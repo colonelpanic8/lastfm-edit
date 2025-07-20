@@ -1504,6 +1504,7 @@ dependencies = [
  "futures",
  "http-client",
  "http-types",
+ "log",
  "ratatui",
  "regex",
  "scraper",
