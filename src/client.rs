@@ -321,7 +321,7 @@ impl LastFmClient {
             edit.track_name
         );
         log::debug!("Using fresh CSRF token: {}", fresh_csrf_token);
-        log::debug!("Session cookies count: {}", self.session_cookies.len());
+        log::trace!("Session cookies count: {}", self.session_cookies.len());
 
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
 
@@ -732,7 +732,7 @@ impl LastFmClient {
             });
         }
 
-        log::debug!(
+        log::info!(
             "Found {} tracks in album '{}'",
             tracks.len(),
             old_album_name
@@ -755,47 +755,36 @@ impl LastFmClient {
             match self.load_edit_form_values(&track.name, artist_name).await {
                 Ok(mut edit_data) => {
                     // Verify this scrobble is from the expected album
-                    if edit_data.album_name_original == old_album_name {
-                        log::debug!("✅ Found editable scrobble for track '{}'", track.name);
+                    log::debug!("✅ Found editable scrobble for track '{}'", track.name);
 
-                        // Update the album name
-                        edit_data.album_name = new_album_name.to_string();
+                    // Update the album name
+                    edit_data.album_name = new_album_name.to_string();
 
-                        // Perform the edit
-                        match self.edit_scrobble(&edit_data).await {
-                            Ok(response) => {
-                                if response.success {
-                                    successful_edits += 1;
-                                    log::debug!("✅ Successfully edited track '{}'", track.name);
-                                } else {
-                                    failed_edits += 1;
-                                    let error_msg = format!(
-                                        "Failed to edit track '{}': {}",
-                                        track.name,
-                                        response
-                                            .message
-                                            .unwrap_or_else(|| "Unknown error".to_string())
-                                    );
-                                    error_messages.push(error_msg);
-                                    log::debug!("❌ {}", error_messages.last().unwrap());
-                                }
-                            }
-                            Err(e) => {
+                    // Perform the edit
+                    match self.edit_scrobble(&edit_data).await {
+                        Ok(response) => {
+                            if response.success {
+                                successful_edits += 1;
+                                log::info!("✅ Successfully edited track '{}'", track.name);
+                            } else {
                                 failed_edits += 1;
-                                let error_msg =
-                                    format!("Error editing track '{}': {}", track.name, e);
+                                let error_msg = format!(
+                                    "Failed to edit track '{}': {}",
+                                    track.name,
+                                    response
+                                        .message
+                                        .unwrap_or_else(|| "Unknown error".to_string())
+                                );
                                 error_messages.push(error_msg);
                                 log::debug!("❌ {}", error_messages.last().unwrap());
                             }
                         }
-                    } else {
-                        skipped_tracks += 1;
-                        log::debug!(
-                            "Track '{}' found but from different album: '{}' (expected '{}')",
-                            track.name,
-                            edit_data.album_name_original,
-                            old_album_name
-                        );
+                        Err(e) => {
+                            failed_edits += 1;
+                            let error_msg = format!("Error editing track '{}': {}", track.name, e);
+                            error_messages.push(error_msg);
+                            log::info!("❌ {}", error_messages.last().unwrap());
+                        }
                     }
                 }
                 Err(e) => {
