@@ -64,7 +64,10 @@ async fn main() -> Result<()> {
                     if needs_cleaning && !cleaned_name.is_empty() {
                         tracks_to_process.push((track, cleaned_name));
                         if tracks_to_process.len() >= 20 {
-                            println!("      📋 Collected {} tracks to clean, stopping fetch", tracks_to_process.len());
+                            println!(
+                                "      📋 Collected {} tracks to clean, stopping fetch",
+                                tracks_to_process.len()
+                            );
                             break;
                         }
                     }
@@ -86,7 +89,10 @@ async fn main() -> Result<()> {
         }
     }
 
-    println!("\n🧹 Starting aggressive remaster removal on {} tracks...\n", tracks_to_process.len());
+    println!(
+        "\n🧹 Starting aggressive remaster removal on {} tracks...\n",
+        tracks_to_process.len()
+    );
 
     let mut processed_count = 0;
     let mut edits_made = 0;
@@ -99,7 +105,10 @@ async fn main() -> Result<()> {
         println!("      🧹 '{}' → '{}'", track.name, cleaned_name);
 
         // Load edit form - this makes an HTTP request
-        match client.load_edit_form_values(&track.name, &track.artist).await {
+        match client
+            .load_edit_form_values(&track.name, &track.artist)
+            .await
+        {
             Ok(mut edit_data) => {
                 // Update track name
                 edit_data.track_name = cleaned_name.clone();

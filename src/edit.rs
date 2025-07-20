@@ -25,6 +25,7 @@ pub struct EditResponse {
 
 impl ScrobbleEdit {
     /// Create a new ScrobbleEdit with all required fields
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         track_name_original: String,
         album_name_original: String,

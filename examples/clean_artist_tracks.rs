@@ -11,7 +11,9 @@ async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 3 {
-        eprintln!("Usage: cargo run --example clean_artist_tracks -- \"Artist Name\" \"Regex Pattern\"");
+        eprintln!(
+            "Usage: cargo run --example clean_artist_tracks -- \"Artist Name\" \"Regex Pattern\""
+        );
         eprintln!("Examples:");
         eprintln!("  # Remove remastered suffixes:");
         eprintln!("  cargo run --example clean_artist_tracks -- \"The Beatles\" \" - Remastered( \\d{{4}})?$\"");
@@ -49,7 +51,10 @@ async fn main() -> Result<()> {
     let mut already_cleaned_tracks = HashSet::new();
 
     // Step 1: Collect all matching tracks first
-    println!("🔍 Step 1: Scanning entire {} catalog for matching tracks...", artist);
+    println!(
+        "🔍 Step 1: Scanning entire {} catalog for matching tracks...",
+        artist
+    );
     let mut all_matching_tracks = Vec::new();
 
     {
@@ -78,7 +83,10 @@ async fn main() -> Result<()> {
                     }
                 }
                 Ok(None) => {
-                    println!("📚 Reached end of {} catalog - scanned {} tracks total", artist, track_count);
+                    println!(
+                        "📚 Reached end of {} catalog - scanned {} tracks total",
+                        artist, track_count
+                    );
                     break;
                 }
                 Err(e) => {
@@ -91,7 +99,10 @@ async fn main() -> Result<()> {
 
     // Step 2: Process all found matching tracks
     if all_matching_tracks.is_empty() {
-        println!("\n🎉 No matching tracks found! Your {} catalog is already clean.", artist);
+        println!(
+            "\n🎉 No matching tracks found! Your {} catalog is already clean.",
+            artist
+        );
         return Ok(());
     }
 
@@ -170,7 +181,10 @@ async fn main() -> Result<()> {
     println!("   • Tracks failed to clean: {}", tracks_failed_to_clean);
 
     if tracks_successfully_cleaned > 0 {
-        println!("\n✨ Your {} catalog is now cleaner! Pattern '{}' has been removed from track names.", artist, pattern);
+        println!(
+            "\n✨ Your {} catalog is now cleaner! Pattern '{}' has been removed from track names.",
+            artist, pattern
+        );
     }
 
     if tracks_failed_to_clean > 0 {

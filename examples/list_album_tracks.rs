@@ -10,7 +10,9 @@ async fn main() -> Result<()> {
 
     if args.len() != 3 {
         eprintln!("Usage: cargo run --example list_album_tracks -- \"Album Name\" \"Artist Name\"");
-        eprintln!("Example: cargo run --example list_album_tracks -- \"Abbey Road\" \"The Beatles\"");
+        eprintln!(
+            "Example: cargo run --example list_album_tracks -- \"Abbey Road\" \"The Beatles\""
+        );
         std::process::exit(1);
     }
 

@@ -11,7 +11,9 @@
       "Bash(direnv exec . cargo run --example debug_album_html -- \"Abbey Road\" \"The Beatles\")",
       "Bash(RUST_LOG=debug direnv exec . cargo run --example debug_album_html -- \"Abbey Road\" \"The Beatles\")",
       "Bash(RUST_LOG=debug direnv exec . cargo run --example debug_album_html -- \"Abbey Road\" \"The Beatles\" 2 >& 1)",
-      "Bash(direnv exec:*)"
+      "Bash(direnv exec:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)"
     ],
     "deny": []
   }

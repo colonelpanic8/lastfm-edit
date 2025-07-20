@@ -1,12 +1,12 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::{ArtistTracksIterator, LastFmClient, Result, ScrobbleEdit, Track};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use lastfm_edit::{ArtistTracksIterator, LastFmClient, Result, ScrobbleEdit, Track};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
