@@ -1,4 +1,6 @@
-use crate::{ArtistTracksIterator, LastFmError, Result, Track, TrackPage};
+use crate::{
+    ArtistTracksIterator, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage,
+};
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};
@@ -207,6 +209,250 @@ impl LastFmClient {
         ArtistTracksIterator::new(self, artist.to_string())
     }
 
+    pub async fn edit_scrobble(&mut self, edit: &ScrobbleEdit) -> Result<EditResponse> {
+        if !self.is_logged_in() {
+            return Err(LastFmError::Auth(
+                "Must be logged in to edit scrobbles".to_string(),
+            ));
+        }
+
+        let edit_url = format!(
+            "{}/user/{}/library/edit?edited-variation=library-track-scrobble",
+            self.base_url, self.username
+        );
+
+        self.debug_log("=== STEP 1: Getting fresh CSRF token for edit ===");
+        
+        // First request: Get the edit form to extract fresh CSRF token
+        let mut form_response = self.get(&edit_url).await?;
+        let form_html = form_response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+        
+        self.debug_log(&format!("Edit form response status: {}", form_response.status()));
+        
+        // Parse HTML to get fresh CSRF token
+        let form_document = Html::parse_document(&form_html);
+        let fresh_csrf_token = self.extract_csrf_token(&form_document)?;
+        
+        self.debug_log(&format!("Fresh CSRF token: {}", fresh_csrf_token));
+        self.debug_log("=== STEP 2: Submitting edit with fresh token ===");
+
+        let mut form_data = HashMap::new();
+
+        // Add fresh CSRF token (required)
+        form_data.insert("csrfmiddlewaretoken", fresh_csrf_token.as_str());
+
+        // Only include essential parameters we actually want to change
+        form_data.insert("track_name_original", &edit.track_name_original);
+        form_data.insert("track_name", &edit.track_name);
+        form_data.insert("artist_name_original", &edit.artist_name_original);
+        form_data.insert("artist_name", &edit.artist_name);
+
+        // Only include timestamp if we're not editing all instances
+        let timestamp_str = edit.timestamp.to_string();
+        if !edit.edit_all && edit.timestamp != 0 {
+            form_data.insert("timestamp", &timestamp_str);
+        }
+
+        // Edit flags
+        if edit.edit_all {
+            form_data.insert("edit_all", "on");
+        }
+        form_data.insert("submit", "edit-scrobble");
+        form_data.insert("ajax", "1");
+
+        self.debug_log(&format!(
+            "Editing scrobble: '{}' -> '{}'",
+            edit.track_name_original, edit.track_name
+        ));
+        self.debug_log(&format!("Using fresh CSRF token: {}", fresh_csrf_token));
+        self.debug_log(&format!(
+            "Session cookies count: {}",
+            self.session_cookies.len()
+        ));
+
+        let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
+
+        // Add comprehensive headers matching your browser request
+        request.insert_header("Accept", "*/*");
+        request.insert_header("Accept-Language", "en-US,en;q=0.9");
+        request.insert_header(
+            "Content-Type",
+            "application/x-www-form-urlencoded;charset=UTF-8",
+        );
+        request.insert_header("Priority", "u=1, i");
+        request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
+        request.insert_header("X-Requested-With", "XMLHttpRequest");
+        request.insert_header("Sec-Fetch-Dest", "empty");
+        request.insert_header("Sec-Fetch-Mode", "cors");
+        request.insert_header("Sec-Fetch-Site", "same-origin");
+        request.insert_header(
+            "sec-ch-ua",
+            "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
+        );
+        request.insert_header("sec-ch-ua-mobile", "?0");
+        request.insert_header("sec-ch-ua-platform", "\"Linux\"");
+
+        // Add session cookies
+        if !self.session_cookies.is_empty() {
+            let cookie_header = self.session_cookies.join("; ");
+            request.insert_header("Cookie", &cookie_header);
+        }
+
+        // Add specific referer (matching browser pattern)
+        request.insert_header(
+            "Referer",
+            &format!("{}/user/{}/library/music/The+Beatles/+tracks?page=1", self.base_url, self.username),
+        );
+
+        // Convert form data to URL-encoded string
+        let form_string: String = form_data
+            .iter()
+            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        self.debug_log(&format!("Form data: {}", form_string));
+        request.set_body(form_string);
+
+        let mut response = self
+            .client
+            .send(request)
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        self.debug_log(&format!("Edit response status: {}", response.status()));
+
+        let response_text = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        self.debug_log(&format!("Edit response: {}", response_text));
+
+        // Parse the HTML response to check for actual success/failure
+        let document = Html::parse_document(&response_text);
+        
+        // Check for success indicator
+        let success_selector = Selector::parse(".alert-success").unwrap();
+        let error_selector = Selector::parse(".alert-danger, .alert-error, .error").unwrap();
+        
+        let has_success_alert = document.select(&success_selector).next().is_some();
+        let has_error_alert = document.select(&error_selector).next().is_some();
+        
+        // Also check if we can see the edited track in the response
+        // The response contains the track data in a table format within a script template
+        let mut actual_track_name = None;
+        let mut actual_album_name = None;
+        
+        // Try direct selectors first
+        let track_name_selector = Selector::parse("td.chartlist-name a").unwrap();
+        let album_name_selector = Selector::parse("td.chartlist-album a").unwrap();
+        
+        if let Some(track_element) = document.select(&track_name_selector).next() {
+            actual_track_name = Some(track_element.text().collect::<String>().trim().to_string());
+        }
+        
+        if let Some(album_element) = document.select(&album_name_selector).next() {
+            actual_album_name = Some(album_element.text().collect::<String>().trim().to_string());
+        }
+        
+        // If not found, try extracting from the raw response text
+        if actual_track_name.is_none() || actual_album_name.is_none() {
+            // Look for track name in href="/music/The+Beatles/_/Things+We+Said+Today"
+            if let Some(track_match) = response_text.find("href=\"/music/The+Beatles/_/") {
+                let track_start = response_text[track_match..].find("_/").map(|pos| track_match + pos + 2);
+                if let Some(start) = track_start {
+                    let track_end = response_text[start..].find("\"").map(|pos| start + pos);
+                    if let Some(end) = track_end {
+                        let raw_track = &response_text[start..end];
+                        // URL decode the track name
+                        let decoded_track = raw_track.replace("+", " ").replace("%27", "'");
+                        actual_track_name = Some(decoded_track);
+                    }
+                }
+            }
+            
+            // Look for album name in href="/music/The+Beatles/A+Hard+Day%27s+Night"
+            if let Some(album_match) = response_text.find("href=\"/music/The+Beatles/A+Hard+Day") {
+                let album_start = response_text[album_match..].find("/The+Beatles/").map(|pos| album_match + pos + 13);
+                if let Some(start) = album_start {
+                    let album_end = response_text[start..].find("\"").map(|pos| start + pos);
+                    if let Some(end) = album_end {
+                        let raw_album = &response_text[start..end];
+                        // URL decode the album name  
+                        let decoded_album = raw_album.replace("+", " ").replace("%27", "'");
+                        actual_album_name = Some(decoded_album);
+                    }
+                }
+            }
+        }
+        
+        self.debug_log(&format!(
+            "Response analysis: success_alert={}, error_alert={}, track='{}', album='{}'",
+            has_success_alert,
+            has_error_alert,
+            actual_track_name.as_deref().unwrap_or("not found"),
+            actual_album_name.as_deref().unwrap_or("not found")
+        ));
+        
+        // Determine if edit was truly successful
+        let success = response.status().is_success() && has_success_alert && !has_error_alert;
+        
+        // Check if the edit actually took effect by comparing with expected values
+        let edit_took_effect = if let (Some(track), Some(album)) = (&actual_track_name, &actual_album_name) {
+            // The track name should match what we edited to
+            let track_matches = track == &edit.track_name;
+            // The album should also match what we edited to (if we edited it)
+            let album_matches = album == &edit.album_name;
+            
+            self.debug_log(&format!(
+                "Edit validation: expected_track='{}', actual_track='{}', matches={}",
+                edit.track_name, track, track_matches
+            ));
+            self.debug_log(&format!(
+                "Edit validation: expected_album='{}', actual_album='{}', matches={}",
+                edit.album_name, album, album_matches
+            ));
+            
+            track_matches && album_matches
+        } else {
+            false
+        };
+        
+        let final_success = success && edit_took_effect;
+        
+        // Create detailed message
+        let message = if has_error_alert {
+            // Extract error message
+            if let Some(error_element) = document.select(&error_selector).next() {
+                Some(format!("Edit failed: {}", error_element.text().collect::<String>().trim()))
+            } else {
+                Some("Edit failed with unknown error".to_string())
+            }
+        } else if final_success {
+            Some(format!(
+                "Edit successful - Track: '{}', Album: '{}'",
+                actual_track_name.as_deref().unwrap_or("unknown"),
+                actual_album_name.as_deref().unwrap_or("unknown")
+            ))
+        } else if success && !edit_took_effect {
+            Some(format!(
+                "Server returned success but edit didn't take effect. Expected track='{}', album='{}' but got track='{}', album='{}'",
+                edit.track_name,
+                edit.album_name,
+                actual_track_name.as_deref().unwrap_or("unknown"),
+                actual_album_name.as_deref().unwrap_or("unknown")
+            ))
+        } else {
+            Some(format!("Edit failed with status: {}", response.status()))
+        };
+
+        Ok(EditResponse { success: final_success, message })
+    }
+
     pub async fn get_artist_tracks_page(&mut self, artist: &str, page: u32) -> Result<TrackPage> {
         // Use AJAX endpoint for page content
         let url = format!(
@@ -292,10 +538,14 @@ impl LastFmClient {
                     // Find the play count for this track
                     let playcount = self.find_playcount_for_track(document, track_name)?;
 
+                    // Try to find timestamp for this track
+                    let timestamp = self.find_timestamp_for_track(document, track_name);
+
                     let track = Track {
                         name: track_name.to_string(),
                         artist: artist.to_string(),
                         playcount,
+                        timestamp,
                     };
                     tracks.push(track);
 
@@ -337,6 +587,32 @@ impl LastFmClient {
             has_next_page,
             total_pages,
         })
+    }
+
+    fn find_timestamp_for_track(&self, document: &Html, track_name: &str) -> Option<u64> {
+        // Look for timestamp in hidden form inputs for edit scrobble forms
+        let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
+        let timestamp_selector = Selector::parse("input[name=\"timestamp\"]").unwrap();
+        
+        for form in document.select(&form_selector) {
+            // Check if this form is for our track
+            let track_input_selector = Selector::parse("input[name=\"track_name\"]").unwrap();
+            if let Some(track_input) = form.select(&track_input_selector).next() {
+                if let Some(value) = track_input.value().attr("value") {
+                    if value == track_name {
+                        // Found the form for our track, get the timestamp
+                        if let Some(timestamp_input) = form.select(&timestamp_selector).next() {
+                            if let Some(timestamp_str) = timestamp_input.value().attr("value") {
+                                if let Ok(timestamp) = timestamp_str.parse::<u64>() {
+                                    return Some(timestamp);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn find_playcount_for_track(&self, document: &Html, track_name: &str) -> Result<u32> {
@@ -419,6 +695,7 @@ impl LastFmClient {
             name,
             artist,
             playcount,
+            timestamp: None, // Not available in table parsing mode
         })
     }
 

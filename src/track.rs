@@ -3,6 +3,7 @@ pub struct Track {
     pub name: String,
     pub artist: String,
     pub playcount: u32,
+    pub timestamp: Option<u64>, // Timestamp if available from scrobble listing
 }
 
 #[derive(Debug, Clone)]

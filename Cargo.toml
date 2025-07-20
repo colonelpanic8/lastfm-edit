@@ -11,6 +11,8 @@ tokio = { version = "1.0", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
 urlencoding = "2.1"
+futures = "0.3"
+regex = "1.0"
 
 [[example]]
 name = "login_test"
@@ -31,3 +33,16 @@ path = "examples/test_pagination.rs"
 [[example]]
 name = "debug_page2"
 path = "examples/debug_page2.rs"
+
+[[example]]
+name = "debug_selectors"
+path = "examples/debug_selectors.rs"
+
+[[example]]
+name = "full_tracklist"
+path = "examples/full_tracklist.rs"
+
+[[example]]
+name = "edit_scrobble"
+path = "examples/edit_scrobble.rs"
+

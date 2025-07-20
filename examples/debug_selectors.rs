@@ -1,7 +1,7 @@
+#[path = "shared/common.rs"]
 mod common;
 
 use lastfm_edit::Result;
-use scraper::{Html, Selector};
 
 #[tokio::main]
 async fn main() -> Result<()> {

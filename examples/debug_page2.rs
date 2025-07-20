@@ -1,3 +1,4 @@
+#[path = "shared/common.rs"]
 mod common;
 
 use lastfm_edit::Result;

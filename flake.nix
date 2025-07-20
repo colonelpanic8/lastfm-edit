@@ -56,16 +56,6 @@
           OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
 
           shellHook = ''
-            echo "🦀 Rust development environment loaded!"
-            echo "📦 Available tools:"
-            echo "  - rustc $(rustc --version)"
-            echo "  - cargo $(cargo --version)"
-            echo "  - rust-analyzer available"
-            echo ""
-            echo "🔧 OpenSSL configured for reqwest"
-            echo "💻 Ready for Last.fm scrobble editor development"
-            echo ""
-            echo "Run: cd scrobble-scrubber && cargo run --bin lastfm-tui"
           '';
         };
 
