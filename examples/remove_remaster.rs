@@ -3,37 +3,14 @@ mod common;
 
 use lastfm_edit::Result;
 use regex::Regex;
-use std::io::{self, Write};
-
-fn get_user_confirmation(original: &str, cleaned: &str) -> bool {
-    println!("\n🔍 Proposed change:");
-    println!("   Original: '{original}'");
-    println!("   Cleaned:  '{cleaned}'");
-    print!("   Apply this change? [y/N/q]: ");
-    io::stdout().flush().unwrap();
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
-    let response = input.trim().to_lowercase();
-
-    match response.as_str() {
-        "y" | "yes" => true,
-        "q" | "quit" => {
-            println!("🛑 Quitting...");
-            std::process::exit(0);
-        }
-        _ => false,
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut client = common::setup_client().await?;
 
     println!("=== Remaster & Year Removal Tool ===\n");
-    println!("🎯 This will remove 'remastered' text and year suffixes from track names with confirmation");
-    println!("📝 Patterns include: '- 2009', '(2009)', '[2009]', '- Remaster', etc.");
-    println!("📝 You'll be asked to confirm each change before it's applied\n");
+    println!("🎯 This will remove 'remastered' text and year suffixes from track names");
+    println!("📝 Patterns include: '- 2009', '(2009)', '[2009]', '- Remaster', etc.\n");
 
     let artist = std::env::args()
         .nth(1)
@@ -98,18 +75,6 @@ async fn main() -> Result<()> {
 
                     if needs_cleaning && !cleaned_name.is_empty() {
                         tracks_to_process.push((track, cleaned_name));
-                        if tracks_to_process.len() >= 20 {
-                            println!(
-                                "      📋 Collected {} tracks to clean, stopping fetch",
-                                tracks_to_process.len()
-                            );
-                            break;
-                        }
-                    }
-
-                    if fetched_count >= 100 {
-                        println!("      📋 Fetched {fetched_count} tracks, stopping");
-                        break;
                     }
                 }
                 Ok(None) => {
@@ -125,27 +90,21 @@ async fn main() -> Result<()> {
     }
 
     println!(
-        "\n🧹 Starting remaster removal on {} tracks with confirmation...\n",
+        "\n🧹 Starting remaster removal on {} tracks...\n",
         tracks_to_process.len()
     );
 
     let mut processed_count = 0;
     let mut edits_made = 0;
-    let mut skipped_count = 0;
     let mut rate_limit_hits = 0;
 
-    // Now process the collected tracks with user confirmation
+    // Now process the collected tracks
     for (track, cleaned_name) in tracks_to_process {
         processed_count += 1;
-        println!("🔧 [{:3}] Processing: '{}'", processed_count, track.name);
-
-        // Ask user for confirmation before making any changes
-        if !get_user_confirmation(&track.name, &cleaned_name) {
-            println!("   ⏭️  Skipped");
-            skipped_count += 1;
-            continue;
-        }
-
+        println!(
+            "🔧 [{:3}] Processing: '{}' -> '{}'",
+            processed_count, track.name, cleaned_name
+        );
         println!("   🔄 Applying change...");
 
         // Load edit form - this makes an HTTP request
@@ -193,13 +152,12 @@ async fn main() -> Result<()> {
     println!("\n=== Summary ===");
     println!("📊 Tracks processed: {processed_count}");
     println!("✏️  Edits made: {edits_made}");
-    println!("⏭️  Tracks skipped: {skipped_count}");
     println!("🚨 Rate limit hits: {rate_limit_hits}");
 
     if rate_limit_hits > 0 {
         println!("\n🎯 Rate limiting was triggered.");
     } else {
-        println!("\n✨ All approved changes completed successfully!");
+        println!("\n✨ All changes completed successfully!");
     }
 
     Ok(())
