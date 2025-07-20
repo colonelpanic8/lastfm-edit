@@ -76,3 +76,7 @@ path = "examples/test_working_edit.rs"
 name = "load_track_metadata"
 path = "examples/load_track_metadata.rs"
 
+[[example]]
+name = "clean_beatles_catalog"
+path = "examples/clean_beatles_catalog.rs"
+
