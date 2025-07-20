@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
     // Test with minimal parameters - just what we know works
     let edit = ScrobbleEdit::from_track_info(
         "Test Track Name",
-        "Test Album Name", 
+        "Test Album Name",
         "Test Artist Name",
         0, // No timestamp
     )

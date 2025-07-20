@@ -18,10 +18,10 @@ async fn main() -> Result<()> {
 
     // Setup client
     let client = common::setup_client().await?;
-    
+
     println!("Client ready! Launching TUI...");
     println!("Press any key to continue...");
-    
+
     // Wait for user input before starting TUI
     std::io::stdin().read_line(&mut String::new()).unwrap();
 

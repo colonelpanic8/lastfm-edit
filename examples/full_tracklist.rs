@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nFetching complete tracklist for {}...\n", artist);
 
     let mut iterator = client.artist_tracks(artist);
-    
+
     // Collect all tracks
     let all_tracks = iterator.collect_all().await?;
 

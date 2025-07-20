@@ -32,9 +32,15 @@ async fn main() -> Result<()> {
                     if regex.is_match(&track.name) {
                         found_track = Some(track.clone());
                         println!("✅ Found remastered track: '{}'", track.name);
-                        println!("   Playcount: {}, Has timestamp: {}", 
-                                track.playcount, 
-                                if track.timestamp.is_some() { "yes" } else { "no" });
+                        println!(
+                            "   Playcount: {}, Has timestamp: {}",
+                            track.playcount,
+                            if track.timestamp.is_some() {
+                                "yes"
+                            } else {
+                                "no"
+                            }
+                        );
                         break;
                     }
                 }
@@ -82,7 +88,10 @@ async fn main() -> Result<()> {
             println!("✅ Successfully loaded edit form values!");
             println!("   Track: '{}'", edit_data.track_name_original);
             println!("   Album: '{}'", edit_data.album_name_original);
-            println!("   Timestamp: {} (real scrobble data!)", edit_data.timestamp);
+            println!(
+                "   Timestamp: {} (real scrobble data!)",
+                edit_data.timestamp
+            );
             edit_data
         }
         Err(e) => {

@@ -80,3 +80,23 @@ path = "examples/load_track_metadata.rs"
 name = "clean_beatles_catalog"
 path = "examples/clean_beatles_catalog.rs"
 
+[[example]]
+name = "test_album_loading"
+path = "examples/test_album_loading.rs"
+
+[[example]]
+name = "clean_beatles_full_catalog"
+path = "examples/clean_beatles_full_catalog.rs"
+
+[[example]]
+name = "clean_beatles_albums"
+path = "examples/clean_beatles_albums.rs"
+
+[[example]]
+name = "rename_album"
+path = "examples/rename_album.rs"
+
+[[example]]
+name = "examine_beatles_albums"
+path = "examples/examine_beatles_albums.rs"
+

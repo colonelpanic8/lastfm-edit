@@ -1,4 +1,4 @@
-use crate::{ScrobbleEdit, LastFmClient, Result};
+use crate::{LastFmClient, Result, ScrobbleEdit};
 
 /// Context object that bridges track listing data with edit functionality
 #[derive(Debug, Clone)]
@@ -6,13 +6,13 @@ pub struct ScrobbleEditContext {
     /// The track that can be edited
     pub track_name: String,
     pub artist_name: String,
-    
+
     /// Edit strategy - determines how to perform the edit
     pub strategy: EditStrategy,
-    
+
     /// Optional album information if available
     pub album_name: Option<String>,
-    
+
     /// Playcount from track listing (informational)
     pub playcount: u32,
 }
@@ -22,7 +22,7 @@ pub enum EditStrategy {
     /// Edit all instances of this track/artist combination
     /// Uses edit_all=on and relies on Last.fm's bulk edit functionality
     EditAll,
-    
+
     /// Edit specific scrobbles with known timestamps
     /// Requires fetching actual scrobble data first
     SpecificScrobbles(Vec<u64>), // timestamps
@@ -45,12 +45,16 @@ impl ScrobbleEditContext {
             strategy: EditStrategy::EditAll, // Default to edit_all for simplicity
         }
     }
-    
+
     /// Create a scrobble edit request from this context
-    pub fn create_edit(&self, new_track_name: String, new_album_name: Option<String>) -> ScrobbleEdit {
+    pub fn create_edit(
+        &self,
+        new_track_name: String,
+        new_album_name: Option<String>,
+    ) -> ScrobbleEdit {
         let original_album = self.album_name.as_deref().unwrap_or(&self.track_name);
         let target_album = new_album_name.as_deref().unwrap_or(&new_track_name);
-        
+
         match &self.strategy {
             EditStrategy::EditAll => {
                 ScrobbleEdit::from_track_info(
@@ -67,7 +71,7 @@ impl ScrobbleEditContext {
                 // For now, just use the first timestamp
                 // In a full implementation, you'd want to handle multiple timestamps
                 let timestamp = timestamps.first().copied().unwrap_or(0);
-                
+
                 ScrobbleEdit::from_track_info(
                     &self.track_name,
                     original_album,
@@ -80,7 +84,7 @@ impl ScrobbleEditContext {
             }
         }
     }
-    
+
     /// Execute the edit using the provided client
     /// This will automatically fetch real scrobble data if needed
     pub async fn execute_edit(
@@ -93,7 +97,10 @@ impl ScrobbleEditContext {
         let edit = match &self.strategy {
             EditStrategy::EditAll => {
                 // Try to find a recent scrobble to get real timestamp data
-                match client.find_recent_scrobble_for_track(&self.track_name, &self.artist_name, 3).await? {
+                match client
+                    .find_recent_scrobble_for_track(&self.track_name, &self.artist_name, 3)
+                    .await?
+                {
                     Some(recent_scrobble) => {
                         if let Some(timestamp) = recent_scrobble.timestamp {
                             // Use real scrobble data for better compatibility
@@ -136,7 +143,10 @@ impl ScrobbleEditContext {
         new_album_name: Option<String>,
     ) -> Result<bool> {
         // First, try to find the most recent scrobble for this track
-        match client.find_recent_scrobble_for_track(&self.track_name, &self.artist_name, 5).await? {
+        match client
+            .find_recent_scrobble_for_track(&self.track_name, &self.artist_name, 5)
+            .await?
+        {
             Some(recent_scrobble) => {
                 if let Some(timestamp) = recent_scrobble.timestamp {
                     // Create edit with real scrobble data
@@ -154,18 +164,17 @@ impl ScrobbleEditContext {
                     Ok(response.success)
                 } else {
                     Err(crate::LastFmError::Parse(
-                        "Found recent scrobble but no timestamp available".to_string()
+                        "Found recent scrobble but no timestamp available".to_string(),
                     ))
                 }
             }
-            None => {
-                Err(crate::LastFmError::Parse(
-                    format!("No recent scrobble found for '{}' by '{}'", self.track_name, self.artist_name)
-                ))
-            }
+            None => Err(crate::LastFmError::Parse(format!(
+                "No recent scrobble found for '{}' by '{}'",
+                self.track_name, self.artist_name
+            ))),
         }
     }
-    
+
     /// Get a description of what this edit will do
     pub fn describe_edit(&self, new_track_name: &str) -> String {
         match &self.strategy {
@@ -178,7 +187,10 @@ impl ScrobbleEditContext {
             EditStrategy::SpecificScrobbles(timestamps) => {
                 format!(
                     "Will edit {} specific scrobbles of '{}' by '{}' to '{}'",
-                    timestamps.len(), self.track_name, self.artist_name, new_track_name
+                    timestamps.len(),
+                    self.track_name,
+                    self.artist_name,
+                    new_track_name
                 )
             }
         }

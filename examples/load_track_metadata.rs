@@ -30,9 +30,9 @@ async fn main() -> Result<()> {
     );
     println!("🌐 Constructed URL: {}\n", expected_url);
 
-    // Now try to load the edit form values 
+    // Now try to load the edit form values
     println!("🔄 Attempting to load edit form values...\n");
-    
+
     match client.load_edit_form_values(track_name, artist_name).await {
         Ok(edit_data) => {
             println!("✅ SUCCESS! Correctly loaded edit form values for the requested track!");
@@ -41,19 +41,25 @@ async fn main() -> Result<()> {
             println!("   ✅ Got Track: '{}'", edit_data.track_name_original);
             println!("   ✅ Got Artist: '{}'", edit_data.artist_name_original);
             println!("   ✅ Got Album: '{}'", edit_data.album_name_original);
-            println!("   ✅ Got Album Artist: '{}'", edit_data.album_artist_name_original);
-            println!("   ✅ Timestamp: {} ({})", edit_data.timestamp, 
+            println!(
+                "   ✅ Got Album Artist: '{}'",
+                edit_data.album_artist_name_original
+            );
+            println!(
+                "   ✅ Timestamp: {} ({})",
+                edit_data.timestamp,
                 chrono::DateTime::from_timestamp(edit_data.timestamp as i64, 0)
                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-                    .unwrap_or_else(|| "Invalid".to_string()));
+                    .unwrap_or_else(|| "Invalid".to_string())
+            );
             println!("   ✅ Edit All: {}", edit_data.edit_all);
-            
+
             println!("\n🎯 SOLUTION IMPLEMENTED:");
             println!("   ✅ Successfully parsing scrobble edit forms directly from track page");
             println!("   ✅ Finding forms that match the requested track and artist");
             println!("   ✅ Extracting real scrobble data with correct timestamps");
             println!("   ✅ No longer using unreliable timestamp-based edit form fetches");
-            
+
             println!("\n💡 This data can now be used for editing the track!");
             println!("   The edit_scrobble example should work correctly with this approach.");
         }

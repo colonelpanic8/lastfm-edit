@@ -1,5 +1,6 @@
 use crate::{
-    ArtistTracksIterator, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage,
+    Album, AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, EditResponse, LastFmError,
+    Result, ScrobbleEdit, Track, TrackPage,
 };
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
@@ -209,6 +210,10 @@ impl LastFmClient {
         ArtistTracksIterator::new(self, artist.to_string())
     }
 
+    pub fn artist_albums<'a>(&'a mut self, artist: &str) -> ArtistAlbumsIterator<'a> {
+        ArtistAlbumsIterator::new(self, artist.to_string())
+    }
+
     /// Fetch recent scrobbles from the user's listening history
     /// This gives us real scrobble data with timestamps for editing
     pub async fn get_recent_scrobbles(&mut self, page: u32) -> Result<Vec<Track>> {
@@ -316,7 +321,10 @@ impl LastFmClient {
         form_data.insert("artist_name", &edit.artist_name);
         form_data.insert("album_name_original", &edit.album_name_original);
         form_data.insert("album_name", &edit.album_name);
-        form_data.insert("album_artist_name_original", &edit.album_artist_name_original);
+        form_data.insert(
+            "album_artist_name_original",
+            &edit.album_artist_name_original,
+        );
         form_data.insert("album_artist_name", &edit.album_artist_name);
 
         // ALWAYS include timestamp - Last.fm requires it even with edit_all=true
@@ -571,6 +579,41 @@ impl LastFmClient {
         self.extract_scrobble_data_from_track_page(&document, track_name, artist_name)
     }
 
+    pub async fn load_album_edit_form_values(
+        &mut self,
+        album_name: &str,
+        artist_name: &str,
+    ) -> Result<crate::ScrobbleEdit> {
+        self.debug_log(&format!(
+            "Loading album edit form values for '{}' by '{}'",
+            album_name, artist_name
+        ));
+
+        // Get the specific album page to find scrobble forms for tracks from this album
+        // Use the same URL format as the browser: /user/{username}/library/music/{artist}/{album}
+        let album_url = format!(
+            "{}/user/{}/library/music/{}/{}",
+            self.base_url,
+            self.username,
+            artist_name.replace(" ", "+"),
+            urlencoding::encode(album_name).replace("%20", "+")
+        );
+
+        self.debug_log(&format!("Fetching album page: {}", album_url));
+
+        let mut response = self.get(&album_url).await?;
+        let html = response
+            .body_string()
+            .await
+            .map_err(|e| crate::LastFmError::Http(e.to_string()))?;
+
+        let document = Html::parse_document(&html);
+
+        // Extract scrobble data from the album page - look for any track scrobble from this album
+        self.extract_scrobble_data_from_album_page(&document, album_name, artist_name)
+            .await
+    }
+
     /// Extract scrobble edit data directly from track page forms
     /// Based on the approach used in lastfm-bulk-edit
     fn extract_scrobble_data_from_track_page(
@@ -580,11 +623,13 @@ impl LastFmClient {
         expected_artist: &str,
     ) -> Result<crate::ScrobbleEdit> {
         self.debug_log("Extracting scrobble data directly from track page forms...");
-        
+
         // Look for the chartlist table that contains scrobbles
-        let table_selector = Selector::parse("table.chartlist:not(.chartlist__placeholder)").unwrap();
-        let table = document.select(&table_selector).next()
-            .ok_or_else(|| crate::LastFmError::Parse("No chartlist table found on track page".to_string()))?;
+        let table_selector =
+            Selector::parse("table.chartlist:not(.chartlist__placeholder)").unwrap();
+        let table = document.select(&table_selector).next().ok_or_else(|| {
+            crate::LastFmError::Parse("No chartlist table found on track page".to_string())
+        })?;
 
         // Look for table rows that contain scrobble edit forms
         let row_selector = Selector::parse("tr").unwrap();
@@ -602,7 +647,8 @@ impl LastFmClient {
                 // Extract all form values directly
                 let extract_form_value = |name: &str| -> Option<String> {
                     let selector = Selector::parse(&format!("input[name='{}']", name)).unwrap();
-                    form.select(&selector).next()
+                    form.select(&selector)
+                        .next()
                         .and_then(|input| input.value().attr("value"))
                         .map(|s| s.to_string())
                 };
@@ -611,21 +657,24 @@ impl LastFmClient {
                 let form_track = extract_form_value("track_name").unwrap_or_default();
                 let form_artist = extract_form_value("artist_name").unwrap_or_default();
                 let form_album = extract_form_value("album_name").unwrap_or_default();
-                let form_album_artist = extract_form_value("album_artist_name").unwrap_or_else(|| form_artist.clone());
+                let form_album_artist =
+                    extract_form_value("album_artist_name").unwrap_or_else(|| form_artist.clone());
                 let form_timestamp = extract_form_value("timestamp").unwrap_or_default();
 
                 self.debug_log(&format!(
-                    "Found scrobble form - Track: '{}', Artist: '{}', Album: '{}', Timestamp: {}", 
+                    "Found scrobble form - Track: '{}', Artist: '{}', Album: '{}', Timestamp: {}",
                     form_track, form_artist, form_album, form_timestamp
                 ));
 
                 // Check if this form matches the expected track and artist
                 if form_track == expected_track && form_artist == expected_artist {
-                    let timestamp = form_timestamp.parse::<u64>()
-                        .map_err(|_| crate::LastFmError::Parse("Invalid timestamp in form".to_string()))?;
+                    let timestamp = form_timestamp.parse::<u64>().map_err(|_| {
+                        crate::LastFmError::Parse("Invalid timestamp in form".to_string())
+                    })?;
 
                     self.debug_log(&format!(
-                        "✅ Found matching scrobble form for '{}' by '{}'", expected_track, expected_artist
+                        "✅ Found matching scrobble form for '{}' by '{}'",
+                        expected_track, expected_artist
                     ));
 
                     // Create ScrobbleEdit with the extracted values
@@ -646,10 +695,113 @@ impl LastFmClient {
         }
 
         Err(crate::LastFmError::Parse(format!(
-            "No scrobble form found for track '{}' by '{}'", expected_track, expected_artist
+            "No scrobble form found for track '{}' by '{}'",
+            expected_track, expected_artist
         )))
     }
 
+    /// Extract scrobble edit data from an album page
+    /// This finds any scrobble from the specified album for editing album metadata
+    async fn extract_scrobble_data_from_album_page(
+        &mut self,
+        document: &Html,
+        expected_album: &str,
+        expected_artist: &str,
+    ) -> Result<crate::ScrobbleEdit> {
+        self.debug_log(
+            "Extracting track names from album page, then finding editable scrobbles...",
+        );
+
+        // Extract track names from the album page
+        let mut track_names = Vec::new();
+
+        // Look for track links in the chartlist
+        let track_link_selector = Selector::parse(".chartlist-name a").unwrap();
+        for link in document.select(&track_link_selector) {
+            let track_name = link.text().collect::<String>().trim().to_string();
+            if !track_name.is_empty() {
+                track_names.push(track_name);
+            }
+        }
+
+        self.debug_log(&format!(
+            "Found {} tracks on album page: {:?}",
+            track_names.len(),
+            track_names
+        ));
+
+        if track_names.is_empty() {
+            return Err(crate::LastFmError::Parse(
+                "No tracks found on album page".to_string(),
+            ));
+        }
+
+        // For each track from this album, try to find an editable scrobble
+        for track_name in track_names {
+            self.debug_log(&format!(
+                "Trying to find editable scrobble for track '{}'",
+                track_name
+            ));
+
+            match self
+                .load_edit_form_values(&track_name, expected_artist)
+                .await
+            {
+                Ok(edit_data) => {
+                    // Check if this scrobble is from the expected album
+                    if edit_data.album_name_original == expected_album {
+                        self.debug_log(&format!(
+                            "✅ Found editable scrobble for track '{}' from album '{}'",
+                            track_name, expected_album
+                        ));
+                        return Ok(edit_data);
+                    } else {
+                        self.debug_log(&format!(
+                            "Track '{}' found but from different album: '{}' (expected '{}')",
+                            track_name, edit_data.album_name_original, expected_album
+                        ));
+                    }
+                }
+                Err(e) => {
+                    self.debug_log(&format!(
+                        "Could not load edit form for track '{}': {}",
+                        track_name, e
+                    ));
+                    // Continue to next track
+                }
+            }
+        }
+
+        Err(crate::LastFmError::Parse(format!(
+            "No editable scrobbles found for any tracks from album '{}' by '{}'",
+            expected_album, expected_artist
+        )))
+    }
+
+    /// Edit album metadata by updating scrobbles with new album name
+    /// This is a convenience method specifically for album editing
+    pub async fn edit_album(
+        &mut self,
+        old_album_name: &str,
+        new_album_name: &str,
+        artist_name: &str,
+    ) -> Result<EditResponse> {
+        self.debug_log(&format!(
+            "Editing album '{}' -> '{}' by '{}'",
+            old_album_name, new_album_name, artist_name
+        ));
+
+        // Load the current edit form values from the album page
+        let mut edit_data = self
+            .load_album_edit_form_values(old_album_name, artist_name)
+            .await?;
+
+        // Update the album name to the new value
+        edit_data.album_name = new_album_name.to_string();
+
+        // Perform the edit using the regular scrobble editing method
+        self.edit_scrobble(&edit_data).await
+    }
 
     pub async fn get_artist_tracks_page(&mut self, artist: &str, page: u32) -> Result<TrackPage> {
         // Use AJAX endpoint for page content
@@ -1228,5 +1380,227 @@ impl LastFmClient {
                 }
             }
         }
+    }
+
+    pub async fn get_artist_albums_page(&mut self, artist: &str, page: u32) -> Result<AlbumPage> {
+        // Use AJAX endpoint for page content
+        let url = format!(
+            "{}/user/{}/library/music/{}/+albums?page={}&ajax=true",
+            self.base_url,
+            self.username,
+            artist.replace(" ", "+"),
+            page
+        );
+
+        self.debug_log(&format!(
+            "Fetching albums page {} for artist: {}",
+            page, artist
+        ));
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        self.debug_log(&format!(
+            "AJAX response: {} status, {} chars",
+            response.status(),
+            content.len()
+        ));
+
+        // Check if we got JSON or HTML
+        if content.trim_start().starts_with("{") || content.trim_start().starts_with("[") {
+            self.debug_log("Parsing JSON response from AJAX endpoint");
+            return self.parse_json_albums_page(&content, page, artist);
+        } else {
+            self.debug_log("Parsing HTML response from AJAX endpoint");
+            let document = Html::parse_document(&content);
+            return self.parse_albums_page(&document, page, artist);
+        }
+    }
+
+    fn parse_json_albums_page(
+        &self,
+        _json_content: &str,
+        page_number: u32,
+        _artist: &str,
+    ) -> Result<AlbumPage> {
+        // JSON parsing not yet implemented - fallback to empty page
+        self.debug_log("JSON parsing not implemented, returning empty page");
+        Ok(AlbumPage {
+            albums: Vec::new(),
+            page_number,
+            has_next_page: false,
+            total_pages: Some(1),
+        })
+    }
+
+    fn parse_albums_page(
+        &self,
+        document: &Html,
+        page_number: u32,
+        artist: &str,
+    ) -> Result<AlbumPage> {
+        let mut albums = Vec::new();
+
+        // Try parsing album data from data attributes (AJAX response)
+        let album_selector = Selector::parse("[data-album-name]").unwrap();
+        let album_elements: Vec<_> = document.select(&album_selector).collect();
+
+        if !album_elements.is_empty() {
+            self.debug_log(&format!(
+                "Found {} album elements with data-album-name",
+                album_elements.len()
+            ));
+
+            // Use a set to track unique albums
+            let mut seen_albums = std::collections::HashSet::new();
+
+            for element in album_elements {
+                if let Some(album_name) = element.value().attr("data-album-name") {
+                    // Skip if we've already processed this album
+                    if seen_albums.contains(album_name) {
+                        continue;
+                    }
+                    seen_albums.insert(album_name.to_string());
+
+                    // Find the play count for this album
+                    let playcount = self.find_playcount_for_album(document, album_name)?;
+
+                    // Try to find timestamp for this album
+                    let timestamp = self.find_timestamp_for_album(document, album_name);
+
+                    let album = Album {
+                        name: album_name.to_string(),
+                        artist: artist.to_string(),
+                        playcount,
+                        timestamp,
+                    };
+                    albums.push(album);
+
+                    if albums.len() >= 50 {
+                        break; // Last.fm shows 50 albums per page
+                    }
+                }
+            }
+
+            self.debug_log(&format!(
+                "Successfully parsed {} unique albums",
+                albums.len()
+            ));
+        } else {
+            // Fallback to table parsing method
+            self.debug_log("No data-album-name elements found, trying table parsing");
+
+            let table_selector = Selector::parse("table.chartlist").unwrap();
+            let row_selector = Selector::parse("tbody tr").unwrap();
+
+            if let Some(table) = document.select(&table_selector).next() {
+                for row in table.select(&row_selector) {
+                    if let Ok(mut album) = self.parse_album_row(&row) {
+                        album.artist = artist.to_string();
+                        albums.push(album);
+                    }
+                }
+            } else {
+                self.debug_log("No table.chartlist found either");
+            }
+        }
+
+        // Check for pagination
+        let (has_next_page, total_pages) = self.parse_pagination(&document, page_number)?;
+
+        Ok(AlbumPage {
+            albums,
+            page_number,
+            has_next_page,
+            total_pages,
+        })
+    }
+
+    fn find_timestamp_for_album(&self, document: &Html, album_name: &str) -> Option<u64> {
+        // Look for timestamp in hidden form inputs for edit scrobble forms
+        let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
+        let timestamp_selector = Selector::parse("input[name=\"timestamp\"]").unwrap();
+
+        for form in document.select(&form_selector) {
+            // Check if this form is for our album
+            let album_input_selector = Selector::parse("input[name=\"album_name\"]").unwrap();
+            if let Some(album_input) = form.select(&album_input_selector).next() {
+                if let Some(value) = album_input.value().attr("value") {
+                    if value == album_name {
+                        // Found the form for our album, get the timestamp
+                        if let Some(timestamp_input) = form.select(&timestamp_selector).next() {
+                            if let Some(timestamp_str) = timestamp_input.value().attr("value") {
+                                if let Ok(timestamp) = timestamp_str.parse::<u64>() {
+                                    return Some(timestamp);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn find_playcount_for_album(&self, document: &Html, album_name: &str) -> Result<u32> {
+        // Look for chartlist-count-bar-value elements near the album
+        let count_selector = Selector::parse(".chartlist-count-bar-value").unwrap();
+        let link_selector = Selector::parse("a[href*=\"/music/\"]").unwrap();
+
+        // Find all album links that match our album name
+        for link in document.select(&link_selector) {
+            let link_text = link.text().collect::<String>().trim().to_string();
+            if link_text == album_name {
+                // Found the album link, now look for the play count in the same row
+                if let Some(row) = self.find_ancestor_row(link) {
+                    // Look for play count in this row
+                    for count_elem in row.select(&count_selector) {
+                        let count_text = count_elem.text().collect::<String>();
+                        if let Some(number_part) = count_text.split_whitespace().next() {
+                            if let Ok(count) = number_part.parse::<u32>() {
+                                return Ok(count);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Default fallback
+        Ok(1)
+    }
+
+    fn parse_album_row(&self, row: &scraper::ElementRef) -> Result<Album> {
+        let name_selector = Selector::parse(".chartlist-name a").unwrap();
+
+        let name = row
+            .select(&name_selector)
+            .next()
+            .map(|el| el.text().collect::<String>().trim().to_string())
+            .ok_or_else(|| LastFmError::Parse("Missing album name".to_string()))?;
+
+        // Parse play count from .chartlist-count-bar-value
+        let playcount_selector = Selector::parse(".chartlist-count-bar-value").unwrap();
+        let mut playcount = 1; // default fallback
+
+        if let Some(element) = row.select(&playcount_selector).next() {
+            let text = element.text().collect::<String>().trim().to_string();
+            if let Some(number_part) = text.split_whitespace().next() {
+                if let Ok(count) = number_part.parse::<u32>() {
+                    playcount = count;
+                }
+            }
+        }
+
+        let artist = "".to_string(); // We'll fill this in when we call the method
+
+        Ok(Album {
+            name,
+            artist,
+            playcount,
+            timestamp: None, // Not available in table parsing mode
+        })
     }
 }

@@ -6,9 +6,7 @@ use crossterm::{
 };
 use ratatui::{
     prelude::*,
-    widgets::{
-        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap,
-    },
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use std::io;
 
@@ -40,7 +38,7 @@ impl TrackEditorApp {
     pub fn new(artist: String) -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
-        
+
         Self {
             artist,
             tracks: Vec::new(),
@@ -60,11 +58,11 @@ impl TrackEditorApp {
     pub async fn load_tracks(&mut self, client: &mut LastFmClient) -> Result<()> {
         self.mode = AppMode::Loading;
         self.loading_message = format!("Loading tracks for {}...", self.artist);
-        
+
         // Load first page of tracks
         let mut iterator = ArtistTracksIterator::new(client, self.artist.clone());
         let track_page = iterator.next_page().await?;
-        
+
         if let Some(page) = track_page {
             self.tracks = page.tracks;
             self.has_more_pages = page.has_next_page;
@@ -74,7 +72,7 @@ impl TrackEditorApp {
             self.has_more_pages = false;
             self.page = 1;
         }
-        
+
         if self.tracks.is_empty() {
             self.mode = AppMode::Error("No tracks found for this artist".to_string());
         } else {
@@ -82,7 +80,7 @@ impl TrackEditorApp {
             self.selected_track_index = 0;
             self.list_state.select(Some(0));
         }
-        
+
         Ok(())
     }
 
@@ -93,20 +91,20 @@ impl TrackEditorApp {
 
         self.mode = AppMode::Loading;
         self.loading_message = format!("Loading more tracks (page {})...", self.page + 1);
-        
+
         let mut iterator = ArtistTracksIterator::new(client, self.artist.clone());
         // Skip to the next page
         for _ in 0..self.page {
             iterator.next_page().await?;
         }
         let track_page = iterator.next_page().await?;
-        
+
         if let Some(page) = track_page {
             self.tracks.extend(page.tracks);
             self.has_more_pages = page.has_next_page;
             self.page = page.page_number;
         }
-        
+
         self.mode = AppMode::BrowseTracks;
         Ok(())
     }
@@ -200,12 +198,16 @@ impl TrackEditorApp {
 
     pub async fn load_edit_form(&mut self, client: &mut LastFmClient) -> Result<()> {
         if let Some(track) = self.tracks.get(self.selected_track_index) {
-            match client.load_edit_form_values(&track.name, &track.artist).await {
+            match client
+                .load_edit_form_values(&track.name, &track.artist)
+                .await
+            {
                 Ok(edit) => {
                     self.current_edit = Some(edit);
                     self.edit_buffer = track.name.clone();
                     self.mode = AppMode::EditTrack;
-                    self.status_message = "Editing track name. Press Enter to save, Esc to cancel.".to_string();
+                    self.status_message =
+                        "Editing track name. Press Enter to save, Esc to cancel.".to_string();
                 }
                 Err(e) => {
                     self.mode = AppMode::Error(format!("Failed to load edit form: {}", e));
@@ -218,28 +220,37 @@ impl TrackEditorApp {
     pub async fn save_edit(&mut self, client: &mut LastFmClient) -> Result<()> {
         if let Some(ref edit) = self.current_edit {
             self.mode = AppMode::Loading;
-            self.loading_message = format!("Saving edit: '{}' -> '{}'...", edit.track_name_original, edit.track_name);
-            
+            self.loading_message = format!(
+                "Saving edit: '{}' -> '{}'...",
+                edit.track_name_original, edit.track_name
+            );
+
             match client.edit_scrobble(edit).await {
                 Ok(response) => {
                     if response.success {
-                        self.status_message = format!("✅ Successfully edited '{}' to '{}'", 
-                            edit.track_name_original, edit.track_name);
-                        
+                        self.status_message = format!(
+                            "✅ Successfully edited '{}' to '{}'",
+                            edit.track_name_original, edit.track_name
+                        );
+
                         // Update the track in our list
                         if let Some(track) = self.tracks.get_mut(self.selected_track_index) {
                             track.name = edit.track_name.clone();
                         }
                     } else {
-                        self.status_message = format!("❌ Edit failed: {}", 
-                            response.message.unwrap_or_else(|| "Unknown error".to_string()));
+                        self.status_message = format!(
+                            "❌ Edit failed: {}",
+                            response
+                                .message
+                                .unwrap_or_else(|| "Unknown error".to_string())
+                        );
                     }
                 }
                 Err(e) => {
                     self.status_message = format!("❌ Edit error: {}", e);
                 }
             }
-            
+
             self.mode = AppMode::BrowseTracks;
             self.current_edit = None;
             self.edit_buffer.clear();
@@ -250,7 +261,7 @@ impl TrackEditorApp {
 
 pub fn render_ui(f: &mut Frame, app: &TrackEditorApp) {
     let size = f.area();
-    
+
     match &app.mode {
         AppMode::Loading => {
             render_loading_screen(f, size, &app.loading_message);
@@ -272,12 +283,12 @@ fn render_loading_screen(f: &mut Frame, area: Rect, message: &str) {
         .title("Loading")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow));
-    
+
     let paragraph = Paragraph::new(format!("{}\n\nPlease wait...", message))
         .block(block)
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-    
+
     let centered = centered_rect(60, 20, area);
     f.render_widget(paragraph, centered);
 }
@@ -287,12 +298,12 @@ fn render_error_screen(f: &mut Frame, area: Rect, error: &str) {
         .title("Error")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red));
-    
+
     let paragraph = Paragraph::new(format!("{}\n\nPress any key to continue...", error))
         .block(block)
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-    
+
     let centered = centered_rect(80, 30, area);
     f.render_widget(paragraph, centered);
 }
@@ -301,10 +312,10 @@ fn render_browse_screen(f: &mut Frame, app: &TrackEditorApp, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Title
-            Constraint::Min(0),     // Track list
-            Constraint::Length(3),  // Status
-            Constraint::Length(4),  // Help
+            Constraint::Length(3), // Title
+            Constraint::Min(0),    // Track list
+            Constraint::Length(3), // Status
+            Constraint::Length(4), // Help
         ])
         .split(area);
 
@@ -315,7 +326,8 @@ fn render_browse_screen(f: &mut Frame, app: &TrackEditorApp, area: Rect) {
     f.render_widget(title, chunks[0]);
 
     // Track list
-    let items: Vec<ListItem> = app.tracks
+    let items: Vec<ListItem> = app
+        .tracks
         .iter()
         .enumerate()
         .map(|(i, track)| {
@@ -325,9 +337,15 @@ fn render_browse_screen(f: &mut Frame, app: &TrackEditorApp, area: Rect) {
         .collect();
 
     let list = List::new(items)
-        .block(Block::default()
-            .title(format!("Tracks (Page {} - {} tracks)", app.page, app.tracks.len()))
-            .borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(format!(
+                    "Tracks (Page {} - {} tracks)",
+                    app.page,
+                    app.tracks.len()
+                ))
+                .borders(Borders::ALL),
+        )
         .highlight_style(Style::default().bg(Color::DarkGray))
         .highlight_symbol("> ");
 
@@ -350,18 +368,18 @@ fn render_browse_screen(f: &mut Frame, app: &TrackEditorApp, area: Rect) {
 fn render_edit_screen(f: &mut Frame, app: &TrackEditorApp, area: Rect) {
     // Create overlay for edit dialog
     let centered = centered_rect(80, 50, area);
-    
+
     // Clear the background
     f.render_widget(Clear, centered);
-    
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Title
-            Constraint::Length(3),  // Original name
-            Constraint::Length(3),  // New name input
-            Constraint::Min(0),     // Spacer
-            Constraint::Length(3),  // Help
+            Constraint::Length(3), // Title
+            Constraint::Length(3), // Original name
+            Constraint::Length(3), // New name input
+            Constraint::Min(0),    // Spacer
+            Constraint::Length(3), // Help
         ])
         .split(centered);
 
@@ -426,7 +444,7 @@ pub async fn run_track_editor(mut client: LastFmClient, artist: String) -> Resul
 
     // Create app
     let mut app = TrackEditorApp::new(artist);
-    
+
     // Load initial tracks
     app.load_tracks(&mut client).await?;
 
