@@ -13,6 +13,7 @@ pub struct LastFmClient {
     csrf_token: Option<String>,
     base_url: String,
     session_cookies: Vec<String>,
+    rate_limit_patterns: Vec<String>,
 }
 
 impl LastFmClient {
@@ -21,12 +22,28 @@ impl LastFmClient {
     }
 
     pub fn with_base_url(client: Box<dyn HttpClient>, base_url: String) -> Self {
+        Self::with_rate_limit_patterns(
+            client,
+            base_url,
+            vec![
+                "you've tried to log in too many times".to_string(),
+                "you're requesting too many pages".to_string(),
+            ],
+        )
+    }
+
+    pub fn with_rate_limit_patterns(
+        client: Box<dyn HttpClient>,
+        base_url: String,
+        rate_limit_patterns: Vec<String>,
+    ) -> Self {
         Self {
             client,
             username: String::new(),
             csrf_token: None,
             base_url,
             session_cookies: Vec::new(),
+            rate_limit_patterns,
         }
     }
 
@@ -114,11 +131,51 @@ impl LastFmClient {
 
         log::debug!("Login response status: {}", response.status());
 
-        // If we get a 403, login definitely failed
+        // If we get a 403, it might be rate limiting or auth failure
         if response.status() == 403 {
-            return Err(LastFmError::Auth(
-                "Login failed - 403 Forbidden. Check credentials.".to_string(),
-            ));
+            // Get the response body to check if it's rate limiting
+            let response_html = response
+                .body_string()
+                .await
+                .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+            // Look for rate limit indicators in the response
+            if self.is_rate_limit_response(&response_html) {
+                log::debug!("403 response appears to be rate limiting");
+                return Err(LastFmError::RateLimit { retry_after: 60 });
+            } else {
+                log::debug!("403 response appears to be authentication failure");
+
+                // Continue with the normal auth failure handling using the response_html
+                let success_doc = Html::parse_document(&response_html);
+                let login_form_selector =
+                    Selector::parse("form[action*=\"login\"], input[name=\"username_or_email\"]")
+                        .unwrap();
+                let has_login_form = success_doc.select(&login_form_selector).next().is_some();
+
+                if !has_login_form {
+                    return Err(LastFmError::Auth(
+                        "Login failed - 403 Forbidden. Check credentials.".to_string(),
+                    ));
+                } else {
+                    // Parse for specific error messages
+                    let error_selector =
+                        Selector::parse(".alert-danger, .form-error, .error-message").unwrap();
+                    let mut error_messages = Vec::new();
+                    for error in success_doc.select(&error_selector) {
+                        let error_text = error.text().collect::<String>().trim().to_string();
+                        if !error_text.is_empty() {
+                            error_messages.push(error_text);
+                        }
+                    }
+                    let error_msg = if error_messages.is_empty() {
+                        "Login failed - 403 Forbidden. Check credentials.".to_string()
+                    } else {
+                        format!("Login failed: {}", error_messages.join("; "))
+                    };
+                    return Err(LastFmError::Auth(error_msg));
+                }
+            }
         }
 
         // Check if we got a new sessionid that looks like a real Last.fm session
@@ -135,6 +192,7 @@ impl LastFmClient {
             return Ok(());
         }
 
+        // At this point, we didn't get a 403, so read the response body for other cases
         let response_html = response
             .body_string()
             .await
@@ -257,6 +315,41 @@ impl LastFmClient {
     }
 
     pub async fn edit_scrobble(&mut self, edit: &ScrobbleEdit) -> Result<EditResponse> {
+        self.edit_scrobble_with_retry(edit, 3).await
+    }
+
+    pub async fn edit_scrobble_with_retry(
+        &mut self,
+        edit: &ScrobbleEdit,
+        max_retries: u32,
+    ) -> Result<EditResponse> {
+        let mut retries = 0;
+
+        loop {
+            match self.edit_scrobble_impl(edit).await {
+                Ok(result) => return Ok(result),
+                Err(LastFmError::RateLimit { retry_after }) => {
+                    if retries >= max_retries {
+                        log::warn!("Max retries ({}) exceeded for edit operation", max_retries);
+                        return Err(LastFmError::RateLimit { retry_after });
+                    }
+
+                    let delay = std::cmp::min(retry_after, 2_u64.pow(retries + 1) * 5);
+                    log::info!(
+                        "Edit rate limited. Waiting {} seconds before retry {} of {}",
+                        delay,
+                        retries + 1,
+                        max_retries
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+                    retries += 1;
+                }
+                Err(other_error) => return Err(other_error),
+            }
+        }
+    }
+
+    async fn edit_scrobble_impl(&mut self, edit: &ScrobbleEdit) -> Result<EditResponse> {
         if !self.is_logged_in() {
             return Err(LastFmError::Auth(
                 "Must be logged in to edit scrobbles".to_string(),
@@ -754,9 +847,6 @@ impl LastFmClient {
 
             match self.load_edit_form_values(&track.name, artist_name).await {
                 Ok(mut edit_data) => {
-                    // Verify this scrobble is from the expected album
-                    log::debug!("✅ Found editable scrobble for track '{}'", track.name);
-
                     // Update the album name
                     edit_data.album_name = new_album_name.to_string();
 
@@ -1355,11 +1445,42 @@ impl LastFmClient {
             }
         }
 
+        // Handle explicit rate limit responses
         if response.status() == 429 {
-            return Err(LastFmError::RateLimit { retry_after: 60 });
+            let retry_after = response
+                .header("retry-after")
+                .and_then(|h| h.get(0))
+                .and_then(|v| v.as_str().parse::<u64>().ok())
+                .unwrap_or(60);
+            return Err(LastFmError::RateLimit { retry_after });
+        }
+
+        // Check for 403 responses that might be rate limits
+        if response.status() == 403 {
+            log::debug!("Got 403 response, checking if it's a rate limit");
+            // Note: We can't read the body here without consuming it, so we'll let the caller handle it
+            // For now, treat 403s from authenticated endpoints as potential rate limits
+            if !self.session_cookies.is_empty() {
+                log::debug!("403 on authenticated request - likely rate limit");
+                return Err(LastFmError::RateLimit { retry_after: 60 });
+            }
         }
 
         Ok(response)
+    }
+
+    /// Check if a response body indicates rate limiting
+    fn is_rate_limit_response(&self, response_body: &str) -> bool {
+        let body_lower = response_body.to_lowercase();
+
+        // Check against configured rate limit patterns
+        for pattern in &self.rate_limit_patterns {
+            if body_lower.contains(&pattern.to_lowercase()) {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn extract_cookies(&mut self, response: &Response) {
