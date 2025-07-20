@@ -15,7 +15,10 @@
       "Bash(cargo clippy:*)",
       "Bash(cargo fmt:*)",
       "Bash(rustc:*)",
-      "Bash(./test_regex)"
+      "Bash(./test_regex)",
+      "Bash(cargo clean:*)",
+      "Bash(mkdir:*)",
+      "Bash(cargo test:*)"
     ],
     "deny": []
   }

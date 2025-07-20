@@ -14,4 +14,7 @@ pub use iterator::{ArtistAlbumsIterator, ArtistTracksIterator};
 pub use scrobble_edit_context::{EditStrategy, IntoEditContext, ScrobbleEditContext};
 pub use track::{Track, TrackPage};
 
+// Re-export scraper types for testing
+pub use scraper::Html;
+
 pub type Result<T> = std::result::Result<T, LastFmError>;

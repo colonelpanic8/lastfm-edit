@@ -23,7 +23,10 @@ async fn main() -> Result<()> {
         match iterator.next().await {
             Ok(Some(track)) => {
                 track_count += 1;
-                println!("[{:4}] '{}' (plays: {})", track_count, track.name, track.playcount);
+                println!(
+                    "[{:4}] '{}' (plays: {})",
+                    track_count, track.name, track.playcount
+                );
             }
             Ok(None) => {
                 println!("\n📚 Reached end of {artist} catalog");

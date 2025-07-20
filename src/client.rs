@@ -705,65 +705,8 @@ impl LastFmClient {
 
         let document = Html::parse_document(&html);
 
-        // Parse tracks from the album page using the same logic as artist tracks
-        let mut tracks = Vec::new();
-
-        // Try the same parsing logic as we use for artist tracks
-        let table_selector = Selector::parse("table.chartlist").unwrap();
-        let row_selector = Selector::parse("tbody tr").unwrap();
-
-        log::debug!("Looking for track tables on album page");
-
-        let tables: Vec<_> = document.select(&table_selector).collect();
-        log::debug!("Found {} chartlist tables", tables.len());
-
-        for (table_idx, table) in tables.iter().enumerate() {
-            log::debug!("Processing table {} of {}", table_idx + 1, tables.len());
-
-            let rows: Vec<_> = table.select(&row_selector).collect();
-            log::debug!("Found {} rows in table {}", rows.len(), table_idx + 1);
-
-            for (row_idx, row) in rows.iter().enumerate() {
-                // Check if this is a placeholder row
-                if let Some(class) = row.value().attr("class") {
-                    if class.contains("placeholder") {
-                        log::debug!(
-                            "Skipping placeholder row {} in table {}",
-                            row_idx + 1,
-                            table_idx + 1
-                        );
-                        continue;
-                    }
-                }
-
-                log::debug!(
-                    "Trying to parse row {} in table {}",
-                    row_idx + 1,
-                    table_idx + 1
-                );
-
-                match self.parse_track_row(row) {
-                    Ok(mut track) => {
-                        // Set the artist name from the album context
-                        track.artist = artist_name.to_string();
-                        log::debug!(
-                            "✓ Parsed track: '{}' ({} plays)",
-                            track.name,
-                            track.playcount
-                        );
-                        tracks.push(track);
-                    }
-                    Err(e) => {
-                        log::debug!(
-                            "✗ Failed to parse row {} in table {}: {}",
-                            row_idx + 1,
-                            table_idx + 1,
-                            e
-                        );
-                    }
-                }
-            }
-        }
+        // Use the shared track extraction function
+        let tracks = self.extract_tracks_from_document(&document, artist_name)?;
 
         log::debug!(
             "Successfully parsed {} tracks from album page",
@@ -940,15 +883,16 @@ impl LastFmClient {
         })
     }
 
-    fn parse_tracks_page(
+    /// Extract tracks from HTML document using multiple parsing strategies
+    pub fn extract_tracks_from_document(
         &self,
         document: &Html,
-        page_number: u32,
         artist: &str,
-    ) -> Result<TrackPage> {
+    ) -> Result<Vec<Track>> {
         let mut tracks = Vec::new();
+        let mut seen_tracks = std::collections::HashSet::new();
 
-        // Try parsing track data from data attributes (AJAX response)
+        // Strategy 1: Try parsing track data from data-track-name attributes (AJAX response)
         let track_selector = Selector::parse("[data-track-name]").unwrap();
         let track_elements: Vec<_> = document.select(&track_selector).collect();
 
@@ -958,21 +902,52 @@ impl LastFmClient {
                 track_elements.len()
             );
 
-            // Use a set to track unique tracks (since each track might appear multiple times)
-            let mut seen_tracks = std::collections::HashSet::new();
-
             for element in track_elements {
                 if let Some(track_name) = element.value().attr("data-track-name") {
-                    // Skip if we've already processed this track
                     if seen_tracks.contains(track_name) {
                         continue;
                     }
                     seen_tracks.insert(track_name.to_string());
 
                     // Find the play count for this track
-                    let playcount = self.find_playcount_for_track(document, track_name)?;
+                    if let Ok(playcount) = self.find_playcount_for_track(document, track_name) {
+                        // Try to find timestamp for this track
+                        let timestamp = self.find_timestamp_for_track(document, track_name);
 
-                    // Try to find timestamp for this track
+                        let track = Track {
+                            name: track_name.to_string(),
+                            artist: artist.to_string(),
+                            playcount,
+                            timestamp,
+                        };
+                        tracks.push(track);
+                    }
+
+                    if tracks.len() >= 50 {
+                        break; // Last.fm shows 50 tracks per page
+                    }
+                }
+            }
+        }
+
+        // Strategy 2: Parse tracks from hidden form inputs (for tracks like "Comes a Time - 2016")
+        let form_input_selector = Selector::parse("input[name='track']").unwrap();
+        let form_inputs: Vec<_> = document.select(&form_input_selector).collect();
+
+        if !form_inputs.is_empty() {
+            log::debug!("Found {} form inputs with track names", form_inputs.len());
+
+            for input in form_inputs {
+                if let Some(track_name) = input.value().attr("value") {
+                    if seen_tracks.contains(track_name) {
+                        continue;
+                    }
+                    seen_tracks.insert(track_name.to_string());
+
+                    // Try to find play count - may not always succeed for form-based tracks
+                    let playcount = self
+                        .find_playcount_for_track(document, track_name)
+                        .unwrap_or(0);
                     let timestamp = self.find_timestamp_for_track(document, track_name);
 
                     let track = Track {
@@ -984,15 +959,15 @@ impl LastFmClient {
                     tracks.push(track);
 
                     if tracks.len() >= 50 {
-                        break; // Last.fm shows 50 tracks per page
+                        break;
                     }
                 }
             }
+        }
 
-            log::debug!("Successfully parsed {} unique tracks", tracks.len());
-        } else {
-            // Fallback to old table parsing method
-            log::debug!("No data-track-name elements found, trying table parsing");
+        // Strategy 3: Fallback to table parsing method if we didn't find enough tracks
+        if tracks.len() < 10 {
+            log::debug!("Found {} tracks so far, trying table parsing", tracks.len());
 
             let table_selector = Selector::parse("table.chartlist").unwrap();
             let row_selector = Selector::parse("tbody tr").unwrap();
@@ -1000,14 +975,27 @@ impl LastFmClient {
             if let Some(table) = document.select(&table_selector).next() {
                 for row in table.select(&row_selector) {
                     if let Ok(mut track) = self.parse_track_row(&row) {
-                        track.artist = artist.to_string();
-                        tracks.push(track);
+                        if !seen_tracks.contains(&track.name) {
+                            track.artist = artist.to_string();
+                            seen_tracks.insert(track.name.clone());
+                            tracks.push(track);
+                        }
                     }
                 }
-            } else {
-                log::debug!("No table.chartlist found either");
             }
         }
+
+        log::debug!("Successfully extracted {} unique tracks", tracks.len());
+        Ok(tracks)
+    }
+
+    pub fn parse_tracks_page(
+        &self,
+        document: &Html,
+        page_number: u32,
+        artist: &str,
+    ) -> Result<TrackPage> {
+        let tracks = self.extract_tracks_from_document(document, artist)?;
 
         // Check for pagination
         let (has_next_page, total_pages) = self.parse_pagination(document, page_number)?;
@@ -1319,7 +1307,7 @@ impl LastFmClient {
             .ok_or(LastFmError::CsrfNotFound)
     }
 
-    async fn get(&mut self, url: &str) -> Result<Response> {
+    pub async fn get(&mut self, url: &str) -> Result<Response> {
         self.get_with_redirects(url, 0).await
     }
 
