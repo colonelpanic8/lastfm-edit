@@ -14,7 +14,7 @@ pub async fn setup_client() -> Result<LastFmClient> {
     let http_client = http_client::native::NativeClient::new();
     let mut client = LastFmClient::new(Box::new(http_client));
 
-    println!("Logging in as {}...", username);
+    println!("Logging in as {username}...");
     client.login(&username, &password).await?;
     println!("✓ Logged in successfully");
 

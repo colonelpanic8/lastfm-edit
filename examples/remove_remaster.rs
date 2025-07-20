@@ -3,29 +3,52 @@ mod common;
 
 use lastfm_edit::Result;
 use regex::Regex;
+use std::io::{self, Write};
+
+fn get_user_confirmation(original: &str, cleaned: &str) -> bool {
+    println!("\n🔍 Proposed change:");
+    println!("   Original: '{original}'");
+    println!("   Cleaned:  '{cleaned}'");
+    print!("   Apply this change? [y/N/q]: ");
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let response = input.trim().to_lowercase();
+
+    match response.as_str() {
+        "y" | "yes" => true,
+        "q" | "quit" => {
+            println!("🛑 Quitting...");
+            std::process::exit(0);
+        }
+        _ => false,
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut client = common::setup_client().await?;
 
-    println!("=== Remaster Removal Tool ===\n");
-    println!("🎯 This will aggressively remove 'remastered' text from track names");
-    println!("📝 Will attempt to trigger rate limiting during edit operations\n");
+    println!("=== Remaster & Year Removal Tool ===\n");
+    println!("🎯 This will remove 'remastered' text and year suffixes from track names with confirmation");
+    println!("📝 Patterns include: '- 2009', '(2009)', '[2009]', '- Remaster', etc.");
+    println!("📝 You'll be asked to confirm each change before it's applied\n");
 
     let artist = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "The Beatles".to_string());
 
-    println!("🎵 Processing tracks for artist: {}\n", artist);
+    println!("🎵 Processing tracks for artist: {artist}\n");
 
-    // Regex patterns to clean up remaster text
+    // Regex patterns to clean up remaster text and year suffixes
+    // Note: Order matters! More specific patterns should come first
     let remaster_patterns = vec![
+        // Patterns with "remaster" word (most specific)
         // "Track Name - 2009 Remaster" -> "Track Name"
         Regex::new(r"(?i)\s*-\s*\d{4}\s*remaster(ed)?.*$").unwrap(),
         // "Track Name - Remaster" or "Track Name - Remastered" -> "Track Name"
         Regex::new(r"(?i)\s*-\s*remaster(ed)?.*$").unwrap(),
-        // "Track Name - 2009" (from previous edits) -> "Track Name"
-        Regex::new(r"(?i)\s*-\s*\d{4}\s*$").unwrap(),
         // "Track Name (2009 Remaster)" -> "Track Name"
         Regex::new(r"(?i)\s*\(\d{4}\s*remaster(ed)?.*\)\s*$").unwrap(),
         // "Track Name (Remaster)" or "Track Name (Remastered)" -> "Track Name"
@@ -36,6 +59,18 @@ async fn main() -> Result<()> {
         Regex::new(r"(?i)\s*\[remaster(ed)?.*\]\s*$").unwrap(),
         // "Track Name Remastered" -> "Track Name"
         Regex::new(r"(?i)\s*remaster(ed)?\s*(\d{4})?\s*$").unwrap(),
+        // Years that are likely remaster years (1980-2030) - be more conservative
+        // "Track Name - 2009" -> "Track Name" (only for likely remaster years)
+        Regex::new(r"(?i)\s*-\s*(19[8-9]\d|20[0-3]\d)\s*$").unwrap(),
+        // "Track Name (2009)" -> "Track Name" (only for likely remaster years)
+        Regex::new(r"(?i)\s*\((19[8-9]\d|20[0-3]\d)\)\s*$").unwrap(),
+        // "Track Name [2009]" -> "Track Name" (only for likely remaster years)
+        Regex::new(r"(?i)\s*\[(19[8-9]\d|20[0-3]\d)\]\s*$").unwrap(),
+        // Other common suffixes that should be removed
+        // "Track Name - 2019 Mix" -> "Track Name"
+        Regex::new(r"(?i)\s*-\s*\d{4}\s*mix.*$").unwrap(),
+        // "Track Name - Mix" -> "Track Name"
+        Regex::new(r"(?i)\s*-\s*mix.*$").unwrap(),
     ];
 
     // First, collect some tracks to process
@@ -73,16 +108,16 @@ async fn main() -> Result<()> {
                     }
 
                     if fetched_count >= 100 {
-                        println!("      📋 Fetched {} tracks, stopping", fetched_count);
+                        println!("      📋 Fetched {fetched_count} tracks, stopping");
                         break;
                     }
                 }
                 Ok(None) => {
-                    println!("\n📚 Fetched all {} tracks for {}", fetched_count, artist);
+                    println!("\n📚 Fetched all {fetched_count} tracks for {artist}");
                     break;
                 }
                 Err(e) => {
-                    println!("❌ Error fetching tracks: {}", e);
+                    println!("❌ Error fetching tracks: {e}");
                     break;
                 }
             }
@@ -90,19 +125,28 @@ async fn main() -> Result<()> {
     }
 
     println!(
-        "\n🧹 Starting aggressive remaster removal on {} tracks...\n",
+        "\n🧹 Starting remaster removal on {} tracks with confirmation...\n",
         tracks_to_process.len()
     );
 
     let mut processed_count = 0;
     let mut edits_made = 0;
+    let mut skipped_count = 0;
     let mut rate_limit_hits = 0;
 
-    // Now process the collected tracks aggressively
+    // Now process the collected tracks with user confirmation
     for (track, cleaned_name) in tracks_to_process {
         processed_count += 1;
-        println!("🔧 [{:3}] Cleaning: '{}'", processed_count, track.name);
-        println!("      🧹 '{}' → '{}'", track.name, cleaned_name);
+        println!("🔧 [{:3}] Processing: '{}'", processed_count, track.name);
+
+        // Ask user for confirmation before making any changes
+        if !get_user_confirmation(&track.name, &cleaned_name) {
+            println!("   ⏭️  Skipped");
+            skipped_count += 1;
+            continue;
+        }
+
+        println!("   🔄 Applying change...");
 
         // Load edit form - this makes an HTTP request
         match client
@@ -113,44 +157,49 @@ async fn main() -> Result<()> {
                 // Update track name
                 edit_data.track_name = cleaned_name.clone();
 
-                // Submit edit - another HTTP request that might get rate limited
+                // Submit edit - another HTTP request
                 match client.edit_scrobble(&edit_data).await {
                     Ok(_) => {
                         edits_made += 1;
-                        println!("      ✅ Successfully cleaned track");
+                        println!("   ✅ Successfully cleaned track");
                     }
                     Err(e) => {
-                        println!("      ❌ Error editing track: {}", e);
+                        println!("   ❌ Error editing track: {e}");
                         if e.to_string().contains("RateLimit") {
                             rate_limit_hits += 1;
-                            println!("      🚨 RATE LIMIT DETECTED during edit operation!");
+                            log::info!("Rate limit encountered during edit operation for track '{}' by '{}'", track.name, track.artist);
+                            println!("   🚨 RATE LIMIT DETECTED during edit operation!");
                             break;
                         }
                     }
                 }
             }
             Err(e) => {
-                println!("      ⚠️  Couldn't load edit form: {}", e);
+                println!("   ⚠️  Couldn't load edit form: {e}");
                 if e.to_string().contains("RateLimit") {
                     rate_limit_hits += 1;
-                    println!("      🚨 RATE LIMIT DETECTED during form load!");
+                    log::info!(
+                        "Rate limit encountered during form load for track '{}' by '{}'",
+                        track.name,
+                        track.artist
+                    );
+                    println!("   🚨 RATE LIMIT DETECTED during form load!");
                     break;
                 }
             }
         }
-
-        // NO DELAY - be aggressive to trigger rate limiting
     }
 
     println!("\n=== Summary ===");
-    println!("📊 Tracks processed: {}", processed_count);
-    println!("✏️  Edits made: {}", edits_made);
-    println!("🚨 Rate limit hits: {}", rate_limit_hits);
+    println!("📊 Tracks processed: {processed_count}");
+    println!("✏️  Edits made: {edits_made}");
+    println!("⏭️  Tracks skipped: {skipped_count}");
+    println!("🚨 Rate limit hits: {rate_limit_hits}");
 
     if rate_limit_hits > 0 {
         println!("\n🎯 Rate limiting was triggered.");
     } else {
-        println!("\n🤔 No rate limits encountered. Try running again quickly.");
+        println!("\n✨ All approved changes completed successfully!");
     }
 
     Ok(())
