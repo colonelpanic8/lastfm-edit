@@ -4,7 +4,14 @@
       "Bash(grep:*)",
       "Bash(cargo check:*)",
       "Bash(mv:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(cargo run:*)",
+      "Bash(RUST_LOG=lastfm_edit=debug cargo run --example list_album_tracks -- \"Exile on Main Street\" \"The Rolling Stones\")",
+      "Bash(rg:*)",
+      "Bash(direnv exec . cargo run --example debug_album_html -- \"Abbey Road\" \"The Beatles\")",
+      "Bash(RUST_LOG=debug direnv exec . cargo run --example debug_album_html -- \"Abbey Road\" \"The Beatles\")",
+      "Bash(RUST_LOG=debug direnv exec . cargo run --example debug_album_html -- \"Abbey Road\" \"The Beatles\" 2 >& 1)",
+      "Bash(direnv exec:*)"
     ],
     "deny": []
   }
