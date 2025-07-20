@@ -361,7 +361,7 @@ impl LastFmClient {
             self.base_url, self.username
         );
 
-        log::debug!("=== STEP 1: Getting fresh CSRF token for edit ===");
+        log::debug!("Getting fresh CSRF token for edit");
 
         // First request: Get the edit form to extract fresh CSRF token
         let mut form_response = self.get(&edit_url).await?;
@@ -376,8 +376,7 @@ impl LastFmClient {
         let form_document = Html::parse_document(&form_html);
         let fresh_csrf_token = self.extract_csrf_token(&form_document)?;
 
-        log::debug!("Fresh CSRF token: {}", fresh_csrf_token);
-        log::debug!("=== STEP 2: Submitting edit with fresh token ===");
+        log::debug!("Submitting edit with fresh token");
 
         let mut form_data = HashMap::new();
 
@@ -413,7 +412,6 @@ impl LastFmClient {
             edit.track_name_original,
             edit.track_name
         );
-        log::debug!("Using fresh CSRF token: {}", fresh_csrf_token);
         log::trace!("Session cookies count: {}", self.session_cookies.len());
 
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
@@ -457,7 +455,6 @@ impl LastFmClient {
             .collect::<Vec<_>>()
             .join("&");
 
-        log::debug!("Form data: {}", form_string);
         request.set_body(form_string);
 
         let mut response = self
