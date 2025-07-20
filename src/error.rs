@@ -19,4 +19,7 @@ pub enum LastFmError {
 
     #[error("Edit failed: {0}")]
     EditFailed(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }

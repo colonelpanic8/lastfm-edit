@@ -209,6 +209,68 @@ impl LastFmClient {
         ArtistTracksIterator::new(self, artist.to_string())
     }
 
+    /// Fetch recent scrobbles from the user's listening history
+    /// This gives us real scrobble data with timestamps for editing
+    pub async fn get_recent_scrobbles(&mut self, page: u32) -> Result<Vec<Track>> {
+        let url = format!(
+            "{}/user/{}/library?page={}",
+            self.base_url, self.username, page
+        );
+
+        self.debug_log(&format!("Fetching recent scrobbles page {}", page));
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        self.debug_log(&format!(
+            "Recent scrobbles response: {} status, {} chars",
+            response.status(),
+            content.len()
+        ));
+
+        let document = Html::parse_document(&content);
+        self.parse_recent_scrobbles(&document)
+    }
+
+    /// Find the most recent scrobble for a specific track
+    /// This searches through recent listening history to find real scrobble data
+    pub async fn find_recent_scrobble_for_track(
+        &mut self,
+        track_name: &str,
+        artist_name: &str,
+        max_pages: u32,
+    ) -> Result<Option<Track>> {
+        self.debug_log(&format!(
+            "Searching for recent scrobble: '{}' by '{}'",
+            track_name, artist_name
+        ));
+
+        for page in 1..=max_pages {
+            let scrobbles = self.get_recent_scrobbles(page).await?;
+
+            for scrobble in scrobbles {
+                if scrobble.name == track_name && scrobble.artist == artist_name {
+                    self.debug_log(&format!(
+                        "Found recent scrobble: '{}' with timestamp {:?}",
+                        scrobble.name, scrobble.timestamp
+                    ));
+                    return Ok(Some(scrobble));
+                }
+            }
+
+            // Small delay between pages to be polite
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+
+        self.debug_log(&format!(
+            "No recent scrobble found for '{}' by '{}' in {} pages",
+            track_name, artist_name, max_pages
+        ));
+        Ok(None)
+    }
+
     pub async fn edit_scrobble(&mut self, edit: &ScrobbleEdit) -> Result<EditResponse> {
         if !self.is_logged_in() {
             return Err(LastFmError::Auth(
@@ -222,20 +284,23 @@ impl LastFmClient {
         );
 
         self.debug_log("=== STEP 1: Getting fresh CSRF token for edit ===");
-        
+
         // First request: Get the edit form to extract fresh CSRF token
         let mut form_response = self.get(&edit_url).await?;
         let form_html = form_response
             .body_string()
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
-        
-        self.debug_log(&format!("Edit form response status: {}", form_response.status()));
-        
+
+        self.debug_log(&format!(
+            "Edit form response status: {}",
+            form_response.status()
+        ));
+
         // Parse HTML to get fresh CSRF token
         let form_document = Html::parse_document(&form_html);
         let fresh_csrf_token = self.extract_csrf_token(&form_document)?;
-        
+
         self.debug_log(&format!("Fresh CSRF token: {}", fresh_csrf_token));
         self.debug_log("=== STEP 2: Submitting edit with fresh token ===");
 
@@ -244,21 +309,23 @@ impl LastFmClient {
         // Add fresh CSRF token (required)
         form_data.insert("csrfmiddlewaretoken", fresh_csrf_token.as_str());
 
-        // Only include essential parameters we actually want to change
+        // Include ALL form fields as they were extracted from the track page
         form_data.insert("track_name_original", &edit.track_name_original);
         form_data.insert("track_name", &edit.track_name);
         form_data.insert("artist_name_original", &edit.artist_name_original);
         form_data.insert("artist_name", &edit.artist_name);
+        form_data.insert("album_name_original", &edit.album_name_original);
+        form_data.insert("album_name", &edit.album_name);
+        form_data.insert("album_artist_name_original", &edit.album_artist_name_original);
+        form_data.insert("album_artist_name", &edit.album_artist_name);
 
-        // Only include timestamp if we're not editing all instances
+        // ALWAYS include timestamp - Last.fm requires it even with edit_all=true
         let timestamp_str = edit.timestamp.to_string();
-        if !edit.edit_all && edit.timestamp != 0 {
-            form_data.insert("timestamp", &timestamp_str);
-        }
+        form_data.insert("timestamp", &timestamp_str);
 
         // Edit flags
         if edit.edit_all {
-            form_data.insert("edit_all", "on");
+            form_data.insert("edit_all", "1");
         }
         form_data.insert("submit", "edit-scrobble");
         form_data.insert("ajax", "1");
@@ -304,7 +371,10 @@ impl LastFmClient {
         // Add specific referer (matching browser pattern)
         request.insert_header(
             "Referer",
-            &format!("{}/user/{}/library/music/The+Beatles/+tracks?page=1", self.base_url, self.username),
+            &format!(
+                "{}/user/{}/library/music/The+Beatles/+tracks?page=1",
+                self.base_url, self.username
+            ),
         );
 
         // Convert form data to URL-encoded string
@@ -334,36 +404,38 @@ impl LastFmClient {
 
         // Parse the HTML response to check for actual success/failure
         let document = Html::parse_document(&response_text);
-        
+
         // Check for success indicator
         let success_selector = Selector::parse(".alert-success").unwrap();
         let error_selector = Selector::parse(".alert-danger, .alert-error, .error").unwrap();
-        
+
         let has_success_alert = document.select(&success_selector).next().is_some();
         let has_error_alert = document.select(&error_selector).next().is_some();
-        
+
         // Also check if we can see the edited track in the response
         // The response contains the track data in a table format within a script template
         let mut actual_track_name = None;
         let mut actual_album_name = None;
-        
+
         // Try direct selectors first
         let track_name_selector = Selector::parse("td.chartlist-name a").unwrap();
         let album_name_selector = Selector::parse("td.chartlist-album a").unwrap();
-        
+
         if let Some(track_element) = document.select(&track_name_selector).next() {
             actual_track_name = Some(track_element.text().collect::<String>().trim().to_string());
         }
-        
+
         if let Some(album_element) = document.select(&album_name_selector).next() {
             actual_album_name = Some(album_element.text().collect::<String>().trim().to_string());
         }
-        
+
         // If not found, try extracting from the raw response text
         if actual_track_name.is_none() || actual_album_name.is_none() {
             // Look for track name in href="/music/The+Beatles/_/Things+We+Said+Today"
             if let Some(track_match) = response_text.find("href=\"/music/The+Beatles/_/") {
-                let track_start = response_text[track_match..].find("_/").map(|pos| track_match + pos + 2);
+                let track_start = response_text[track_match..]
+                    .find("_/")
+                    .map(|pos| track_match + pos + 2);
                 if let Some(start) = track_start {
                     let track_end = response_text[start..].find("\"").map(|pos| start + pos);
                     if let Some(end) = track_end {
@@ -374,22 +446,24 @@ impl LastFmClient {
                     }
                 }
             }
-            
+
             // Look for album name in href="/music/The+Beatles/A+Hard+Day%27s+Night"
             if let Some(album_match) = response_text.find("href=\"/music/The+Beatles/A+Hard+Day") {
-                let album_start = response_text[album_match..].find("/The+Beatles/").map(|pos| album_match + pos + 13);
+                let album_start = response_text[album_match..]
+                    .find("/The+Beatles/")
+                    .map(|pos| album_match + pos + 13);
                 if let Some(start) = album_start {
                     let album_end = response_text[start..].find("\"").map(|pos| start + pos);
                     if let Some(end) = album_end {
                         let raw_album = &response_text[start..end];
-                        // URL decode the album name  
+                        // URL decode the album name
                         let decoded_album = raw_album.replace("+", " ").replace("%27", "'");
                         actual_album_name = Some(decoded_album);
                     }
                 }
             }
         }
-        
+
         self.debug_log(&format!(
             "Response analysis: success_alert={}, error_alert={}, track='{}', album='{}'",
             has_success_alert,
@@ -397,38 +471,42 @@ impl LastFmClient {
             actual_track_name.as_deref().unwrap_or("not found"),
             actual_album_name.as_deref().unwrap_or("not found")
         ));
-        
+
         // Determine if edit was truly successful
         let success = response.status().is_success() && has_success_alert && !has_error_alert;
-        
+
         // Check if the edit actually took effect by comparing with expected values
-        let edit_took_effect = if let (Some(track), Some(album)) = (&actual_track_name, &actual_album_name) {
-            // The track name should match what we edited to
-            let track_matches = track == &edit.track_name;
-            // The album should also match what we edited to (if we edited it)
-            let album_matches = album == &edit.album_name;
-            
-            self.debug_log(&format!(
-                "Edit validation: expected_track='{}', actual_track='{}', matches={}",
-                edit.track_name, track, track_matches
-            ));
-            self.debug_log(&format!(
-                "Edit validation: expected_album='{}', actual_album='{}', matches={}",
-                edit.album_name, album, album_matches
-            ));
-            
-            track_matches && album_matches
-        } else {
-            false
-        };
-        
+        let edit_took_effect =
+            if let (Some(track), Some(album)) = (&actual_track_name, &actual_album_name) {
+                // The track name should match what we edited to
+                let track_matches = track == &edit.track_name;
+                // The album should also match what we edited to (if we edited it)
+                let album_matches = album == &edit.album_name;
+
+                self.debug_log(&format!(
+                    "Edit validation: expected_track='{}', actual_track='{}', matches={}",
+                    edit.track_name, track, track_matches
+                ));
+                self.debug_log(&format!(
+                    "Edit validation: expected_album='{}', actual_album='{}', matches={}",
+                    edit.album_name, album, album_matches
+                ));
+
+                track_matches && album_matches
+            } else {
+                false
+            };
+
         let final_success = success && edit_took_effect;
-        
+
         // Create detailed message
         let message = if has_error_alert {
             // Extract error message
             if let Some(error_element) = document.select(&error_selector).next() {
-                Some(format!("Edit failed: {}", error_element.text().collect::<String>().trim()))
+                Some(format!(
+                    "Edit failed: {}",
+                    error_element.text().collect::<String>().trim()
+                ))
             } else {
                 Some("Edit failed with unknown error".to_string())
             }
@@ -450,8 +528,128 @@ impl LastFmClient {
             Some(format!("Edit failed with status: {}", response.status()))
         };
 
-        Ok(EditResponse { success: final_success, message })
+        Ok(EditResponse {
+            success: final_success,
+            message,
+        })
     }
+
+    /// Load prepopulated form values for editing a specific track
+    /// This extracts scrobble data directly from the track page forms
+    pub async fn load_edit_form_values(
+        &mut self,
+        track_name: &str,
+        artist_name: &str,
+    ) -> Result<crate::ScrobbleEdit> {
+        self.debug_log(&format!(
+            "Loading edit form values for '{}' by '{}'",
+            track_name, artist_name
+        ));
+
+        // Get the specific track page to find scrobble forms
+        // Add +noredirect to avoid redirects as per lastfm-bulk-edit approach
+        // Use the correct URL format with underscore: artist/_/track
+        let track_url = format!(
+            "{}/user/{}/library/music/+noredirect/{}/_/{}",
+            self.base_url,
+            self.username,
+            urlencoding::encode(artist_name),
+            urlencoding::encode(track_name)
+        );
+
+        self.debug_log(&format!("Fetching track page: {}", track_url));
+
+        let mut response = self.get(&track_url).await?;
+        let html = response
+            .body_string()
+            .await
+            .map_err(|e| crate::LastFmError::Http(e.to_string()))?;
+
+        let document = Html::parse_document(&html);
+
+        // Extract scrobble data directly from the track page forms
+        self.extract_scrobble_data_from_track_page(&document, track_name, artist_name)
+    }
+
+    /// Extract scrobble edit data directly from track page forms
+    /// Based on the approach used in lastfm-bulk-edit
+    fn extract_scrobble_data_from_track_page(
+        &self,
+        document: &Html,
+        expected_track: &str,
+        expected_artist: &str,
+    ) -> Result<crate::ScrobbleEdit> {
+        self.debug_log("Extracting scrobble data directly from track page forms...");
+        
+        // Look for the chartlist table that contains scrobbles
+        let table_selector = Selector::parse("table.chartlist:not(.chartlist__placeholder)").unwrap();
+        let table = document.select(&table_selector).next()
+            .ok_or_else(|| crate::LastFmError::Parse("No chartlist table found on track page".to_string()))?;
+
+        // Look for table rows that contain scrobble edit forms
+        let row_selector = Selector::parse("tr").unwrap();
+        for row in table.select(&row_selector) {
+            // Check if this row has a count bar link (means it's an aggregation, not individual scrobbles)
+            let count_bar_link_selector = Selector::parse(".chartlist-count-bar-link").unwrap();
+            if row.select(&count_bar_link_selector).next().is_some() {
+                self.debug_log("Found count bar link, skipping aggregated row");
+                continue;
+            }
+
+            // Look for scrobble edit form in this row
+            let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
+            if let Some(form) = row.select(&form_selector).next() {
+                // Extract all form values directly
+                let extract_form_value = |name: &str| -> Option<String> {
+                    let selector = Selector::parse(&format!("input[name='{}']", name)).unwrap();
+                    form.select(&selector).next()
+                        .and_then(|input| input.value().attr("value"))
+                        .map(|s| s.to_string())
+                };
+
+                // Get the track and artist from this form
+                let form_track = extract_form_value("track_name").unwrap_or_default();
+                let form_artist = extract_form_value("artist_name").unwrap_or_default();
+                let form_album = extract_form_value("album_name").unwrap_or_default();
+                let form_album_artist = extract_form_value("album_artist_name").unwrap_or_else(|| form_artist.clone());
+                let form_timestamp = extract_form_value("timestamp").unwrap_or_default();
+
+                self.debug_log(&format!(
+                    "Found scrobble form - Track: '{}', Artist: '{}', Album: '{}', Timestamp: {}", 
+                    form_track, form_artist, form_album, form_timestamp
+                ));
+
+                // Check if this form matches the expected track and artist
+                if form_track == expected_track && form_artist == expected_artist {
+                    let timestamp = form_timestamp.parse::<u64>()
+                        .map_err(|_| crate::LastFmError::Parse("Invalid timestamp in form".to_string()))?;
+
+                    self.debug_log(&format!(
+                        "✅ Found matching scrobble form for '{}' by '{}'", expected_track, expected_artist
+                    ));
+
+                    // Create ScrobbleEdit with the extracted values
+                    return Ok(crate::ScrobbleEdit {
+                        track_name_original: form_track.clone(),
+                        album_name_original: form_album.clone(),
+                        artist_name_original: form_artist.clone(),
+                        album_artist_name_original: form_album_artist.clone(),
+                        track_name: form_track,
+                        album_name: form_album,
+                        artist_name: form_artist,
+                        album_artist_name: form_album_artist,
+                        timestamp,
+                        edit_all: true,
+                    });
+                }
+            }
+        }
+
+        Err(crate::LastFmError::Parse(format!(
+            "No scrobble form found for track '{}' by '{}'", expected_track, expected_artist
+        )))
+    }
+
 
     pub async fn get_artist_tracks_page(&mut self, artist: &str, page: u32) -> Result<TrackPage> {
         // Use AJAX endpoint for page content
@@ -593,7 +791,7 @@ impl LastFmClient {
         // Look for timestamp in hidden form inputs for edit scrobble forms
         let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
         let timestamp_selector = Selector::parse("input[name=\"timestamp\"]").unwrap();
-        
+
         for form in document.select(&form_selector) {
             // Check if this form is for our track
             let track_input_selector = Selector::parse("input[name=\"track_name\"]").unwrap();
@@ -697,6 +895,113 @@ impl LastFmClient {
             playcount,
             timestamp: None, // Not available in table parsing mode
         })
+    }
+
+    /// Parse recent scrobbles from the user's library page
+    /// This extracts real scrobble data with timestamps for editing
+    fn parse_recent_scrobbles(&self, document: &Html) -> Result<Vec<Track>> {
+        let mut tracks = Vec::new();
+
+        // Recent scrobbles are typically in a chartlist table
+        let table_selector = Selector::parse("table.chartlist").unwrap();
+        let row_selector = Selector::parse("tbody tr").unwrap();
+
+        if let Some(table) = document.select(&table_selector).next() {
+            for row in table.select(&row_selector) {
+                if let Ok(track) = self.parse_recent_scrobble_row(&row) {
+                    tracks.push(track);
+                }
+            }
+        } else {
+            self.debug_log("No chartlist table found in recent scrobbles");
+        }
+
+        self.debug_log(&format!("Parsed {} recent scrobbles", tracks.len()));
+        Ok(tracks)
+    }
+
+    /// Parse a single row from the recent scrobbles table
+    fn parse_recent_scrobble_row(&self, row: &scraper::ElementRef) -> Result<Track> {
+        // Extract track name
+        let name_selector = Selector::parse(".chartlist-name a").unwrap();
+        let name = row
+            .select(&name_selector)
+            .next()
+            .ok_or(LastFmError::Parse("Missing track name".to_string()))?
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_string();
+
+        // Extract artist name
+        let artist_selector = Selector::parse(".chartlist-artist a").unwrap();
+        let artist = row
+            .select(&artist_selector)
+            .next()
+            .ok_or(LastFmError::Parse("Missing artist name".to_string()))?
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_string();
+
+        // Extract timestamp from data attributes or hidden inputs
+        let timestamp = self.extract_scrobble_timestamp(row);
+
+        // For recent scrobbles, playcount is typically 1 since they're individual scrobbles
+        let playcount = 1;
+
+        Ok(Track {
+            name,
+            artist,
+            playcount,
+            timestamp,
+        })
+    }
+
+    /// Extract timestamp from scrobble row elements
+    fn extract_scrobble_timestamp(&self, row: &scraper::ElementRef) -> Option<u64> {
+        // Look for timestamp in various places:
+
+        // 1. Check for data-timestamp attribute
+        if let Some(timestamp_str) = row.value().attr("data-timestamp") {
+            if let Ok(timestamp) = timestamp_str.parse::<u64>() {
+                return Some(timestamp);
+            }
+        }
+
+        // 2. Look for hidden timestamp input
+        let timestamp_input_selector = Selector::parse("input[name='timestamp']").unwrap();
+        if let Some(input) = row.select(&timestamp_input_selector).next() {
+            if let Some(value) = input.value().attr("value") {
+                if let Ok(timestamp) = value.parse::<u64>() {
+                    return Some(timestamp);
+                }
+            }
+        }
+
+        // 3. Look for edit form with timestamp
+        let edit_form_selector =
+            Selector::parse("form[data-edit-scrobble] input[name='timestamp']").unwrap();
+        if let Some(timestamp_input) = row.select(&edit_form_selector).next() {
+            if let Some(value) = timestamp_input.value().attr("value") {
+                if let Ok(timestamp) = value.parse::<u64>() {
+                    return Some(timestamp);
+                }
+            }
+        }
+
+        // 4. Look for time element with datetime attribute
+        let time_selector = Selector::parse("time").unwrap();
+        if let Some(time_elem) = row.select(&time_selector).next() {
+            if let Some(datetime) = time_elem.value().attr("datetime") {
+                // Parse ISO datetime to timestamp
+                if let Ok(parsed_time) = chrono::DateTime::parse_from_rfc3339(datetime) {
+                    return Some(parsed_time.timestamp() as u64);
+                }
+            }
+        }
+
+        None
     }
 
     fn parse_pagination(&self, document: &Html, current_page: u32) -> Result<(bool, Option<u32>)> {
