@@ -1,4 +1,7 @@
-use crate::{ArtistTracksIterator, LastFmClient, Result, ScrobbleEdit, Track};
+#[path = "shared/common.rs"]
+mod common;
+
+use lastfm_edit::{ArtistTracksIterator, LastFmClient, Result, ScrobbleEdit, Track};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
@@ -485,4 +488,21 @@ pub async fn run_track_editor(mut client: LastFmClient, artist: String) -> Resul
     terminal.show_cursor()?;
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() != 2 {
+        eprintln!("Usage: cargo run --example tui -- \"Artist Name\"");
+        eprintln!("Example: cargo run --example tui -- \"The Beatles\"");
+        std::process::exit(1);
+    }
+
+    let artist = &args[1];
+    let mut client = common::setup_client().await?;
+
+    println!("🎵 Starting track editor for: {}", artist);
+    run_track_editor(client, artist.to_string()).await
 }

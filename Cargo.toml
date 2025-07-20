@@ -22,82 +22,22 @@ name = "login_test"
 path = "examples/login_test.rs"
 
 [[example]]
-name = "artist_tracks"
-path = "examples/artist_tracks.rs"
+name = "list_tracks"
+path = "examples/list_tracks.rs"
 
 [[example]]
-name = "debug_html"
-path = "examples/debug_html.rs"
-
-[[example]]
-name = "test_pagination"
-path = "examples/test_pagination.rs"
-
-[[example]]
-name = "debug_page2"
-path = "examples/debug_page2.rs"
-
-[[example]]
-name = "debug_selectors"
-path = "examples/debug_selectors.rs"
-
-[[example]]
-name = "full_tracklist"
-path = "examples/full_tracklist.rs"
-
-[[example]]
-name = "edit_scrobble"
-path = "examples/edit_scrobble.rs"
-
-[[example]]
-name = "context_based_edit"
-path = "examples/context_based_edit.rs"
-
-[[example]]
-name = "test_minimal_edit"
-path = "examples/test_minimal_edit.rs"
-
-[[example]]
-name = "real_scrobble_edit"
-path = "examples/real_scrobble_edit.rs"
-
-[[example]]
-name = "track_editor_tui"
-path = "examples/track_editor_tui.rs"
-
-[[example]]
-name = "test_edit_form_loading"
-path = "examples/test_edit_form_loading.rs"
-
-[[example]]
-name = "test_working_edit"
-path = "examples/test_working_edit.rs"
-
-[[example]]
-name = "load_track_metadata"
-path = "examples/load_track_metadata.rs"
-
-[[example]]
-name = "clean_beatles_catalog"
-path = "examples/clean_beatles_catalog.rs"
-
-[[example]]
-name = "test_album_loading"
-path = "examples/test_album_loading.rs"
-
-[[example]]
-name = "clean_beatles_full_catalog"
-path = "examples/clean_beatles_full_catalog.rs"
-
-[[example]]
-name = "clean_beatles_albums"
-path = "examples/clean_beatles_albums.rs"
+name = "list_album_tracks"
+path = "examples/list_album_tracks.rs"
 
 [[example]]
 name = "rename_album"
 path = "examples/rename_album.rs"
 
 [[example]]
-name = "examine_beatles_albums"
-path = "examples/examine_beatles_albums.rs"
+name = "clean_artist_tracks"
+path = "examples/clean_artist_tracks.rs"
+
+[[example]]
+name = "tui"
+path = "examples/tui.rs"
 

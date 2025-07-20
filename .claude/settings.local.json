@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(grep:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

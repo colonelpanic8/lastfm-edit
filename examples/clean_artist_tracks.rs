@@ -4,107 +4,110 @@ mod common;
 use lastfm_edit::Result;
 use regex::Regex;
 use std::collections::HashSet;
+use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() != 3 {
+        eprintln!("Usage: cargo run --example clean_artist_tracks -- \"Artist Name\" \"Regex Pattern\"");
+        eprintln!("Examples:");
+        eprintln!("  # Remove remastered suffixes:");
+        eprintln!("  cargo run --example clean_artist_tracks -- \"The Beatles\" \" - Remastered( \\d{{4}})?$\"");
+        eprintln!("  # Remove live suffixes:");
+        eprintln!("  cargo run --example clean_artist_tracks -- \"Pink Floyd\" \" \\(Live\\)$\"");
+        eprintln!("  # Remove explicit tags:");
+        eprintln!("  cargo run --example clean_artist_tracks -- \"Eminem\" \" \\(Explicit\\)$\"");
+        std::process::exit(1);
+    }
+
+    let artist = &args[1];
+    let pattern = &args[2];
+
+    let regex = match Regex::new(pattern) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("❌ Invalid regex pattern '{}': {}", pattern, e);
+            std::process::exit(1);
+        }
+    };
+
     let mut client = common::setup_client().await?;
 
-    println!("=== Beatles Catalog Cleanup: Remove All Remastered Suffixes ===\n");
-
-    let artist = "The Beatles";
-    let regex = Regex::new(r" - Remastered( \d{4})?$").unwrap();
-
-    println!(
-        "🎯 TARGET: Remove all '- Remastered' and '- Remastered YYYY' suffixes from Beatles tracks"
-    );
+    println!("=== Artist Catalog Cleanup Tool ===\n");
     println!("🎨 ARTIST: {}", artist);
-    println!("🔍 PATTERN: Looking for tracks ending with '- Remastered' or '- Remastered YYYY'");
-    println!("📝 EXAMPLES:");
-    println!("   • 'Hey Jude - Remastered 2009' → 'Hey Jude'");
-    println!("   • 'Let It Be - Remastered' → 'Let It Be'");
-    println!("   • 'Yesterday - Remastered 2015' → 'Yesterday'");
+    println!("🔍 PATTERN: {}", pattern);
+    println!("📝 This will clean track names by removing text matching the regex pattern");
     println!("\n🚀 Starting catalog scan...\n");
 
     // Track statistics
     let mut total_tracks_scanned = 0;
-    let mut remastered_tracks_found = 0;
+    let mut matching_tracks_found = 0;
     let mut tracks_successfully_cleaned = 0;
     let mut tracks_failed_to_clean = 0;
     let mut already_cleaned_tracks = HashSet::new();
 
-    // Step 1: Collect all remastered tracks first
-    println!("🔍 Step 1: Scanning entire Beatles catalog for remastered tracks...");
-    let mut all_remastered_tracks = Vec::new();
+    // Step 1: Collect all matching tracks first
+    println!("🔍 Step 1: Scanning entire {} catalog for matching tracks...", artist);
+    let mut all_matching_tracks = Vec::new();
 
     {
         let mut iterator = client.artist_tracks(artist);
-        let mut page_num = 1;
+        let mut track_count = 0;
 
         loop {
-            println!("📖 Scanning page {}...", page_num);
+            match iterator.next().await {
+                Ok(Some(track)) => {
+                    total_tracks_scanned += 1;
+                    track_count += 1;
 
-            match iterator.next_page().await {
-                Ok(Some(page)) => {
-                    total_tracks_scanned += page.tracks.len();
+                    // Print progress every 50 tracks
+                    if track_count % 50 == 0 {
+                        println!("📖 Scanned {} tracks so far...", track_count);
+                    }
 
-                    // Find remastered tracks on this page
-                    for track in &page.tracks {
-                        if regex.is_match(&track.name) {
-                            let base_name = regex.replace(&track.name, "").to_string();
-                            if !already_cleaned_tracks.contains(&base_name) {
-                                all_remastered_tracks.push(track.clone());
-                                already_cleaned_tracks.insert(base_name);
-                                remastered_tracks_found += 1;
-                            }
+                    // Check if this track matches our pattern
+                    if regex.is_match(&track.name) {
+                        let base_name = regex.replace(&track.name, "").to_string();
+                        if !already_cleaned_tracks.contains(&base_name) {
+                            all_matching_tracks.push(track);
+                            already_cleaned_tracks.insert(base_name);
+                            matching_tracks_found += 1;
                         }
                     }
-
-                    println!(
-                        "   📊 Page {}: {} tracks scanned, {} total remastered found so far",
-                        page_num,
-                        page.tracks.len(),
-                        all_remastered_tracks.len()
-                    );
-
-                    // Check if there are more pages
-                    if !page.has_next_page {
-                        println!("📚 Reached end of Beatles catalog");
-                        break;
-                    }
-
-                    page_num += 1;
                 }
                 Ok(None) => {
-                    println!("📚 No more pages available");
+                    println!("📚 Reached end of {} catalog - scanned {} tracks total", artist, track_count);
                     break;
                 }
                 Err(e) => {
-                    println!("❌ Error fetching page {}: {}", page_num, e);
+                    println!("❌ Error fetching tracks: {}", e);
                     break;
                 }
             }
         }
     }
 
-    // Step 2: Process all found remastered tracks
-    if all_remastered_tracks.is_empty() {
-        println!("\n🎉 No remastered tracks found! Your Beatles catalog is already clean.");
+    // Step 2: Process all found matching tracks
+    if all_matching_tracks.is_empty() {
+        println!("\n🎉 No matching tracks found! Your {} catalog is already clean.", artist);
         return Ok(());
     }
 
     println!(
-        "\n🎯 Step 2: Processing {} remastered tracks...",
-        all_remastered_tracks.len()
+        "\n🎯 Step 2: Processing {} matching tracks...",
+        all_matching_tracks.len()
     );
     already_cleaned_tracks.clear(); // Reset for actual processing
 
-    for (index, track) in all_remastered_tracks.iter().enumerate() {
+    for (index, track) in all_matching_tracks.iter().enumerate() {
         let clean_name = regex.replace(&track.name, "").to_string();
 
         println!(
             "\n🎵 [{}/{}] Cleaning: '{}' → '{}'",
             index + 1,
-            all_remastered_tracks.len(),
+            all_matching_tracks.len(),
             track.name,
             clean_name
         );
@@ -130,7 +133,7 @@ async fn main() -> Result<()> {
 
                 // Perform the edit
                 match client.edit_scrobble(&edit_data).await {
-                    Ok(response) => {
+                    Ok(_response) => {
                         println!("   ✅ Successfully cleaned: '{}'", clean_name);
                         tracks_successfully_cleaned += 1;
                         already_cleaned_tracks.insert(clean_name);
@@ -149,17 +152,17 @@ async fn main() -> Result<()> {
         }
 
         // Add a small delay to be respectful to Last.fm servers
-        println!("   ⏳ Waiting 500ms before next track...");
+        println!("   ⏳ Waiting 1.2s before next track...");
         tokio::time::sleep(tokio::time::Duration::from_millis(1200)).await;
     }
 
     // Print final statistics
     println!("\n{}", "=".repeat(60));
-    println!("🎼 BEATLES CATALOG CLEANUP COMPLETE");
+    println!("🎼 {} CATALOG CLEANUP COMPLETE", artist.to_uppercase());
     println!("{}", "=".repeat(60));
     println!("📊 STATISTICS:");
     println!("   • Total tracks scanned: {}", total_tracks_scanned);
-    println!("   • Remastered tracks found: {}", remastered_tracks_found);
+    println!("   • Matching tracks found: {}", matching_tracks_found);
     println!(
         "   • Tracks successfully cleaned: {}",
         tracks_successfully_cleaned
@@ -167,7 +170,7 @@ async fn main() -> Result<()> {
     println!("   • Tracks failed to clean: {}", tracks_failed_to_clean);
 
     if tracks_successfully_cleaned > 0 {
-        println!("\n✨ Your Beatles catalog is now cleaner! All 'Remastered' suffixes have been removed.");
+        println!("\n✨ Your {} catalog is now cleaner! Pattern '{}' has been removed from track names.", artist, pattern);
     }
 
     if tracks_failed_to_clean > 0 {
@@ -178,7 +181,7 @@ async fn main() -> Result<()> {
         println!("\n💡 You can re-run this script later to try cleaning the remaining tracks.");
     }
 
-    println!("\n🎵 Beatles catalog cleanup completed!");
+    println!("\n🎵 {} catalog cleanup completed!", artist);
 
     Ok(())
 }

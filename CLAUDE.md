@@ -44,9 +44,13 @@ pub struct TrackPage {
 - Error handling for missing elements
 
 ### 5. Examples Structure
-- `examples/login_test.rs` - tests authentication
-- `examples/artist_tracks.rs` - tests paginated track fetching
-- Run: `cargo run --example artist_tracks`
+- `examples/login_test.rs` - Basic authentication test
+- `examples/list_tracks.rs` - Simple track listing for an artist
+- `examples/list_album_tracks.rs` - List editable tracks from a specific album
+- `examples/rename_album.rs` - Album name editing example
+- `examples/clean_artist_tracks.rs` - Generic track name cleanup with regex patterns
+- `examples/tui.rs` - Interactive terminal UI for track editing
+- Run: `cargo run --example login_test` or `cargo run --example list_tracks -- "Artist Name"`
 
 ## Key Dependencies
 ```toml
@@ -66,8 +70,23 @@ urlencoding = "2.1"
 
 ## Working Commands
 ```bash
+# Basic authentication test
 direnv exec . cargo run --example login_test
-direnv exec . cargo run --example artist_tracks
+
+# Simple track listing
+direnv exec . cargo run --example list_tracks -- "Artist Name"
+
+# List editable tracks from an album
+direnv exec . cargo run --example list_album_tracks -- "Artist Name" "Album Name"
+
+# Album renaming
+direnv exec . cargo run --example rename_album -- "Old Album Name" "New Album Name" "Artist Name"
+
+# Track cleaning with regex patterns
+direnv exec . cargo run --example clean_artist_tracks -- "Artist Name" " - Remastered( \\d{4})?$"
+
+# Interactive TUI
+direnv exec . cargo run --example tui -- "Artist Name"
 ```
 
 ## Reference Implementation

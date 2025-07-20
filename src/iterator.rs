@@ -21,6 +21,19 @@ impl<'a> ArtistTracksIterator<'a> {
         }
     }
 
+    /// Async method to fetch next track from the iterator
+    pub async fn next(&mut self) -> Result<Option<Track>> {
+        // If buffer is empty, try to load next page
+        if self.buffer.is_empty() {
+            if let Some(page) = self.next_page().await? {
+                self.buffer = page.tracks;
+                self.buffer.reverse(); // Reverse so we can pop from end efficiently
+            }
+        }
+
+        Ok(self.buffer.pop())
+    }
+
     pub async fn next_page(&mut self) -> Result<Option<TrackPage>> {
         if !self.has_more {
             return Ok(None);
@@ -46,8 +59,8 @@ impl<'a> ArtistTracksIterator<'a> {
     pub async fn collect_all(&mut self) -> Result<Vec<Track>> {
         let mut all_tracks = Vec::new();
 
-        while let Some(page) = self.next_page().await? {
-            all_tracks.extend(page.tracks);
+        while let Some(track) = self.next().await? {
+            all_tracks.push(track);
         }
 
         Ok(all_tracks)
@@ -56,19 +69,10 @@ impl<'a> ArtistTracksIterator<'a> {
     pub async fn take(&mut self, n: usize) -> Result<Vec<Track>> {
         let mut tracks = Vec::new();
 
-        while tracks.len() < n {
-            if self.buffer.is_empty() {
-                match self.next_page().await? {
-                    Some(page) => self.buffer = page.tracks,
-                    None => break,
-                }
-            }
-
-            let remaining = n - tracks.len();
-            if self.buffer.len() <= remaining {
-                tracks.extend(self.buffer.drain(..));
-            } else {
-                tracks.extend(self.buffer.drain(..remaining));
+        for _ in 0..n {
+            match self.next().await? {
+                Some(track) => tracks.push(track),
+                None => break,
             }
         }
 
@@ -105,6 +109,19 @@ impl<'a> ArtistAlbumsIterator<'a> {
         }
     }
 
+    /// Async method to fetch next album from the iterator
+    pub async fn next(&mut self) -> Result<Option<Album>> {
+        // If buffer is empty, try to load next page
+        if self.buffer.is_empty() {
+            if let Some(page) = self.next_page().await? {
+                self.buffer = page.albums;
+                self.buffer.reverse(); // Reverse so we can pop from end efficiently
+            }
+        }
+
+        Ok(self.buffer.pop())
+    }
+
     pub async fn next_page(&mut self) -> Result<Option<AlbumPage>> {
         if !self.has_more {
             return Ok(None);
@@ -130,8 +147,8 @@ impl<'a> ArtistAlbumsIterator<'a> {
     pub async fn collect_all(&mut self) -> Result<Vec<Album>> {
         let mut all_albums = Vec::new();
 
-        while let Some(page) = self.next_page().await? {
-            all_albums.extend(page.albums);
+        while let Some(album) = self.next().await? {
+            all_albums.push(album);
         }
 
         Ok(all_albums)
@@ -140,19 +157,10 @@ impl<'a> ArtistAlbumsIterator<'a> {
     pub async fn take(&mut self, n: usize) -> Result<Vec<Album>> {
         let mut albums = Vec::new();
 
-        while albums.len() < n {
-            if self.buffer.is_empty() {
-                match self.next_page().await? {
-                    Some(page) => self.buffer = page.albums,
-                    None => break,
-                }
-            }
-
-            let remaining = n - albums.len();
-            if self.buffer.len() <= remaining {
-                albums.extend(self.buffer.drain(..));
-            } else {
-                albums.extend(self.buffer.drain(..remaining));
+        for _ in 0..n {
+            match self.next().await? {
+                Some(album) => albums.push(album),
+                None => break,
             }
         }
 
