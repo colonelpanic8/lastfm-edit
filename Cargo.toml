@@ -16,6 +16,7 @@ regex = "1.0"
 ratatui = "0.28"
 crossterm = "0.28"
 log = "0.4"
+env_logger = "0.11"
 
 [[example]]
 name = "login_test"

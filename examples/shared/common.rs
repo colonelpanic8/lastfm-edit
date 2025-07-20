@@ -2,6 +2,9 @@ use lastfm_edit::{LastFmClient, Result};
 use std::env;
 
 pub async fn setup_client() -> Result<LastFmClient> {
+    // Initialize logger to handle log::debug! calls
+    env_logger::init();
+    
     let username = env::var("LASTFM_EDIT_USERNAME")
         .expect("LASTFM_EDIT_USERNAME environment variable not set");
     let password = env::var("LASTFM_EDIT_PASSWORD")
