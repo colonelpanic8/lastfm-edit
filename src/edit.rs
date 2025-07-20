@@ -24,40 +24,52 @@ pub struct EditResponse {
 }
 
 impl ScrobbleEdit {
-    pub fn new() -> Self {
+    /// Create a new ScrobbleEdit with all required fields
+    pub fn new(
+        track_name_original: String,
+        album_name_original: String,
+        artist_name_original: String,
+        album_artist_name_original: String,
+        track_name: String,
+        album_name: String,
+        artist_name: String,
+        album_artist_name: String,
+        timestamp: u64,
+        edit_all: bool,
+    ) -> Self {
         Self {
-            track_name_original: String::new(),
-            album_name_original: String::new(),
-            artist_name_original: String::new(),
-            album_artist_name_original: String::new(),
-            track_name: String::new(),
-            album_name: String::new(),
-            artist_name: String::new(),
-            album_artist_name: String::new(),
-            timestamp: 0,
-            edit_all: false,
+            track_name_original,
+            album_name_original,
+            artist_name_original,
+            album_artist_name_original,
+            track_name,
+            album_name,
+            artist_name,
+            album_artist_name,
+            timestamp,
+            edit_all,
         }
     }
 
-    /// Create an edit request from track information
+    /// Create an edit request from track information (convenience constructor)
     pub fn from_track_info(
         original_track: &str,
         original_album: &str,
         original_artist: &str,
         timestamp: u64,
     ) -> Self {
-        Self {
-            track_name_original: original_track.to_string(),
-            album_name_original: original_album.to_string(),
-            artist_name_original: original_artist.to_string(),
-            album_artist_name_original: original_artist.to_string(),
-            track_name: original_track.to_string(),
-            album_name: original_album.to_string(),
-            artist_name: original_artist.to_string(),
-            album_artist_name: original_artist.to_string(),
+        Self::new(
+            original_track.to_string(),
+            original_album.to_string(),
+            original_artist.to_string(),
+            original_artist.to_string(), // album_artist defaults to artist
+            original_track.to_string(),
+            original_album.to_string(),
+            original_artist.to_string(),
+            original_artist.to_string(), // album_artist defaults to artist
             timestamp,
-            edit_all: false,
-        }
+            false, // edit_all defaults to false
+        )
     }
 
     /// Set the new track name
@@ -83,11 +95,5 @@ impl ScrobbleEdit {
     pub fn with_edit_all(mut self, edit_all: bool) -> Self {
         self.edit_all = edit_all;
         self
-    }
-}
-
-impl Default for ScrobbleEdit {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -30,7 +30,6 @@ impl LastFmClient {
         }
     }
 
-
     pub async fn login(&mut self, username: &str, password: &str) -> Result<()> {
         // Get login page to extract CSRF token
         let login_url = format!("{}/login", self.base_url);
@@ -226,7 +225,8 @@ impl LastFmClient {
     ) -> Result<Option<Track>> {
         log::debug!(
             "Searching for recent scrobble: '{}' by '{}'",
-            track_name, artist_name
+            track_name,
+            artist_name
         );
 
         for page in 1..=max_pages {
@@ -236,7 +236,8 @@ impl LastFmClient {
                 if scrobble.name == track_name && scrobble.artist == artist_name {
                     log::debug!(
                         "Found recent scrobble: '{}' with timestamp {:?}",
-                        scrobble.name, scrobble.timestamp
+                        scrobble.name,
+                        scrobble.timestamp
                     );
                     return Ok(Some(scrobble));
                 }
@@ -248,7 +249,9 @@ impl LastFmClient {
 
         log::debug!(
             "No recent scrobble found for '{}' by '{}' in {} pages",
-            track_name, artist_name, max_pages
+            track_name,
+            artist_name,
+            max_pages
         );
         Ok(None)
     }
@@ -274,10 +277,7 @@ impl LastFmClient {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        log::debug!(
-            "Edit form response status: {}",
-            form_response.status()
-        );
+        log::debug!("Edit form response status: {}", form_response.status());
 
         // Parse HTML to get fresh CSRF token
         let form_document = Html::parse_document(&form_html);
@@ -317,13 +317,11 @@ impl LastFmClient {
 
         log::debug!(
             "Editing scrobble: '{}' -> '{}'",
-            edit.track_name_original, edit.track_name
+            edit.track_name_original,
+            edit.track_name
         );
         log::debug!("Using fresh CSRF token: {}", fresh_csrf_token);
-        log::debug!(
-            "Session cookies count: {}",
-            self.session_cookies.len()
-        );
+        log::debug!("Session cookies count: {}", self.session_cookies.len());
 
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
 
@@ -356,10 +354,7 @@ impl LastFmClient {
         // Add referer header - use the current artist being edited
         request.insert_header(
             "Referer",
-            &format!(
-                "{}/user/{}/library",
-                self.base_url, self.username
-            ),
+            &format!("{}/user/{}/library", self.base_url, self.username),
         );
 
         // Convert form data to URL-encoded string
@@ -432,7 +427,8 @@ impl LastFmClient {
 
             // Look for album name in href="/music/{artist}/{album}"
             // Find album links that are not track links (don't contain /_/)
-            let album_pattern = regex::Regex::new(r#"href="/music/[^"]+/([^"/_]+)"[^>]*>[^<]*</a>"#).unwrap();
+            let album_pattern =
+                regex::Regex::new(r#"href="/music/[^"]+/([^"/_]+)"[^>]*>[^<]*</a>"#).unwrap();
             if let Some(captures) = album_pattern.captures(&response_text) {
                 if let Some(album_match) = captures.get(1) {
                     let raw_album = album_match.as_str();
@@ -466,11 +462,15 @@ impl LastFmClient {
 
                 log::debug!(
                     "Edit validation: expected_track='{}', actual_track='{}', matches={}",
-                    edit.track_name, track, track_matches
+                    edit.track_name,
+                    track,
+                    track_matches
                 );
                 log::debug!(
                     "Edit validation: expected_album='{}', actual_album='{}', matches={}",
-                    edit.album_name, album, album_matches
+                    edit.album_name,
+                    album,
+                    album_matches
                 );
 
                 track_matches && album_matches
@@ -524,7 +524,8 @@ impl LastFmClient {
     ) -> Result<crate::ScrobbleEdit> {
         log::debug!(
             "Loading edit form values for '{}' by '{}'",
-            track_name, artist_name
+            track_name,
+            artist_name
         );
 
         // Get the specific track page to find scrobble forms
@@ -559,7 +560,8 @@ impl LastFmClient {
     ) -> Result<crate::ScrobbleEdit> {
         log::debug!(
             "Loading album edit form values for '{}' by '{}'",
-            album_name, artist_name
+            album_name,
+            artist_name
         );
 
         // Get the specific album page to find scrobble forms for tracks from this album
@@ -636,7 +638,10 @@ impl LastFmClient {
 
                 log::debug!(
                     "Found scrobble form - Track: '{}', Artist: '{}', Album: '{}', Timestamp: {}",
-                    form_track, form_artist, form_album, form_timestamp
+                    form_track,
+                    form_artist,
+                    form_album,
+                    form_timestamp
                 );
 
                 // Check if this form matches the expected track and artist
@@ -647,22 +652,23 @@ impl LastFmClient {
 
                     log::debug!(
                         "✅ Found matching scrobble form for '{}' by '{}'",
-                        expected_track, expected_artist
+                        expected_track,
+                        expected_artist
                     );
 
                     // Create ScrobbleEdit with the extracted values
-                    return Ok(crate::ScrobbleEdit {
-                        track_name_original: form_track.clone(),
-                        album_name_original: form_album.clone(),
-                        artist_name_original: form_artist.clone(),
-                        album_artist_name_original: form_album_artist.clone(),
-                        track_name: form_track,
-                        album_name: form_album,
-                        artist_name: form_artist,
-                        album_artist_name: form_album_artist,
+                    return Ok(crate::ScrobbleEdit::new(
+                        form_track.clone(),
+                        form_album.clone(),
+                        form_artist.clone(),
+                        form_album_artist.clone(),
+                        form_track,
+                        form_album,
+                        form_artist,
+                        form_album_artist,
                         timestamp,
-                        edit_all: true,
-                    });
+                        true,
+                    ));
                 }
             }
         }
@@ -681,9 +687,7 @@ impl LastFmClient {
         expected_album: &str,
         expected_artist: &str,
     ) -> Result<crate::ScrobbleEdit> {
-        log::debug!(
-            "Extracting track names from album page, then finding editable scrobbles..."
-        );
+        log::debug!("Extracting track names from album page, then finding editable scrobbles...");
 
         // Extract track names from the album page
         let mut track_names = Vec::new();
@@ -725,21 +729,21 @@ impl LastFmClient {
                     if edit_data.album_name_original == expected_album {
                         log::debug!(
                             "✅ Found editable scrobble for track '{}' from album '{}'",
-                            track_name, expected_album
+                            track_name,
+                            expected_album
                         );
                         return Ok(edit_data);
                     } else {
                         log::debug!(
                             "Track '{}' found but from different album: '{}' (expected '{}')",
-                            track_name, edit_data.album_name_original, expected_album
+                            track_name,
+                            edit_data.album_name_original,
+                            expected_album
                         );
                     }
                 }
                 Err(e) => {
-                    log::debug!(
-                        "Could not load edit form for track '{}': {}",
-                        track_name, e
-                    );
+                    log::debug!("Could not load edit form for track '{}': {}", track_name, e);
                     // Continue to next track
                 }
             }
@@ -761,7 +765,9 @@ impl LastFmClient {
     ) -> Result<EditResponse> {
         log::debug!(
             "Editing album '{}' -> '{}' by '{}'",
-            old_album_name, new_album_name, artist_name
+            old_album_name,
+            new_album_name,
+            artist_name
         );
 
         // Load the current edit form values from the album page
@@ -786,10 +792,7 @@ impl LastFmClient {
             page
         );
 
-        log::debug!(
-            "Fetching tracks page {} for artist: {}",
-            page, artist
-        );
+        log::debug!("Fetching tracks page {} for artist: {}", page, artist);
         let mut response = self.get(&url).await?;
         let content = response
             .body_string()
@@ -878,10 +881,7 @@ impl LastFmClient {
                 }
             }
 
-            log::debug!(
-                "Successfully parsed {} unique tracks",
-                tracks.len()
-            );
+            log::debug!("Successfully parsed {} unique tracks", tracks.len());
         } else {
             // Fallback to old table parsing method
             log::debug!("No data-track-name elements found, trying table parsing");
@@ -1267,10 +1267,7 @@ impl LastFmClient {
                 if let Some(redirect_url) = location.get(0) {
                     let redirect_url_str = redirect_url.as_str();
                     if url.contains("page=") {
-                        log::debug!(
-                            "Following redirect from {} to {}",
-                            url, redirect_url_str
-                        );
+                        log::debug!("Following redirect from {} to {}", url, redirect_url_str);
 
                         // Check if this is a redirect to login - authentication issue
                         if redirect_url_str.contains("/login") {
@@ -1344,10 +1341,7 @@ impl LastFmClient {
                 // Check if sessionid changed
                 for cookie in &self.session_cookies {
                     if cookie.starts_with("sessionid=") {
-                        log::debug!(
-                            "Current sessionid: {}",
-                            &cookie[10..50.min(cookie.len())]
-                        );
+                        log::debug!("Current sessionid: {}", &cookie[10..50.min(cookie.len())]);
                         break;
                     }
                 }
@@ -1365,10 +1359,7 @@ impl LastFmClient {
             page
         );
 
-        log::debug!(
-            "Fetching albums page {} for artist: {}",
-            page, artist
-        );
+        log::debug!("Fetching albums page {} for artist: {}", page, artist);
         let mut response = self.get(&url).await?;
         let content = response
             .body_string()
@@ -1457,10 +1448,7 @@ impl LastFmClient {
                 }
             }
 
-            log::debug!(
-                "Successfully parsed {} unique albums",
-                albums.len()
-            );
+            log::debug!("Successfully parsed {} unique albums", albums.len());
         } else {
             // Fallback to table parsing method
             log::debug!("No data-album-name elements found, trying table parsing");
