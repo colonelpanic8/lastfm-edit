@@ -10,10 +10,9 @@ use crate::{Album, AlbumPage, LastFmClient, Result, Track, TrackPage};
 ///
 /// ```rust,no_run
 /// use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-/// use http_client::HttpClient;
 ///
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(HttpClient::new());
+/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut tracks = client.artist_tracks("Radiohead");
@@ -55,9 +54,8 @@ pub trait AsyncPaginatedIterator {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// let mut tracks = client.artist_tracks("Small Artist");
     /// let all_tracks = tracks.collect_all().await?;
     /// println!("Found {} tracks total", all_tracks.len());
@@ -85,9 +83,8 @@ pub trait AsyncPaginatedIterator {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// let mut tracks = client.artist_tracks("Radiohead");
     /// let top_20 = tracks.take(20).await?;
     /// println!("Top 20 tracks: {:?}", top_20);
@@ -120,9 +117,8 @@ pub trait AsyncPaginatedIterator {
 ///
 /// ```rust,no_run
 /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-/// # use http_client::HttpClient;
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(HttpClient::new());
+/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut tracks = client.artist_tracks("The Beatles");
@@ -222,9 +218,8 @@ impl<'a> ArtistTracksIterator<'a> {
 ///
 /// ```rust,no_run
 /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-/// # use http_client::HttpClient;
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(HttpClient::new());
+/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut albums = client.artist_albums("Pink Floyd");
@@ -323,9 +318,8 @@ impl<'a> ArtistAlbumsIterator<'a> {
 ///
 /// ```rust,no_run
 /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-/// # use http_client::HttpClient;
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(HttpClient::new());
+/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// // Get recent tracks with timestamps
@@ -430,9 +424,8 @@ impl<'a> RecentTracksIterator<'a> {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// let last_processed = 1640995200; // Some previous timestamp
     ///
     /// let mut recent = client.recent_tracks().with_stop_timestamp(last_processed);

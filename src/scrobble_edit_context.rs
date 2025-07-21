@@ -11,10 +11,9 @@ use crate::{LastFmClient, Result, ScrobbleEdit};
 /// ```rust,no_run
 /// use lastfm_edit::{ScrobbleEditContext, EditStrategy, IntoEditContext};
 /// use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-/// use http_client::HttpClient;
 ///
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(HttpClient::new());
+/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// // Find tracks and convert to edit contexts
@@ -211,9 +210,8 @@ impl ScrobbleEditContext {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{ScrobbleEditContext, LastFmClient};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// let context = ScrobbleEditContext::from_track_listing(
     ///     "Wrong Name".to_string(),
     ///     "Artist".to_string(),
@@ -297,9 +295,8 @@ impl ScrobbleEditContext {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{ScrobbleEditContext, LastFmClient};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// let context = ScrobbleEditContext::from_track_listing(
     ///     "Misspelled Track".to_string(),
     ///     "Artist".to_string(),
@@ -408,10 +405,9 @@ impl ScrobbleEditContext {
 ///
 /// ```rust,no_run
 /// use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, IntoEditContext};
-/// use http_client::HttpClient;
 ///
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(HttpClient::new());
+/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut tracks = client.artist_tracks("Radiohead");

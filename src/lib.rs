@@ -17,20 +17,19 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmClient, Result};
-//! use http_client::HttpClient;
+//! use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Create client with any HTTP implementation
-//!     let http_client = HttpClient::new();
-//!     let mut client = LastFmClient::new(http_client);
+//!     let http_client = http_client::native::NativeClient::new();
+//!     let mut client = LastFmClient::new(Box::new(http_client));
 //!
 //!     // Login to Last.fm
 //!     client.login("username", "password").await?;
 //!
 //!     // Browse recent tracks
-//!     let mut recent_tracks = client.recent_tracks("username").await?;
+//!     let mut recent_tracks = client.recent_tracks();
 //!     while let Some(track) = recent_tracks.next().await? {
 //!         println!("{} - {}", track.artist, track.name);
 //!     }

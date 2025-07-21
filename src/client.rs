@@ -18,13 +18,12 @@ use std::path::Path;
 ///
 /// ```rust,no_run
 /// use lastfm_edit::{LastFmClient, Result};
-/// use http_client::HttpClient;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<()> {
 ///     // Create client with any HTTP implementation
-///     let http_client = HttpClient::new();
-///     let mut client = LastFmClient::new(http_client);
+///     let http_client = http_client::native::NativeClient::new();
+///     let mut client = LastFmClient::new(Box::new(http_client));
 ///
 ///     // Login to Last.fm
 ///     client.login("username", "password").await?;
@@ -56,10 +55,9 @@ impl LastFmClient {
     ///
     /// ```rust,no_run
     /// use lastfm_edit::LastFmClient;
-    /// use http_client::HttpClient;
     ///
-    /// let http_client = HttpClient::new();
-    /// let client = LastFmClient::new(http_client);
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let client = LastFmClient::new(Box::new(http_client));
     /// ```
     pub fn new(client: Box<dyn HttpClient>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
@@ -142,9 +140,8 @@ impl LastFmClient {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmClient, Result};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// client.login("username", "password").await?;
     /// assert!(client.is_logged_in());
     /// # Ok::<(), lastfm_edit::LastFmError>(())
@@ -363,9 +360,8 @@ impl LastFmClient {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// // client.login(...).await?;
     ///
     /// let mut tracks = client.artist_tracks("Radiohead");
@@ -405,9 +401,8 @@ impl LastFmClient {
     ///
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
-    /// # use http_client::HttpClient;
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
     /// // client.login(...).await?;
     ///
     /// let mut recent = client.recent_tracks();
