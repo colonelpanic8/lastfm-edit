@@ -1,8 +1,8 @@
 use crate::{
-    AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator,
     EditResponse, LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
+    AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, EditResponse,
+    LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
 };
-use crate::parsing::LastFmParser;
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};
@@ -877,7 +877,9 @@ impl LastFmEditClient {
         let document = Html::parse_document(&html);
 
         // Use the shared track extraction function
-        let tracks = self.parser.extract_tracks_from_document(&document, artist_name)?;
+        let tracks = self
+            .parser
+            .extract_tracks_from_document(&document, artist_name)?;
 
         log::debug!(
             "Successfully parsed {} tracks from album page",
@@ -1727,5 +1729,4 @@ impl LastFmEditClient {
             total_pages: Some(1),
         })
     }
-
 }
