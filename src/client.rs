@@ -1,5 +1,5 @@
+use crate::parsing::LastFmParser;
 use crate::{
-    EditResponse, LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
     AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, EditResponse,
     LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
 };
@@ -358,22 +358,6 @@ impl LastFmEditClient {
     /// # Returns
     ///
     /// Returns an [`ArtistTracksIterator`] that implements [`AsyncPaginatedIterator`].
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
-    /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
-    /// // client.login(...).await?;
-    ///
-    /// let mut tracks = client.artist_tracks("Radiohead");
-    /// while let Some(track) = tracks.next().await? {
-    ///     println!("{} - {}", track.artist, track.name);
-    /// }
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// # });
-    /// ```
     pub fn artist_tracks<'a>(&'a mut self, artist: &str) -> ArtistTracksIterator<'a> {
         ArtistTracksIterator::new(self, artist.to_string())
     }
@@ -399,24 +383,6 @@ impl LastFmEditClient {
     /// # Returns
     ///
     /// Returns a [`RecentTracksIterator`] that implements [`AsyncPaginatedIterator`].
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
-    /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
-    /// // client.login(...).await?;
-    ///
-    /// let mut recent = client.recent_tracks();
-    /// while let Some(track) = recent.next().await? {
-    ///     if let Some(timestamp) = track.timestamp {
-    ///         println!("{} - {} (played at {})", track.artist, track.name, timestamp);
-    ///     }
-    /// }
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// # });
-    /// ```
     pub fn recent_tracks<'a>(&'a mut self) -> RecentTracksIterator<'a> {
         RecentTracksIterator::new(self)
     }

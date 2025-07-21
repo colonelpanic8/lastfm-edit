@@ -1,4 +1,4 @@
-use lastfm_edit::{Result, parsing::LastFmParser};
+use lastfm_edit::{parsing::LastFmParser, Result};
 use scraper::Html;
 use std::fs;
 

@@ -1,4 +1,4 @@
-use lastfm_edit::{Html, parsing::LastFmParser};
+use lastfm_edit::{parsing::LastFmParser, Html};
 use std::fs;
 
 #[test]

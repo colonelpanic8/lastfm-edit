@@ -23,3 +23,8 @@ readme:
 
 clippy:
     cargo clippy --all-targets --all-features -- -D warnings
+
+checks:
+    just fmt-check
+    just clippy
+    cargo test
