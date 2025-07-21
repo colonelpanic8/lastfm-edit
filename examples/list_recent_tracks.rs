@@ -36,11 +36,18 @@ async fn main() -> Result<()> {
                     " (no timestamp)".to_string()
                 };
 
+                let album_str = if let Some(album) = &track.album {
+                    format!(" [{}]", album)
+                } else {
+                    "".to_string()
+                };
+
                 println!(
-                    "{}. {} - {}{}",
+                    "{}. {} - {}{}{}",
                     count + 1,
                     track.artist,
                     track.name,
+                    album_str,
                     timestamp_str
                 );
 

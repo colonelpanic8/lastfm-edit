@@ -28,13 +28,24 @@ fn test_recent_tracks_parsing() {
     // Print first few tracks for debugging
     for (i, track) in tracks.iter().take(5).enumerate() {
         println!(
-            "{}. {} - {} (timestamp: {:?})",
+            "{}. {} - {} (album: {:?}, timestamp: {:?})",
             i + 1,
             track.artist,
             track.name,
+            track.album,
             track.timestamp
         );
     }
+
+    // Test that at least some tracks have album information
+    let tracks_with_albums = tracks.iter().filter(|t| t.album.is_some()).count();
+    println!("Found {} tracks with album information", tracks_with_albums);
+
+    // We should have at least some tracks with album info (based on the test fixture)
+    assert!(
+        tracks_with_albums > 0,
+        "Expected to find at least some tracks with album information"
+    );
 }
 
 #[test]

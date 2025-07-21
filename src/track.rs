@@ -13,9 +13,13 @@
 ///     artist: "Radiohead".to_string(),
 ///     playcount: 42,
 ///     timestamp: Some(1640995200), // Unix timestamp
+///     album: Some("OK Computer".to_string()),
 /// };
 ///
 /// println!("{} by {} (played {} times)", track.name, track.artist, track.playcount);
+/// if let Some(album) = &track.album {
+///     println!("From album: {}", album);
+/// }
 /// ```
 #[derive(Debug, Clone)]
 pub struct Track {
@@ -30,6 +34,12 @@ pub struct Track {
     /// This field is populated when tracks are retrieved from recent scrobbles
     /// or individual scrobble data, but may be `None` for aggregate track listings.
     pub timestamp: Option<u64>,
+    /// The album name (if available)
+    ///
+    /// This field is populated when tracks are retrieved from recent scrobbles
+    /// where album information is available in the edit forms. May be `None`
+    /// for aggregate track listings or when album information is not available.
+    pub album: Option<String>,
 }
 
 /// Represents a paginated collection of tracks.
@@ -49,6 +59,7 @@ pub struct Track {
 ///             artist: "Artist".to_string(),
 ///             playcount: 10,
 ///             timestamp: None,
+///             album: None,
 ///         }
 ///     ],
 ///     page_number: 1,

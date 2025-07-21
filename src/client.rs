@@ -1397,6 +1397,7 @@ impl LastFmClient {
                             artist: artist.to_string(),
                             playcount,
                             timestamp,
+                            album: None, // JSON parsing doesn't have album info
                         };
                         tracks.push(track);
                     }
@@ -1433,6 +1434,7 @@ impl LastFmClient {
                         artist: artist.to_string(),
                         playcount,
                         timestamp,
+                        album: None, // Form parsing doesn't have album info
                     };
                     tracks.push(track);
 
@@ -1593,6 +1595,7 @@ impl LastFmClient {
             artist,
             playcount,
             timestamp: None, // Not available in table parsing mode
+            album: None,     // Not available in table parsing mode
         })
     }
 
@@ -1651,6 +1654,9 @@ impl LastFmClient {
         // Extract timestamp from data attributes or hidden inputs
         let timestamp = self.extract_scrobble_timestamp(row);
 
+        // Extract album from hidden inputs in edit form
+        let album = self.extract_scrobble_album(row);
+
         // For recent scrobbles, playcount is typically 1 since they're individual scrobbles
         let playcount = 1;
 
@@ -1659,6 +1665,7 @@ impl LastFmClient {
             artist,
             playcount,
             timestamp,
+            album,
         })
     }
 
@@ -1701,6 +1708,23 @@ impl LastFmClient {
                 // Parse ISO datetime to timestamp
                 if let Ok(parsed_time) = chrono::DateTime::parse_from_rfc3339(datetime) {
                     return Some(parsed_time.timestamp() as u64);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Extract album name from scrobble row elements
+    fn extract_scrobble_album(&self, row: &scraper::ElementRef) -> Option<String> {
+        // Look for album_name in hidden inputs within edit forms
+        let album_input_selector =
+            Selector::parse("form[data-edit-scrobble] input[name='album_name']").unwrap();
+
+        if let Some(album_input) = row.select(&album_input_selector).next() {
+            if let Some(album_name) = album_input.value().attr("value") {
+                if !album_name.is_empty() {
+                    return Some(album_name.to_string());
                 }
             }
         }
