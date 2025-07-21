@@ -38,7 +38,10 @@
       "Bash(done)",
       "Bash(if ! grep -q \"\\.next()\\.await\" \"$file\")",
       "Bash(then)",
-      "Bash(fi)"
+      "Bash(fi)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": []
   }

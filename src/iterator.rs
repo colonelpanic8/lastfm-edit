@@ -1,6 +1,7 @@
 use crate::{Album, AlbumPage, LastFmClient, Result, Track, TrackPage};
 
 /// Async iterator trait for paginated Last.fm data
+#[allow(async_fn_in_trait)]
 pub trait AsyncPaginatedIterator {
     /// The item type yielded by this iterator
     type Item;
