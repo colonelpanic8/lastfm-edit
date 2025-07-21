@@ -24,6 +24,7 @@ fn test_rewrite_rule_application() {
     let track = Track {
         name: "Song - 2023 Remaster".to_string(),
         artist: "Artist ft. Someone".to_string(),
+        album: None,
         timestamp: Some(1234567890),
         playcount: 0,
     };
@@ -55,6 +56,7 @@ fn test_no_changes() {
     let track = Track {
         name: "Clean Song".to_string(),
         artist: "Clean Artist".to_string(),
+        album: None,
         timestamp: Some(1234567890),
         playcount: 0,
     };
@@ -75,6 +77,7 @@ fn test_multiple_rules_application() {
     let track = Track {
         name: "Song - 2023 Remaster  ".to_string(), // Extra spaces
         artist: "Artist ft. Someone".to_string(),
+        album: None,
         timestamp: Some(1234567890),
         playcount: 0,
     };
@@ -105,6 +108,7 @@ fn test_applies_to_check() {
     let track = Track {
         name: "Song - 2023 Remaster".to_string(),
         artist: "Clean Artist".to_string(),
+        album: None,
         timestamp: Some(1234567890),
         playcount: 0,
     };

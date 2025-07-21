@@ -2,6 +2,11 @@
 name = "scrobble-scrubber"
 version = "0.1.0"
 edition = "2021"
+description = "Automated Last.fm scrobble monitoring and correction tool"
+license = "MIT"
+repository = "https://github.com/imalison/lastfm-edit"
+keywords = ["lastfm", "scrobbling", "music", "metadata"]
+categories = ["multimedia::audio", "web-programming"]
 
 [dependencies]
 lastfm-edit = { path = ".." }

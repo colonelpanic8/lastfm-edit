@@ -18,20 +18,20 @@ pub struct ScrobbleScrubber<S: StateStorage, P: ScrubActionProvider> {
 }
 
 impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
-    pub async fn new(
+    pub fn new(
         storage: Arc<Mutex<S>>,
         client: LastFmEditClient,
         action_provider: P,
         config: ScrobbleScrubberConfig,
-    ) -> Result<Self> {
-        Ok(Self {
+) -> Self {
+        Self {
             client,
             storage,
             action_provider,
             config,
             is_running: Arc::new(RwLock::new(false)),
             should_stop: Arc::new(RwLock::new(false)),
-        })
+        }
     }
 
     /// Get a reference to the storage for external access (e.g., web interface)
@@ -52,8 +52,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
     /// Trigger a single scrubbing run manually
     pub async fn trigger_run(&mut self) -> Result<()> {
         if *self.is_running.read().await {
-            return Err(lastfm_edit::LastFmError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(lastfm_edit::LastFmError::Io(std::io::Error::other(
                 "Scrubber is already running",
             )));
         }
@@ -73,7 +72,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             info!("Starting track monitoring cycle...");
 
             if let Err(e) = self.check_and_process_tracks().await {
-                warn!("Error during track processing: {}", e);
+                warn!("Error during track processing: {e}");
             }
 
             *self.is_running.write().await = false;
@@ -109,9 +108,8 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .load_timestamp_state()
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to load timestamp state: {}", e),
+                lastfm_edit::LastFmError::Io(std::io::Error::other(
+                    format!("Failed to load timestamp state: {e}"),
                 ))
             })?;
 
@@ -125,8 +123,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
         let mut tracks_to_process = Vec::new();
         while let Some(track) = recent_iterator.next().await? {
             if processed >= self.config.scrubber.max_tracks {
-                return Err(lastfm_edit::LastFmError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                return Err(lastfm_edit::LastFmError::Io(std::io::Error::other(
                     format!(
                         "Reached maximum track limit ({}), unable to proceed",
                         self.config.scrubber.max_tracks
@@ -142,13 +139,12 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                     let track_time = DateTime::from_timestamp(track_ts as i64, 0);
                     if let Some(track_time) = track_time {
                         if track_time == last_processed {
-                            info!("Found anchor track at timestamp {}, starting processing from next track", last_processed);
+                            info!("Found anchor track at timestamp {last_processed}, starting processing from next track");
                             found_anchor = true;
                             continue; // Skip this track since we've already processed it
                         } else if track_time < last_processed {
                             info!(
-                                "Reached track older than last processed ({}), stopping",
-                                last_processed
+                                "Reached track older than last processed ({last_processed}), stopping"
                             );
                             break;
                         }
@@ -161,7 +157,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             // Track the timestamp of this track since we're processing it
             if let Some(ts) = track.timestamp {
                 let track_time =
-                    DateTime::from_timestamp(ts as i64, 0).unwrap_or_else(|| Utc::now());
+                    DateTime::from_timestamp(ts as i64, 0).unwrap_or_else(Utc::now);
                 if latest_processed_timestamp.is_none()
                     || latest_processed_timestamp.unwrap() < track_time
                 {
@@ -197,7 +193,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
 
                 for suggestion in suggestions {
                     if self.config.scrubber.dry_run {
-                        info!("DRY RUN: Would apply suggestion: {:?}", suggestion);
+                        info!("DRY RUN: Would apply suggestion: {suggestion:?}");
                     } else {
                         self.apply_suggestion(track, &suggestion).await?;
                     }
@@ -217,16 +213,71 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .save_timestamp_state(&updated_state)
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to save timestamp state: {}", e),
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(
+                        format!("Failed to save timestamp state: {e}"),
                     ))
                 })?;
 
-            info!("Updated last processed timestamp to: {}", latest);
+            info!("Updated last processed timestamp to: {latest}");
         }
 
-        info!("Processed {} tracks", processed);
+        info!("Processed {processed} tracks");
+        Ok(())
+    }
+
+    /// Process all tracks for a specific artist
+    pub async fn process_artist(&mut self, artist: &str) -> Result<()> {
+        info!("Starting artist track processing for: {artist}");
+
+        let mut artist_iterator = self.client.artist_tracks(artist);
+        let mut processed = 0;
+
+        // Collect tracks first to avoid borrow checker issues
+        let mut tracks_to_process = Vec::new();
+        while let Some(track) = artist_iterator.next().await? {
+            tracks_to_process.push(track);
+            processed += 1;
+        }
+
+        info!(
+            "Found {} tracks for artist '{}'",
+            tracks_to_process.len(),
+            artist
+        );
+
+        // Process collected tracks in batch
+        if !tracks_to_process.is_empty() {
+            let batch_suggestions = self.analyze_tracks(&tracks_to_process).await;
+
+            for (track_index, suggestions) in batch_suggestions {
+                if track_index >= tracks_to_process.len() {
+                    log::warn!(
+                        "Invalid track index {} for batch size {}",
+                        track_index,
+                        tracks_to_process.len()
+                    );
+                    continue;
+                }
+
+                let track = &tracks_to_process[track_index];
+                info!(
+                    "Processing track: {} - {} ({} suggestions)",
+                    track.artist,
+                    track.name,
+                    suggestions.len()
+                );
+
+                for suggestion in suggestions {
+                    if self.config.scrubber.dry_run {
+                        info!("DRY RUN: Would apply suggestion: {suggestion:?}");
+                    } else {
+                        self.apply_suggestion(track, &suggestion).await?;
+                    }
+                }
+            }
+        }
+
+        info!("Processed {processed} tracks for artist '{artist}'");
         Ok(())
     }
 
@@ -250,7 +301,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 suggestions
             }
             Err(e) => {
-                warn!("Error from action provider: {}", e);
+                warn!("Error from action provider: {e}");
                 Vec::new()
             }
         }
@@ -269,9 +320,8 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .load_settings_state()
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to load settings state: {}", e),
+                lastfm_edit::LastFmError::Io(std::io::Error::other(
+                    format!("Failed to load settings state: {e}"),
                 ))
             })?;
 
@@ -301,32 +351,32 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
     }
 
     async fn create_pending_edit(
-        &mut self,
+        &self,
         track: &lastfm_edit::Track,
         edit: &ScrobbleEdit,
     ) -> Result<()> {
-        let new_track_name = if edit.track_name != edit.track_name_original {
+        let new_track_name = if edit.track_name == edit.track_name_original {
+            None
+        } else {
             Some(edit.track_name.clone())
-        } else {
-            None
         };
 
-        let new_artist_name = if edit.artist_name != edit.artist_name_original {
+        let new_artist_name = if edit.artist_name == edit.artist_name_original {
+            None
+        } else {
             Some(edit.artist_name.clone())
-        } else {
-            None
         };
 
-        let new_album_name = if edit.album_name != edit.album_name_original {
+        let new_album_name = if edit.album_name == edit.album_name_original {
+            None
+        } else {
             Some(edit.album_name.clone())
-        } else {
-            None
         };
 
-        let new_album_artist_name = if edit.album_artist_name != edit.album_artist_name_original {
-            Some(edit.album_artist_name.clone())
-        } else {
+        let new_album_artist_name = if edit.album_artist_name == edit.album_artist_name_original {
             None
+        } else {
+            Some(edit.album_artist_name.clone())
         };
 
         let pending_edit = PendingEdit::new(
@@ -349,9 +399,8 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .load_pending_edits_state()
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to load pending edits: {}", e),
+                lastfm_edit::LastFmError::Io(std::io::Error::other(
+                    format!("Failed to load pending edits: {e}"),
                 ))
             })?;
 
@@ -363,9 +412,8 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .save_pending_edits_state(&pending_edits_state)
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to save pending edit: {}", e),
+                lastfm_edit::LastFmError::Io(std::io::Error::other(
+                    format!("Failed to save pending edit: {e}"),
                 ))
             })?;
 
@@ -413,7 +461,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
     }
 
     async fn handle_proposed_rule(
-        &mut self,
+        &self,
         track: &lastfm_edit::Track,
         rule: &crate::rewrite::RewriteRule,
         motivation: &str,
@@ -436,9 +484,8 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .load_pending_rewrite_rules_state()
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to load pending rewrite rules: {}", e),
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(
+                        format!("Failed to load pending rewrite rules: {e}"),
                     ))
                 })?;
 
@@ -450,9 +497,8 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .save_pending_rewrite_rules_state(&pending_rules_state)
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to save pending rewrite rule: {}", e),
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(
+                        format!("Failed to save pending rewrite rule: {e}"),
                     ))
                 })?;
 
@@ -469,9 +515,8 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .load_rewrite_rules_state()
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to load rewrite rules: {}", e),
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(
+                        format!("Failed to load rewrite rules: {e}"),
                     ))
                 })?;
 
@@ -483,13 +528,12 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .save_rewrite_rules_state(&rules_state)
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to save rewrite rules: {}", e),
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(
+                        format!("Failed to save rewrite rules: {e}"),
                     ))
                 })?;
 
-            info!("Auto-approved and added new rewrite rule: {}", motivation);
+            info!("Auto-approved and added new rewrite rule: {motivation}");
         }
         Ok(())
     }

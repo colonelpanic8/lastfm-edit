@@ -92,11 +92,11 @@ pub struct ScrubberConfig {
 pub struct ProvidersConfig {
     /// Enable rewrite rules provider
     pub enable_rewrite_rules: bool,
-    /// Enable OpenAI provider
+    /// Enable `OpenAI` provider
     pub enable_openai: bool,
     /// Enable HTTP provider
     pub enable_http: bool,
-    /// OpenAI configuration
+    /// `OpenAI` configuration
     pub openai: Option<OpenAIProviderConfig>,
     /// HTTP provider configuration
     pub http: Option<HttpProviderConfig>,
@@ -104,7 +104,7 @@ pub struct ProvidersConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAIProviderConfig {
-    /// OpenAI API key
+    /// `OpenAI` API key
     pub api_key: String,
     /// Model to use (defaults to gpt-4o)
     pub model: Option<String>,
@@ -132,7 +132,7 @@ pub struct LastFmConfig {
     pub username: String,
     /// Last.fm password
     pub password: String,
-    /// Base URL for Last.fm (defaults to https://www.last.fm)
+    /// Base URL for Last.fm (defaults to <https://www.last.fm>)
     pub base_url: Option<String>,
 }
 
@@ -188,7 +188,7 @@ impl Default for ScrobbleScrubberConfig {
 impl ScrobbleScrubberConfig {
     /// Get default configuration file paths in order of preference
     /// Uses XDG Base Directory specification
-    pub fn get_default_config_paths() -> Vec<PathBuf> {
+    #[must_use] pub fn get_default_config_paths() -> Vec<PathBuf> {
         let mut paths = Vec::new();
 
         // Current directory
@@ -221,7 +221,7 @@ impl ScrobbleScrubberConfig {
 
     /// Get the preferred configuration file path for creating new config files
     /// Returns the XDG config directory path
-    pub fn get_preferred_config_path() -> Option<PathBuf> {
+    #[must_use] pub fn get_preferred_config_path() -> Option<PathBuf> {
         dirs::config_dir()
             .map(|config_dir| config_dir.join("scrobble-scrubber").join("config.toml"))
     }
@@ -281,7 +281,7 @@ impl ScrobbleScrubberConfig {
     }
 
     /// Merge command line arguments into the configuration
-    pub fn merge_args(mut self, args: &crate::Args) -> Self {
+    #[must_use] pub fn merge_args(mut self, args: &crate::Args) -> Self {
         // Override with command line arguments if provided
         if let Some(interval) = args.interval {
             self.scrubber.interval = interval;
@@ -332,7 +332,7 @@ impl ScrobbleScrubberConfig {
     }
 
     /// Get the Last.fm base URL with fallback to default
-    pub fn lastfm_base_url(&self) -> &str {
+    #[must_use] pub fn lastfm_base_url(&self) -> &str {
         self.lastfm
             .base_url
             .as_deref()

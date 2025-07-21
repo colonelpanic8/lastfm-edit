@@ -67,7 +67,7 @@ struct RewriteRuleSuggestion {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SdRuleData {
-    /// The pattern to search for (regex by default, or literal if is_literal is true)
+    /// The pattern to search for (regex by default, or literal if `is_literal` is true)
     find: String,
     /// The replacement string (supports $1, $2, ${named}, etc.)
     replace: String,
@@ -79,21 +79,20 @@ struct SdRuleData {
     max_replacements: usize,
 }
 
-impl SdRuleData {
-    /// Convert SdRuleData to SdRule
-    fn to_sd_rule(self) -> crate::rewrite::SdRule {
-        let mut sd_rule = if self.is_literal {
-            crate::rewrite::SdRule::new_literal(&self.find, &self.replace)
+impl From<SdRuleData> for crate::rewrite::SdRule {
+    fn from(data: SdRuleData) -> Self {
+        let mut sd_rule = if data.is_literal {
+            crate::rewrite::SdRule::new_literal(&data.find, &data.replace)
         } else {
-            crate::rewrite::SdRule::new_regex(&self.find, &self.replace)
+            crate::rewrite::SdRule::new_regex(&data.find, &data.replace)
         };
 
-        if let Some(flags) = &self.flags {
+        if let Some(flags) = &data.flags {
             sd_rule = sd_rule.with_flags(flags);
         }
 
-        if self.max_replacements > 0 {
-            sd_rule = sd_rule.with_max_replacements(self.max_replacements);
+        if data.max_replacements > 0 {
+            sd_rule = sd_rule.with_max_replacements(data.max_replacements);
         }
 
         sd_rule
@@ -101,24 +100,24 @@ impl SdRuleData {
 }
 
 impl RewriteRuleSuggestion {
-    /// Convert this suggestion into a RewriteRule and motivation pair
+    /// Convert this suggestion into a `RewriteRule` and motivation pair
     fn into_rule_and_motivation(self) -> (RewriteRule, String) {
         let mut rule = RewriteRule::new();
 
         if let Some(track_rule) = self.track_name {
-            rule = rule.with_track_name(track_rule.to_sd_rule());
+            rule = rule.with_track_name(track_rule.into());
         }
 
         if let Some(album_rule) = self.album_name {
-            rule = rule.with_album_name(album_rule.to_sd_rule());
+            rule = rule.with_album_name(album_rule.into());
         }
 
         if let Some(artist_rule) = self.artist_name {
-            rule = rule.with_artist_name(artist_rule.to_sd_rule());
+            rule = rule.with_artist_name(artist_rule.into());
         }
 
         if let Some(album_artist_rule) = self.album_artist_name {
-            rule = rule.with_album_artist_name(album_artist_rule.to_sd_rule());
+            rule = rule.with_album_artist_name(album_artist_rule.into());
         }
 
         rule = rule.with_confirmation_required(self.requires_confirmation);
@@ -137,7 +136,7 @@ impl OpenAIScrubActionProvider {
         let client = OpenAIClient::builder()
             .with_api_key(api_key)
             .build()
-            .map_err(|e| ActionProviderError(format!("Failed to create OpenAI client: {}", e)))?;
+            .map_err(|e| ActionProviderError(format!("Failed to create OpenAI client: {e}")))?;
 
         let model = match model.as_deref() {
             Some("gpt-4") => "gpt-4".to_string(),
@@ -387,7 +386,7 @@ impl OpenAIScrubActionProvider {
         }
 
         match serde_json::to_string_pretty(&self.rewrite_rules) {
-            Ok(json) => format!("EXISTING REWRITE RULES:\n{}", json),
+            Ok(json) => format!("EXISTING REWRITE RULES:\n{json}"),
             Err(_) => "EXISTING REWRITE RULES: (serialization error)".to_string(),
         }
     }
@@ -398,7 +397,7 @@ impl OpenAIScrubActionProvider {
         tracks: &[Track],
     ) -> Result<(usize, ScrubActionSuggestion), ActionProviderError> {
         let args: ScrobbleEditWithIndex = serde_json::from_str(arguments)
-            .map_err(|e| ActionProviderError(format!("Failed to parse function arguments: {}", e)))?;
+            .map_err(|e| ActionProviderError(format!("Failed to parse function arguments: {e}")))?;
 
         if args.track_index >= tracks.len() {
             return Err(ActionProviderError(format!(
@@ -433,7 +432,7 @@ impl OpenAIScrubActionProvider {
         tracks: &[Track],
     ) -> Result<(usize, ScrubActionSuggestion), ActionProviderError> {
         let args: RewriteRuleSuggestionWithIndex = serde_json::from_str(arguments)
-            .map_err(|e| ActionProviderError(format!("Failed to parse rewrite rule arguments: {}", e)))?;
+            .map_err(|e| ActionProviderError(format!("Failed to parse rewrite rule arguments: {e}")))?;
 
         if args.track_index >= tracks.len() {
             return Err(ActionProviderError(format!(
@@ -501,7 +500,7 @@ impl OpenAIScrubActionProvider {
                             Self::add_suggestion_to_results(results, track_index, suggestion);
                         }
                         Err(e) => {
-                            log::warn!("Failed to process track edit suggestion: {}", e);
+                            log::warn!("Failed to process track edit suggestion: {e}");
                         }
                     }
                 }
@@ -511,7 +510,7 @@ impl OpenAIScrubActionProvider {
                             Self::add_suggestion_to_results(results, track_index, suggestion);
                         }
                         Err(e) => {
-                            log::warn!("Failed to process rewrite rule suggestion: {}", e);
+                            log::warn!("Failed to process rewrite rule suggestion: {e}");
                         }
                     }
                 }
@@ -519,7 +518,7 @@ impl OpenAIScrubActionProvider {
                     // Do nothing - no suggestions to add
                 }
                 _ => {
-                    log::warn!("Unknown function call: {}", name);
+                    log::warn!("Unknown function call: {name}");
                 }
             }
         }
@@ -548,7 +547,7 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
             .enumerate()
             .map(|(idx, track)| {
                 let album_info = if let Some(album) = &track.album {
-                    format!(" from album \"{}\"", album)
+                    format!(" from album \"{album}\"")
                 } else {
                     String::new()
                 };
@@ -561,8 +560,7 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
             .join("\n");
 
         let user_message = format!(
-            "Analyze these Last.fm scrobbles and provide suggestions for each track that needs improvement:\n\n{}\n\n{}",
-            tracks_info, existing_rules
+            "Analyze these Last.fm scrobbles and provide suggestions for each track that needs improvement:\n\n{tracks_info}\n\n{existing_rules}"
         );
 
         // Add track_index parameter to edit function
@@ -671,13 +669,25 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
         ])
         .tool_choice(ToolChoiceType::Auto);
 
+        // Log the request being sent to OpenAI
+        log::info!(
+            "OpenAI request: {}",
+            serde_json::to_string_pretty(&req).unwrap_or_else(|_| "Failed to serialize request".to_string())
+        );
+
         let response = self
             .client
             .lock()
             .await
             .chat_completion(req)
             .await
-            .map_err(|e| ActionProviderError(format!("OpenAI API error: {}", e)))?;
+            .map_err(|e| ActionProviderError(format!("OpenAI API error: {e}")))?;
+
+        // Log the full OpenAI response for debugging
+        log::info!(
+            "OpenAI response: {}",
+            serde_json::to_string_pretty(&response).unwrap_or_else(|_| "Failed to serialize response".to_string())
+        );
 
         let mut results: Vec<(usize, Vec<ScrubActionSuggestion>)> = Vec::new();
 
@@ -687,7 +697,7 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
         Ok(results)
     }
 
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "OpenAI"
     }
 }

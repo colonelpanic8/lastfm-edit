@@ -19,19 +19,19 @@ impl Error for ActionProviderError {}
 
 impl From<RewriteError> for ActionProviderError {
     fn from(err: RewriteError) -> Self {
-        ActionProviderError(format!("Rewrite error: {}", err))
+        Self(format!("Rewrite error: {err}"))
     }
 }
 
 impl From<String> for ActionProviderError {
     fn from(msg: String) -> Self {
-        ActionProviderError(msg)
+        Self(msg)
     }
 }
 
 impl From<&str> for ActionProviderError {
     fn from(msg: &str) -> Self {
-        ActionProviderError(msg.to_string())
+        Self(msg.to_string())
     }
 }
 
@@ -69,13 +69,13 @@ pub struct RewriteRulesScrubActionProvider {
 }
 
 impl RewriteRulesScrubActionProvider {
-    pub fn new(rules_state: &RewriteRulesState) -> Self {
+    #[must_use] pub fn new(rules_state: &RewriteRulesState) -> Self {
         Self {
             rules: rules_state.rewrite_rules.clone(),
         }
     }
 
-    pub fn from_rules(rules: Vec<RewriteRule>) -> Self {
+    #[must_use] pub const fn from_rules(rules: Vec<RewriteRule>) -> Self {
         Self { rules }
     }
 }
@@ -128,7 +128,7 @@ impl ScrubActionProvider for RewriteRulesScrubActionProvider {
         Ok(results)
     }
 
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "RewriteRules"
     }
 }
@@ -140,8 +140,14 @@ pub struct OrScrubActionProvider {
     provider_names: Vec<String>,
 }
 
+impl Default for OrScrubActionProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrScrubActionProvider {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             providers: Vec::new(),
             provider_names: Vec::new(),
@@ -162,7 +168,7 @@ impl OrScrubActionProvider {
         self
     }
 
-    pub fn with_providers<P>(providers: Vec<P>) -> Self
+    #[must_use] pub fn with_providers<P>(providers: Vec<P>) -> Self
     where
         P: ScrubActionProvider + 'static,
         P::Error: Into<ActionProviderError>,
@@ -192,7 +198,7 @@ where
         self.inner
             .analyze_tracks(tracks)
             .await
-            .map_err(|e| e.into())
+            .map_err(std::convert::Into::into)
     }
 
     fn provider_name(&self) -> &str {
@@ -230,7 +236,6 @@ impl ScrubActionProvider for OrScrubActionProvider {
                         self.provider_names.get(provider_idx).unwrap_or(&"unknown".to_string()),
                         e
                     );
-                    continue;
                 }
             }
         }
@@ -238,7 +243,7 @@ impl ScrubActionProvider for OrScrubActionProvider {
         Ok(combined_results)
     }
 
-    fn provider_name(&self) -> &str {
+    fn provider_name(&self) -> &'static str {
         "OrProvider"
     }
 }

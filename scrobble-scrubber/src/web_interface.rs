@@ -24,6 +24,7 @@ struct ApproveRuleRequest {
     action: String, // "approve" or "reject"
 }
 
+
 #[derive(Serialize, Deserialize)]
 struct ApiResponse {
     success: bool,
@@ -123,7 +124,7 @@ async fn dashboard<S: StateStorage, P: ScrubActionProvider>(
                     <button class="btn danger" onclick="handleEdit('{}', 'reject')">Reject</button>
                 </div>
             "#, edit.original_artist_name, edit.original_track_name, edit.id, edit.id, edit.id)
-        }).collect::<Vec<_>>().join(""),
+        }).collect::<String>(),
         pending_rules.len(),
         pending_rules.iter().take(5).map(|rule| {
             format!(r#"
@@ -134,7 +135,7 @@ async fn dashboard<S: StateStorage, P: ScrubActionProvider>(
                     <button class="btn danger" onclick="handleRule('{}', 'reject')">Reject</button>
                 </div>
             "#, rule.reason, rule.example_artist_name, rule.example_track_name, rule.id, rule.id)
-        }).collect::<Vec<_>>().join("")
+        }).collect::<String>()
     );
 
     Ok(Html(html))
@@ -263,6 +264,7 @@ async fn scrubber_status<S: StateStorage, P: ScrubActionProvider>(
     })))
 }
 
+
 pub async fn start_web_server<S: StateStorage + 'static, P: ScrubActionProvider + 'static>(
     storage: Arc<Mutex<S>>,
     scrubber: Arc<Mutex<ScrobbleScrubber<S, P>>>,
@@ -272,9 +274,9 @@ pub async fn start_web_server<S: StateStorage + 'static, P: ScrubActionProvider 
     
     let app = create_router().with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     
-    log::info!("Web interface available at http://localhost:{}", port);
+    log::info!("Web interface available at http://localhost:{port}");
     
     axum::serve(listener, app).await?;
     

@@ -20,9 +20,8 @@ async fn main() -> Result<()> {
 
     // Load configuration from args, env vars, and config files
     let config = ScrobbleScrubberConfig::load_from_args(&args).map_err(|e| {
-        LastFmError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to load configuration: {}", e),
+        LastFmError::Io(std::io::Error::other(
+            format!("Failed to load configuration: {e}"),
         ))
     })?;
 
@@ -44,9 +43,8 @@ async fn main() -> Result<()> {
     // Create storage wrapped in Arc<Mutex<>>
     let storage = Arc::new(Mutex::new(
         FileStorage::new(&config.storage.state_file).map_err(|e| {
-            LastFmError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to create storage: {}", e),
+            LastFmError::Io(std::io::Error::other(
+                format!("Failed to create storage: {e}"),
             ))
         })?,
     ));
@@ -58,9 +56,8 @@ async fn main() -> Result<()> {
         .load_rewrite_rules_state()
         .await
         .map_err(|e| {
-            LastFmError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to load rewrite rules: {}", e),
+            LastFmError::Io(std::io::Error::other(
+                format!("Failed to load rewrite rules: {e}"),
             ))
         })?;
 
@@ -85,7 +82,7 @@ async fn main() -> Result<()> {
                     action_provider = action_provider.add_provider(openai_provider);
                 }
                 Err(e) => {
-                    log::warn!("Failed to create OpenAI provider: {}", e);
+                    log::warn!("Failed to create OpenAI provider: {e}");
                 }
             }
         } else {
@@ -95,7 +92,7 @@ async fn main() -> Result<()> {
 
     // Create scrubber wrapped in Arc<Mutex<>>
     let scrubber = Arc::new(Mutex::new(
-        ScrobbleScrubber::new(storage.clone(), client, action_provider, config.clone()).await?,
+        ScrobbleScrubber::new(storage.clone(), client, action_provider, config.clone()),
     ));
 
     // Start web interface if enabled
@@ -108,7 +105,7 @@ async fn main() -> Result<()> {
             if let Err(e) =
                 web_interface::start_web_server(web_storage, web_scrubber, web_port).await
             {
-                log::error!("Web interface error: {}", e);
+                log::error!("Web interface error: {e}");
             }
         });
 

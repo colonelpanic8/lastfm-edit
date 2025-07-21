@@ -3,8 +3,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
-/// Create a no-op ScrobbleEdit from a Track (no changes, just a baseline)
-pub fn create_no_op_edit(track: &Track) -> ScrobbleEdit {
+/// Create a no-op `ScrobbleEdit` from a Track (no changes, just a baseline)
+#[must_use] pub fn create_no_op_edit(track: &Track) -> ScrobbleEdit {
     let album_name = track.album.clone().unwrap_or_default();
     ScrobbleEdit {
         track_name_original: track.name.clone(),
@@ -30,7 +30,7 @@ pub fn any_rules_apply(rules: &[RewriteRule], track: &Track) -> Result<bool, Rew
     Ok(false)
 }
 
-/// Apply all rewrite rules to a ScrobbleEdit, returning true if any changes were made
+/// Apply all rewrite rules to a `ScrobbleEdit`, returning true if any changes were made
 pub fn apply_all_rules(rules: &[RewriteRule], edit: &mut ScrobbleEdit) -> Result<bool, RewriteError> {
     let mut any_changes = false;
     for rule in rules {
@@ -45,7 +45,7 @@ pub fn apply_all_rules(rules: &[RewriteRule], edit: &mut ScrobbleEdit) -> Result
 /// A single find-and-replace transformation using sd-style syntax
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdRule {
-    /// The pattern to search for (regex by default, or literal if is_literal is true)
+    /// The pattern to search for (regex by default, or literal if `is_literal` is true)
     pub find: String,
     /// The replacement string (supports $1, $2, ${named}, etc.)
     pub replace: String,
@@ -59,7 +59,7 @@ pub struct SdRule {
 
 impl SdRule {
     /// Create a new regex-based rule
-    pub fn new_regex(find: &str, replace: &str) -> Self {
+    #[must_use] pub fn new_regex(find: &str, replace: &str) -> Self {
         Self {
             find: find.to_string(),
             replace: replace.to_string(),
@@ -70,7 +70,7 @@ impl SdRule {
     }
 
     /// Create a new literal string rule
-    pub fn new_literal(find: &str, replace: &str) -> Self {
+    #[must_use] pub fn new_literal(find: &str, replace: &str) -> Self {
         Self {
             find: find.to_string(),
             replace: replace.to_string(),
@@ -81,13 +81,13 @@ impl SdRule {
     }
 
     /// Add regex flags
-    pub fn with_flags(mut self, flags: &str) -> Self {
+    #[must_use] pub fn with_flags(mut self, flags: &str) -> Self {
         self.flags = Some(flags.to_string());
         self
     }
 
     /// Set maximum number of replacements
-    pub fn with_max_replacements(mut self, max: usize) -> Self {
+    #[must_use] pub const fn with_max_replacements(mut self, max: usize) -> Self {
         self.max_replacements = max;
         self
     }
@@ -139,7 +139,6 @@ impl SdReplacer {
         // Validate replacement string first
         validate_replace(&replace_with)?;
 
-        let look_for = look_for;
         let replace_with = unescape(&replace_with).into_bytes();
 
         let mut regex_builder = regex::RegexBuilder::new(&look_for);
@@ -165,7 +164,7 @@ impl SdReplacer {
                         regex_builder.dot_matches_new_line(true);
                     }
                     'w' => {
-                        regex_builder = regex::RegexBuilder::new(&format!("\\b{}\\b", look_for));
+                        regex_builder = regex::RegexBuilder::new(&format!("\\b{look_for}\\b"));
                     }
                     _ => {}
                 }
@@ -216,7 +215,7 @@ pub struct RewriteRule {
 
 impl RewriteRule {
     /// Create a new empty rewrite rule
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self {
             track_name: None,
             album_name: None,
@@ -227,31 +226,31 @@ impl RewriteRule {
     }
 
     /// Set transformation for track name
-    pub fn with_track_name(mut self, rule: SdRule) -> Self {
+    #[must_use] pub fn with_track_name(mut self, rule: SdRule) -> Self {
         self.track_name = Some(rule);
         self
     }
 
     /// Set transformation for album name
-    pub fn with_album_name(mut self, rule: SdRule) -> Self {
+    #[must_use] pub fn with_album_name(mut self, rule: SdRule) -> Self {
         self.album_name = Some(rule);
         self
     }
 
     /// Set transformation for artist name
-    pub fn with_artist_name(mut self, rule: SdRule) -> Self {
+    #[must_use] pub fn with_artist_name(mut self, rule: SdRule) -> Self {
         self.artist_name = Some(rule);
         self
     }
 
     /// Set transformation for album artist name
-    pub fn with_album_artist_name(mut self, rule: SdRule) -> Self {
+    #[must_use] pub fn with_album_artist_name(mut self, rule: SdRule) -> Self {
         self.album_artist_name = Some(rule);
         self
     }
 
     /// Set whether this rule requires confirmation
-    pub fn with_confirmation_required(mut self, requires_confirmation: bool) -> Self {
+    #[must_use] pub const fn with_confirmation_required(mut self, requires_confirmation: bool) -> Self {
         self.requires_confirmation = requires_confirmation;
         self
     }
@@ -290,7 +289,7 @@ impl RewriteRule {
         Ok(false)
     }
 
-    /// Apply this rule to an existing ScrobbleEdit, modifying it in place
+    /// Apply this rule to an existing `ScrobbleEdit`, modifying it in place
     /// Returns true if any changes were made
     pub fn apply(&self, edit: &mut ScrobbleEdit) -> Result<bool, RewriteError> {
         let mut has_changes = false;
@@ -357,7 +356,7 @@ pub enum RewriteError {
 }
 
 /// Default rewrite rules for common cleanup tasks
-pub fn default_rules() -> Vec<RewriteRule> {
+#[must_use] pub fn default_rules() -> Vec<RewriteRule> {
     vec![
         // Remove remaster suffixes from track names
         RewriteRule::new()
@@ -435,7 +434,7 @@ fn validate_replace(s: &str) -> Result<(), RewriteError> {
                     chars.next(); // consume the {
                                   // Find the closing }
                     let mut found_close = false;
-                    while let Some(inner_c) = chars.next() {
+                    for inner_c in chars.by_ref() {
                         if inner_c == '}' {
                             found_close = true;
                             break;

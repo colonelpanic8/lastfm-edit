@@ -64,21 +64,15 @@ pub struct PendingRewriteRulesState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct SettingsState {
     /// Global setting to require confirmation for all edits
     pub require_confirmation: bool,
 }
 
-impl Default for SettingsState {
-    fn default() -> Self {
-        Self {
-            require_confirmation: false,
-        }
-    }
-}
 
 impl PendingEdit {
-    pub fn new(
+    #[must_use] pub fn new(
         original_track_name: String,
         original_artist_name: String,
         original_album_name: Option<String>,
@@ -106,7 +100,7 @@ impl PendingEdit {
 }
 
 impl PendingRewriteRule {
-    pub fn new(
+    #[must_use] pub fn new(
         rule: RewriteRule,
         reason: String,
         example_track_name: String,
@@ -257,9 +251,15 @@ pub struct MemoryStorage {
     settings_state: tokio::sync::RwLock<SettingsState>,
 }
 
+impl Default for MemoryStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemoryStorage {
     #[allow(dead_code)]
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             timestamp_state: tokio::sync::RwLock::new(TimestampState::default()),
             rewrite_rules_state: tokio::sync::RwLock::new(RewriteRulesState::default()),
@@ -331,7 +331,7 @@ impl StateStorage for MemoryStorage {
 
 
 impl RewriteRulesState {
-    pub fn with_default_rules() -> Self {
+    #[must_use] pub fn with_default_rules() -> Self {
         Self {
             rewrite_rules: crate::rewrite::default_rules(),
         }

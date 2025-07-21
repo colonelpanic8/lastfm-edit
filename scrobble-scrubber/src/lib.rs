@@ -48,11 +48,11 @@ pub struct Args {
     #[arg(long)]
     pub lastfm_password: Option<String>,
 
-    /// Enable OpenAI provider
+    /// Enable `OpenAI` provider
     #[arg(long)]
     pub enable_openai: bool,
 
-    /// OpenAI API key
+    /// `OpenAI` API key
     #[arg(long)]
     pub openai_api_key: Option<String>,
 
