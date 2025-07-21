@@ -46,3 +46,7 @@ path = "examples/tui.rs"
 name = "remove_remaster"
 path = "examples/remove_remaster.rs"
 
+[[example]]
+name = "rename_artist"
+path = "examples/rename_artist.rs"
+
