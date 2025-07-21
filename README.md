@@ -17,13 +17,13 @@ available through Last.fm's public API.
 ## Quick Start
 
 ```rust,no_run
-use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, Result};
+use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Create client with any HTTP implementation
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmClient::new(Box::new(http_client));
+    let mut client = LastFmEditClient::new(Box::new(http_client));
 
     // Login to Last.fm
     client.login("username", "password").await?;
@@ -61,12 +61,12 @@ tokio = { version = "1.0", features = ["full"] }
 ### Basic Library Browsing
 
 ```rust,no_run
-use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, Result};
+use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmClient::new(Box::new(http_client));
+    let mut client = LastFmEditClient::new(Box::new(http_client));
 
     client.login("username", "password").await?;
 
@@ -83,24 +83,35 @@ async fn main() -> Result<()> {
 ### Bulk Track Editing
 
 ```rust,no_run
-use lastfm_edit::{LastFmClient, ScrobbleEditContext, EditStrategy, Result};
+use lastfm_edit::{LastFmEditClient, ScrobbleEdit, AsyncPaginatedIterator, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmClient::new(Box::new(http_client));
+    let mut client = LastFmEditClient::new(Box::new(http_client));
 
     client.login("username", "password").await?;
-
-    // Create edit context for bulk operations
-    let mut context = ScrobbleEditContext::new(&mut client, EditStrategy::DryRun);
 
     // Find and edit tracks
     let tracks = client.artist_tracks("Artist Name").collect_all().await?;
     for track in tracks {
         if track.name.contains("(Remaster)") {
             let new_name = track.name.replace(" (Remaster)", "");
-            context.edit_track(&track, Some(&new_name), None, None).await?;
+
+            // Create edit for this track
+            let edit = ScrobbleEdit::from_track_info(
+                &track.name,
+                &track.name, // Use track name as album fallback
+                &track.artist,
+                0 // No timestamp needed for bulk edit
+            )
+            .with_track_name(&new_name)
+            .with_edit_all(true);
+
+            let response = client.edit_scrobble(&edit).await?;
+            if response.success {
+                println!("Successfully edited: {} -> {}", track.name, new_name);
+            }
         }
     }
 
@@ -111,17 +122,17 @@ async fn main() -> Result<()> {
 ### Recent Tracks Monitoring
 
 ```rust,no_run
-use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, Result};
+use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmClient::new(Box::new(http_client));
+    let mut client = LastFmEditClient::new(Box::new(http_client));
 
     client.login("username", "password").await?;
 
     // Get recent tracks (first 100)
-    let recent_tracks = client.recent_tracks().take(100).collect_all().await?;
+    let recent_tracks = client.recent_tracks().take(100).await?;
     println!("Found {} recent tracks", recent_tracks.len());
 
     Ok(())
