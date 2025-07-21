@@ -6,6 +6,8 @@ use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 pub struct LastFmClient {
     client: Box<dyn HttpClient>,
@@ -14,6 +16,7 @@ pub struct LastFmClient {
     base_url: String,
     session_cookies: Vec<String>,
     rate_limit_patterns: Vec<String>,
+    debug_save_responses: bool,
 }
 
 impl LastFmClient {
@@ -28,6 +31,20 @@ impl LastFmClient {
             vec![
                 "you've tried to log in too many times".to_string(),
                 "you're requesting too many pages".to_string(),
+                "slow down".to_string(),
+                "too fast".to_string(),
+                "rate limit".to_string(),
+                "throttled".to_string(),
+                "temporarily blocked".to_string(),
+                "temporarily restricted".to_string(),
+                "captcha".to_string(),
+                "verify you're human".to_string(),
+                "prove you're not a robot".to_string(),
+                "security check".to_string(),
+                "service temporarily unavailable".to_string(),
+                "quota exceeded".to_string(),
+                "limit exceeded".to_string(),
+                "daily limit".to_string(),
             ],
         )
     }
@@ -44,6 +61,7 @@ impl LastFmClient {
             base_url,
             session_cookies: Vec::new(),
             rate_limit_patterns,
+            debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
         }
     }
 
@@ -602,8 +620,6 @@ impl LastFmClient {
         expected_track: &str,
         expected_artist: &str,
     ) -> Result<crate::ScrobbleEdit> {
-        log::debug!("Extracting scrobble data directly from track page forms...");
-
         // Look for the chartlist table that contains scrobbles
         let table_selector =
             Selector::parse("table.chartlist:not(.chartlist__placeholder)").unwrap();
@@ -1307,8 +1323,62 @@ impl LastFmClient {
             .ok_or(LastFmError::CsrfNotFound)
     }
 
+    /// Make an HTTP GET request with authentication and retry logic
     pub async fn get(&mut self, url: &str) -> Result<Response> {
-        self.get_with_redirects(url, 0).await
+        self.get_with_retry(url, 3).await
+    }
+
+    /// Make an HTTP GET request with retry logic for rate limits
+    async fn get_with_retry(&mut self, url: &str, max_retries: u32) -> Result<Response> {
+        let mut retries = 0;
+
+        loop {
+            match self.get_with_redirects(url, 0).await {
+                Ok(mut response) => {
+                    // Extract body and save debug info if enabled
+                    let body = self.extract_response_body(url, &mut response).await?;
+
+                    // Check for rate limit patterns in successful responses
+                    if response.status().is_success() && self.is_rate_limit_response(&body) {
+                        log::debug!("Response body contains rate limit patterns");
+                        if retries < max_retries {
+                            let delay = 60 + (retries as u64 * 30); // Exponential backoff
+                            log::info!("Rate limit detected in response body, retrying in {delay}s (attempt {}/{max_retries})", retries + 1);
+                            tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+                            retries += 1;
+                            continue;
+                        } else {
+                            return Err(crate::LastFmError::RateLimit { retry_after: 60 });
+                        }
+                    }
+
+                    // Recreate response with the body we extracted
+                    let mut new_response = http_types::Response::new(response.status());
+                    for (name, values) in response.iter() {
+                        for value in values {
+                            new_response.insert_header(name.clone(), value.clone());
+                        }
+                    }
+                    new_response.set_body(body);
+
+                    return Ok(new_response);
+                }
+                Err(crate::LastFmError::RateLimit { retry_after }) => {
+                    if retries < max_retries {
+                        let delay = retry_after + (retries as u64 * 30); // Exponential backoff
+                        log::info!(
+                            "Rate limit detected, retrying in {delay}s (attempt {}/{max_retries})",
+                            retries + 1
+                        );
+                        tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+                        retries += 1;
+                    } else {
+                        return Err(crate::LastFmError::RateLimit { retry_after });
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 
     async fn get_with_redirects(&mut self, url: &str, redirect_count: u32) -> Result<Response> {
@@ -1414,7 +1484,6 @@ impl LastFmClient {
         // Check for 403 responses that might be rate limits
         if response.status() == 403 {
             log::debug!("Got 403 response, checking if it's a rate limit");
-            // Note: We can't read the body here without consuming it, so we'll let the caller handle it
             // For now, treat 403s from authenticated endpoints as potential rate limits
             if !self.session_cookies.is_empty() {
                 log::debug!("403 on authenticated request - likely rate limit");
@@ -1474,6 +1543,62 @@ impl LastFmClient {
                 }
             }
         }
+    }
+
+    /// Extract response body, optionally saving debug info
+    async fn extract_response_body(&self, url: &str, response: &mut Response) -> Result<String> {
+        let body = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        if self.debug_save_responses {
+            self.save_debug_response(url, response.status().into(), &body);
+        }
+
+        Ok(body)
+    }
+
+    /// Save response to debug directory (optional debug feature)
+    fn save_debug_response(&self, url: &str, status_code: u16, body: &str) {
+        if let Err(e) = self.try_save_debug_response(url, status_code, body) {
+            log::warn!("Failed to save debug response: {e}");
+        }
+    }
+
+    /// Internal debug response saving implementation
+    fn try_save_debug_response(&self, url: &str, status_code: u16, body: &str) -> Result<()> {
+        // Create debug directory if it doesn't exist
+        let debug_dir = Path::new("debug_responses");
+        if !debug_dir.exists() {
+            fs::create_dir_all(debug_dir)
+                .map_err(|e| LastFmError::Http(format!("Failed to create debug directory: {e}")))?;
+        }
+
+        // Extract the path part of the URL (after base_url)
+        let url_path = if url.starts_with(&self.base_url) {
+            &url[self.base_url.len()..]
+        } else {
+            url
+        };
+
+        // Create safe filename from URL path and add timestamp
+        let now = chrono::Utc::now();
+        let timestamp = now.format("%Y%m%d_%H%M%S_%3f");
+        let safe_path = url_path.replace(['/', '?', '&', '=', '%', '+'], "_");
+
+        let filename = format!("{timestamp}_{safe_path}_status{status_code}.html");
+        let file_path = debug_dir.join(filename);
+
+        // Write response to file
+        fs::write(&file_path, body)
+            .map_err(|e| LastFmError::Http(format!("Failed to write debug file: {e}")))?;
+
+        log::debug!(
+            "Saved HTTP response to {file_path:?} (status: {status_code}, url: {url_path})"
+        );
+
+        Ok(())
     }
 
     pub async fn get_artist_albums_page(&mut self, artist: &str, page: u32) -> Result<AlbumPage> {

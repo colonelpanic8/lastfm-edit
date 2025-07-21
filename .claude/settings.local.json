@@ -21,7 +21,9 @@
       "Bash(cargo test:*)",
       "Bash(LASTFM_DEBUG_SAVE_RESPONSES=1 cargo run --example remove_remaster -- \"Neil Young\" 2 >& 1)",
       "Bash(RUST_LOG=warn LASTFM_DEBUG_SAVE_RESPONSES=1 cargo run --example remove_remaster -- \"The Velvet Underground\" 2 >& 1)",
-      "Bash(RUST_LOG=warn LASTFM_DEBUG_SAVE_RESPONSES=1 timeout 30s cargo run --example remove_remaster -- \"The Velvet Underground\" 2 >& 1)"
+      "Bash(RUST_LOG=warn LASTFM_DEBUG_SAVE_RESPONSES=1 timeout 30s cargo run --example remove_remaster -- \"The Velvet Underground\" 2 >& 1)",
+      "Bash(cargo fix:*)",
+      "Bash(LASTFM_DEBUG_SAVE_RESPONSES=1 timeout 10s cargo run --example remove_remaster -- \"The Velvet Underground\" 2>&1)"
     ],
     "deny": []
   }
