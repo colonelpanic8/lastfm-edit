@@ -31,7 +31,14 @@
       "Bash(cargo:*)",
       "Bash(LASTFM_DEBUG_SAVE_RESPONSES=1 cargo run --example list_recent_tracks 60)",
       "Bash(find:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(for:*)",
+      "Bash(do)",
+      "Bash(sed:*)",
+      "Bash(done)",
+      "Bash(if ! grep -q \"\\.next()\\.await\" \"$file\")",
+      "Bash(then)",
+      "Bash(fi)"
     ],
     "deny": []
   }
