@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::Result;
+use lastfm_edit::{AsyncPaginatedIterator, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {

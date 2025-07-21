@@ -1,6 +1,6 @@
 use crate::{
-    Album, AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, EditResponse, LastFmError,
-    Result, ScrobbleEdit, Track, TrackPage,
+    Album, AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator,
+    EditResponse, LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
 };
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
@@ -264,6 +264,10 @@ impl LastFmClient {
 
     pub fn artist_albums<'a>(&'a mut self, artist: &str) -> ArtistAlbumsIterator<'a> {
         ArtistAlbumsIterator::new(self, artist.to_string())
+    }
+
+    pub fn recent_tracks<'a>(&'a mut self) -> RecentTracksIterator<'a> {
+        RecentTracksIterator::new(self)
     }
 
     /// Fetch recent scrobbles from the user's listening history
@@ -1446,21 +1450,26 @@ impl LastFmClient {
 
     /// Parse recent scrobbles from the user's library page
     /// This extracts real scrobble data with timestamps for editing
-    fn parse_recent_scrobbles(&self, document: &Html) -> Result<Vec<Track>> {
+    pub fn parse_recent_scrobbles(&self, document: &Html) -> Result<Vec<Track>> {
         let mut tracks = Vec::new();
 
-        // Recent scrobbles are typically in a chartlist table
+        // Recent scrobbles are typically in chartlist tables - there can be multiple
         let table_selector = Selector::parse("table.chartlist").unwrap();
         let row_selector = Selector::parse("tbody tr").unwrap();
 
-        if let Some(table) = document.select(&table_selector).next() {
+        let tables: Vec<_> = document.select(&table_selector).collect();
+        log::debug!("Found {} chartlist tables", tables.len());
+
+        for table in tables {
             for row in table.select(&row_selector) {
                 if let Ok(track) = self.parse_recent_scrobble_row(&row) {
                     tracks.push(track);
                 }
             }
-        } else {
-            log::debug!("No chartlist table found in recent scrobbles");
+        }
+
+        if tracks.is_empty() {
+            log::debug!("No tracks found in recent scrobbles");
         }
 
         log::debug!("Parsed {} recent scrobbles", tracks.len());

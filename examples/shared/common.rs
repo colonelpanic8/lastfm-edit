@@ -1,4 +1,5 @@
 use lastfm_edit::{LastFmClient, Result};
+use lastfm_edit::AsyncPaginatedIterator;
 use std::env;
 
 pub async fn setup_client() -> Result<LastFmClient> {

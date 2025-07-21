@@ -1,4 +1,5 @@
 #[path = "shared/common.rs"]
+use lastfm_edit::AsyncPaginatedIterator;
 mod common;
 
 use lastfm_edit::Result;

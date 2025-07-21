@@ -50,3 +50,7 @@ path = "examples/remove_remaster.rs"
 name = "rename_artist"
 path = "examples/rename_artist.rs"
 
+[[example]]
+name = "list_recent_tracks"
+path = "examples/list_recent_tracks.rs"
+

@@ -10,7 +10,9 @@ pub use album::{Album, AlbumPage};
 pub use client::LastFmClient;
 pub use edit::{EditResponse, ScrobbleEdit};
 pub use error::LastFmError;
-pub use iterator::{ArtistAlbumsIterator, ArtistTracksIterator};
+pub use iterator::{
+    ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, RecentTracksIterator,
+};
 pub use scrobble_edit_context::{EditStrategy, IntoEditContext, ScrobbleEditContext};
 pub use track::{Track, TrackPage};
 
