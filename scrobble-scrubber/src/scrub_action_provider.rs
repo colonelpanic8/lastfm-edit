@@ -54,8 +54,9 @@ pub enum ScrubActionSuggestion {
 pub trait ScrubActionProvider: Send + Sync {
     type Error: std::error::Error + Send + Sync + 'static;
 
-    /// Analyze a track and provide suggestions for improvements
-    async fn analyze_track(&self, track: &Track) -> Result<ScrubActionSuggestion, Self::Error>;
+    /// Analyze multiple tracks and provide suggestions for improvements
+    /// Returns a vector of (track_index, suggestions) pairs
+    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error>;
 
     /// Get a human-readable name for this provider
     fn provider_name(&self) -> &str;
@@ -83,40 +84,48 @@ impl RewriteRulesScrubActionProvider {
 impl ScrubActionProvider for RewriteRulesScrubActionProvider {
     type Error = ActionProviderError;
 
-    async fn analyze_track(&self, track: &Track) -> Result<ScrubActionSuggestion, Self::Error> {
-        // Check if any rules would apply
-        let rules_apply = crate::rewrite::any_rules_apply(&self.rules, track)?;
+    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
+        let mut results = Vec::new();
 
-        if !rules_apply {
-            return Ok(ScrubActionSuggestion::NoAction);
+        for (index, track) in tracks.iter().enumerate() {
+            let mut suggestions = Vec::new();
+
+            // Check if any rules would apply
+            let rules_apply = crate::rewrite::any_rules_apply(&self.rules, track)?;
+
+            if rules_apply {
+                // Apply all rules to see what changes would be made
+                let mut edit = crate::rewrite::create_no_op_edit(track);
+                let changes_made = crate::rewrite::apply_all_rules(&self.rules, &mut edit)?;
+
+                if changes_made {
+                    // Check if any of the applicable rules require confirmation
+                    let needs_confirmation = self
+                        .rules
+                        .iter()
+                        .any(|rule| rule.applies_to(track).unwrap_or(false) && rule.requires_confirmation);
+
+                    // If confirmation needed, propose a rule instead of immediate action
+                    if needs_confirmation {
+                        // For now, return a simple rule proposal
+                        // TODO: Create a more sophisticated rule from the applied changes
+                        suggestions.push(ScrubActionSuggestion::ProposeRule {
+                            rule: RewriteRule::new(), // This should be constructed based on the actual applied rules
+                            motivation: "One or more rules require confirmation".to_string(),
+                        });
+                    } else {
+                        // Return the ScrobbleEdit directly
+                        suggestions.push(ScrubActionSuggestion::Edit(edit));
+                    }
+                }
+            }
+
+            if !suggestions.is_empty() {
+                results.push((index, suggestions));
+            }
         }
 
-        // Apply all rules to see what changes would be made
-        let mut edit = crate::rewrite::create_no_op_edit(track);
-        let changes_made = crate::rewrite::apply_all_rules(&self.rules, &mut edit)?;
-
-        if !changes_made {
-            return Ok(ScrubActionSuggestion::NoAction);
-        }
-
-        // Check if any of the applicable rules require confirmation
-        let needs_confirmation = self
-            .rules
-            .iter()
-            .any(|rule| rule.applies_to(track).unwrap_or(false) && rule.requires_confirmation);
-
-        // If confirmation needed, propose a rule instead of immediate action
-        if needs_confirmation {
-            // For now, return a simple rule proposal
-            // TODO: Create a more sophisticated rule from the applied changes
-            return Ok(ScrubActionSuggestion::ProposeRule {
-                rule: RewriteRule::new(), // This should be constructed based on the actual applied rules
-                motivation: "One or more rules require confirmation".to_string(),
-            });
-        }
-
-        // Return the ScrobbleEdit directly
-        Ok(ScrubActionSuggestion::Edit(edit))
+        Ok(results)
     }
 
     fn provider_name(&self) -> &str {
@@ -179,9 +188,9 @@ where
 {
     type Error = ActionProviderError;
 
-    async fn analyze_track(&self, track: &Track) -> Result<ScrubActionSuggestion, Self::Error> {
+    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
         self.inner
-            .analyze_track(track)
+            .analyze_tracks(tracks)
             .await
             .map_err(|e| e.into())
     }
@@ -195,22 +204,30 @@ where
 impl ScrubActionProvider for OrScrubActionProvider {
     type Error = ActionProviderError;
 
-    async fn analyze_track(&self, track: &Track) -> Result<ScrubActionSuggestion, Self::Error> {
-        for (i, provider) in self.providers.iter().enumerate() {
-            match provider.analyze_track(track).await {
-                Ok(ScrubActionSuggestion::NoAction) => {
-                    // Try next provider
-                    continue;
-                }
-                Ok(suggestion) => {
-                    // Found a suggestion, return it
-                    return Ok(suggestion);
+    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
+        let mut combined_results: Vec<(usize, Vec<ScrubActionSuggestion>)> = Vec::new();
+        
+        // Try each provider in sequence and combine results
+        for (provider_idx, provider) in self.providers.iter().enumerate() {
+            match provider.analyze_tracks(tracks).await {
+                Ok(provider_results) => {
+                    // Add these results to our combined results
+                    for (track_idx, suggestions) in provider_results {
+                        // Check if we already have suggestions for this track
+                        if let Some(existing) = combined_results.iter_mut().find(|(idx, _)| *idx == track_idx) {
+                            // Add to existing suggestions
+                            existing.1.extend(suggestions);
+                        } else {
+                            // Add new entry
+                            combined_results.push((track_idx, suggestions));
+                        }
+                    }
                 }
                 Err(e) => {
                     // Log error but continue to next provider
                     log::warn!(
                         "Error from provider '{}': {}",
-                        self.provider_names.get(i).unwrap_or(&"unknown".to_string()),
+                        self.provider_names.get(provider_idx).unwrap_or(&"unknown".to_string()),
                         e
                     );
                     continue;
@@ -218,8 +235,7 @@ impl ScrubActionProvider for OrScrubActionProvider {
             }
         }
 
-        // All providers returned NoAction or failed
-        Ok(ScrubActionSuggestion::NoAction)
+        Ok(combined_results)
     }
 
     fn provider_name(&self) -> &str {

@@ -173,15 +173,34 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             processed += 1;
         }
 
-        // Process collected tracks
-        for track in tracks_to_process {
-            info!("Processing track: {} - {}", track.artist, track.name);
+        // Process collected tracks in batch
+        if !tracks_to_process.is_empty() {
+            let batch_suggestions = self.analyze_tracks(&tracks_to_process).await;
 
-            if let Some(suggestion) = self.analyze_track(&track).await {
-                if self.config.scrubber.dry_run {
-                    info!("DRY RUN: Would apply suggestion: {:?}", suggestion);
-                } else {
-                    self.apply_suggestion(&track, &suggestion).await?;
+            for (track_index, suggestions) in batch_suggestions {
+                if track_index >= tracks_to_process.len() {
+                    log::warn!(
+                        "Invalid track index {} for batch size {}",
+                        track_index,
+                        tracks_to_process.len()
+                    );
+                    continue;
+                }
+
+                let track = &tracks_to_process[track_index];
+                info!(
+                    "Processing track: {} - {} ({} suggestions)",
+                    track.artist,
+                    track.name,
+                    suggestions.len()
+                );
+
+                for suggestion in suggestions {
+                    if self.config.scrubber.dry_run {
+                        info!("DRY RUN: Would apply suggestion: {:?}", suggestion);
+                    } else {
+                        self.apply_suggestion(track, &suggestion).await?;
+                    }
                 }
             }
         }
@@ -211,21 +230,28 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
         Ok(())
     }
 
-    async fn analyze_track(&self, track: &lastfm_edit::Track) -> Option<ScrubActionSuggestion> {
-        match self.action_provider.analyze_track(track).await {
-            Ok(ScrubActionSuggestion::NoAction) => None,
-            Ok(suggestion) => {
-                info!(
-                    "Action provider '{}' suggested action for track '{} - {}'",
-                    self.action_provider.provider_name(),
-                    track.artist,
-                    track.name
-                );
-                Some(suggestion)
+    async fn analyze_tracks(
+        &self,
+        tracks: &[lastfm_edit::Track],
+    ) -> Vec<(usize, Vec<ScrubActionSuggestion>)> {
+        match self.action_provider.analyze_tracks(tracks).await {
+            Ok(suggestions) => {
+                for (track_idx, track_suggestions) in &suggestions {
+                    if let Some(track) = tracks.get(*track_idx) {
+                        info!(
+                            "Action provider '{}' suggested {} actions for track '{} - {}'",
+                            self.action_provider.provider_name(),
+                            track_suggestions.len(),
+                            track.artist,
+                            track.name
+                        );
+                    }
+                }
+                suggestions
             }
             Err(e) => {
                 warn!("Error from action provider: {}", e);
-                None
+                Vec::new()
             }
         }
     }
