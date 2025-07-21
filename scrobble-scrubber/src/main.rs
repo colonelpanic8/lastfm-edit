@@ -1,5 +1,5 @@
 use clap::Parser;
-use lastfm_edit::{LastFmClient, LastFmError, Result};
+use lastfm_edit::{LastFmEditClient, LastFmError, Result};
 use log::info;
 use scrobble_scrubber::config::ScrobbleScrubberConfig;
 use scrobble_scrubber::openai_provider::OpenAIScrubActionProvider;
@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
 
     // Create and login to LastFM client
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmClient::new(Box::new(http_client));
+    let mut client = LastFmEditClient::new(Box::new(http_client));
 
     info!("Logging in to Last.fm...");
     client
