@@ -9,6 +9,32 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+/// Main client for interacting with Last.fm's web interface.
+///
+/// This client handles authentication, session management, and provides methods for
+/// browsing user libraries and editing scrobble data through web scraping.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use lastfm_edit::{LastFmClient, Result};
+/// use http_client::HttpClient;
+///
+/// #[tokio::main]
+/// async fn main() -> Result<()> {
+///     // Create client with any HTTP implementation
+///     let http_client = HttpClient::new();
+///     let mut client = LastFmClient::new(http_client);
+///
+///     // Login to Last.fm
+///     client.login("username", "password").await?;
+///
+///     // Check if authenticated
+///     assert!(client.is_logged_in());
+///
+///     Ok(())
+/// }
+/// ```
 pub struct LastFmClient {
     client: Box<dyn HttpClient>,
     username: String,
@@ -20,10 +46,33 @@ pub struct LastFmClient {
 }
 
 impl LastFmClient {
+    /// Create a new [`LastFmClient`] with the default Last.fm URL.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation that implements [`HttpClient`]
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::LastFmClient;
+    /// use http_client::HttpClient;
+    ///
+    /// let http_client = HttpClient::new();
+    /// let client = LastFmClient::new(http_client);
+    /// ```
     pub fn new(client: Box<dyn HttpClient>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
     }
 
+    /// Create a new [`LastFmClient`] with a custom base URL.
+    ///
+    /// This is useful for testing or if Last.fm changes their domain.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `base_url` - The base URL for Last.fm (e.g., "https://www.last.fm")
     pub fn with_base_url(client: Box<dyn HttpClient>, base_url: String) -> Self {
         Self::with_rate_limit_patterns(
             client,
@@ -49,6 +98,13 @@ impl LastFmClient {
         )
     }
 
+    /// Create a new [`LastFmClient`] with custom rate limit detection patterns.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `base_url` - The base URL for Last.fm
+    /// * `rate_limit_patterns` - Text patterns that indicate rate limiting in responses
     pub fn with_rate_limit_patterns(
         client: Box<dyn HttpClient>,
         base_url: String,
@@ -65,6 +121,35 @@ impl LastFmClient {
         }
     }
 
+    /// Authenticate with Last.fm using username and password.
+    ///
+    /// This method:
+    /// 1. Fetches the login page to extract CSRF tokens
+    /// 2. Submits the login form with credentials
+    /// 3. Validates the authentication by checking for session cookies
+    /// 4. Stores session data for subsequent requests
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - Last.fm username or email
+    /// * `password` - Last.fm password
+    ///
+    /// # Returns
+    ///
+    /// Returns [`Ok(())`] on successful authentication, or [`LastFmError::Auth`] on failure.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use lastfm_edit::{LastFmClient, Result};
+    /// # use http_client::HttpClient;
+    /// # tokio_test::block_on(async {
+    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// client.login("username", "password").await?;
+    /// assert!(client.is_logged_in());
+    /// # Ok::<(), lastfm_edit::LastFmError>(())
+    /// # });
+    /// ```
     pub async fn login(&mut self, username: &str, password: &str) -> Result<()> {
         // Get login page to extract CSRF token
         let login_url = format!("{}/login", self.base_url);
@@ -250,22 +335,90 @@ impl LastFmClient {
         }
     }
 
+    /// Get the currently authenticated username.
+    ///
+    /// Returns an empty string if not logged in.
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    /// Check if the client is currently authenticated.
+    ///
+    /// Returns `true` if [`login`](Self::login) was successful and session is active.
     pub fn is_logged_in(&self) -> bool {
         !self.username.is_empty() && self.csrf_token.is_some()
     }
 
+    /// Create an iterator for browsing an artist's tracks from the user's library.
+    ///
+    /// # Arguments
+    ///
+    /// * `artist` - The artist name to browse
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`ArtistTracksIterator`] that implements [`AsyncPaginatedIterator`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
+    /// # use http_client::HttpClient;
+    /// # tokio_test::block_on(async {
+    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// // client.login(...).await?;
+    ///
+    /// let mut tracks = client.artist_tracks("Radiohead");
+    /// while let Some(track) = tracks.next().await? {
+    ///     println!("{} - {}", track.artist, track.name);
+    /// }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # });
+    /// ```
     pub fn artist_tracks<'a>(&'a mut self, artist: &str) -> ArtistTracksIterator<'a> {
         ArtistTracksIterator::new(self, artist.to_string())
     }
 
+    /// Create an iterator for browsing an artist's albums from the user's library.
+    ///
+    /// # Arguments
+    ///
+    /// * `artist` - The artist name to browse
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`ArtistAlbumsIterator`] that implements [`AsyncPaginatedIterator`].
     pub fn artist_albums<'a>(&'a mut self, artist: &str) -> ArtistAlbumsIterator<'a> {
         ArtistAlbumsIterator::new(self, artist.to_string())
     }
 
+    /// Create an iterator for browsing the user's recent tracks.
+    ///
+    /// This provides access to the user's recent listening history with timestamps,
+    /// which is useful for finding tracks to edit.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`RecentTracksIterator`] that implements [`AsyncPaginatedIterator`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
+    /// # use http_client::HttpClient;
+    /// # tokio_test::block_on(async {
+    /// let mut client = LastFmClient::new(HttpClient::new());
+    /// // client.login(...).await?;
+    ///
+    /// let mut recent = client.recent_tracks();
+    /// while let Some(track) = recent.next().await? {
+    ///     if let Some(timestamp) = track.timestamp {
+    ///         println!("{} - {} (played at {})", track.artist, track.name, timestamp);
+    ///     }
+    /// }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # });
+    /// ```
     pub fn recent_tracks<'a>(&'a mut self) -> RecentTracksIterator<'a> {
         RecentTracksIterator::new(self)
     }
