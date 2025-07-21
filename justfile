@@ -20,3 +20,6 @@ readme:
     sed 's/^\/\/!$//' > README.md
 
     echo "README.md generated successfully!"
+
+clippy:
+    cargo clippy --all-targets --all-features -- -D warnings

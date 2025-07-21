@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
                 };
 
                 let album_str = if let Some(album) = &track.album {
-                    format!(" [{}]", album)
+                    format!(" [{album}]")
                 } else {
                     "".to_string()
                 };
