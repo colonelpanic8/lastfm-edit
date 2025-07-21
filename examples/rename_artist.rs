@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
 }
 
 async fn rename_all_tracks(
-    client: &mut lastfm_edit::LastFmClient,
+    client: &mut lastfm_edit::LastFmEditClient,
     old_artist: &str,
     new_artist: &str,
 ) -> Result<()> {
@@ -98,7 +98,7 @@ async fn rename_all_tracks(
 }
 
 async fn rename_single_track(
-    client: &mut lastfm_edit::LastFmClient,
+    client: &mut lastfm_edit::LastFmEditClient,
     track_name: &str,
     old_artist: &str,
     new_artist: &str,
@@ -128,7 +128,7 @@ async fn rename_single_track(
 }
 
 async fn rename_album_tracks(
-    client: &mut lastfm_edit::LastFmClient,
+    client: &mut lastfm_edit::LastFmEditClient,
     album_name: &str,
     old_artist: &str,
     new_artist: &str,

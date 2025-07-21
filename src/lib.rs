@@ -141,7 +141,7 @@ pub mod scrobble_edit_context;
 pub mod track;
 
 pub use album::{Album, AlbumPage};
-pub use client::LastFmClient;
+pub use client::LastFmEditClient;
 pub use edit::{EditResponse, ScrobbleEdit};
 pub use error::LastFmError;
 pub use iterator::{

@@ -1,4 +1,4 @@
-use lastfm_edit::{LastFmClient, Result};
+use lastfm_edit::{LastFmEditClient, Result};
 use scraper::Html;
 use std::fs;
 
@@ -14,7 +14,7 @@ async fn test_neil_young_track_parsing() -> Result<()> {
 
     // Create a client to access the parsing method (we don't need to login for parsing)
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmClient::new(Box::new(http_client));
+    let client = LastFmEditClient::new(Box::new(http_client));
 
     // Test the parsing function
     let track_page = client.parse_tracks_page(&document, 1, "Neil Young")?;

@@ -1,4 +1,4 @@
-use lastfm_edit::{Html, LastFmClient};
+use lastfm_edit::{Html, LastFmEditClient};
 use std::fs;
 
 #[test]
@@ -11,7 +11,7 @@ fn test_recent_tracks_parsing() {
 
     // Create a mock client for testing parsing
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmClient::new(Box::new(http_client));
+    let client = LastFmEditClient::new(Box::new(http_client));
 
     // Test the parsing
     let tracks = client.parse_recent_scrobbles(&document).unwrap();

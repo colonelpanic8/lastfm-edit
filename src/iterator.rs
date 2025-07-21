@@ -1,4 +1,4 @@
-use crate::{Album, AlbumPage, LastFmClient, Result, Track, TrackPage};
+use crate::{Album, AlbumPage, LastFmEditClient, Result, Track, TrackPage};
 
 /// Async iterator trait for paginated Last.fm data.
 ///
@@ -132,7 +132,7 @@ pub trait AsyncPaginatedIterator {
 /// # });
 /// ```
 pub struct ArtistTracksIterator<'a> {
-    client: &'a mut LastFmClient,
+    client: &'a mut LastFmEditClient,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -164,7 +164,7 @@ impl<'a> ArtistTracksIterator<'a> {
     /// Create a new artist tracks iterator.
     ///
     /// This is typically called via [`LastFmClient::artist_tracks`](crate::LastFmClient::artist_tracks).
-    pub fn new(client: &'a mut LastFmClient, artist: String) -> Self {
+    pub fn new(client: &'a mut LastFmEditClient, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -232,7 +232,7 @@ impl<'a> ArtistTracksIterator<'a> {
 /// # });
 /// ```
 pub struct ArtistAlbumsIterator<'a> {
-    client: &'a mut LastFmClient,
+    client: &'a mut LastFmEditClient,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -264,7 +264,7 @@ impl<'a> ArtistAlbumsIterator<'a> {
     /// Create a new artist albums iterator.
     ///
     /// This is typically called via [`LastFmClient::artist_albums`](crate::LastFmClient::artist_albums).
-    pub fn new(client: &'a mut LastFmClient, artist: String) -> Self {
+    pub fn new(client: &'a mut LastFmEditClient, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -338,7 +338,7 @@ impl<'a> ArtistAlbumsIterator<'a> {
 /// # });
 /// ```
 pub struct RecentTracksIterator<'a> {
-    client: &'a mut LastFmClient,
+    client: &'a mut LastFmEditClient,
     current_page: u32,
     has_more: bool,
     buffer: Vec<Track>,
@@ -400,7 +400,7 @@ impl<'a> RecentTracksIterator<'a> {
     /// Create a new recent tracks iterator.
     ///
     /// This is typically called via [`LastFmClient::recent_tracks`](crate::LastFmClient::recent_tracks).
-    pub fn new(client: &'a mut LastFmClient) -> Self {
+    pub fn new(client: &'a mut LastFmEditClient) -> Self {
         Self {
             client,
             current_page: 1,

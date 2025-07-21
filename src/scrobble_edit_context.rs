@@ -1,4 +1,4 @@
-use crate::{LastFmClient, Result, ScrobbleEdit};
+use crate::{LastFmEditClient, Result, ScrobbleEdit};
 
 /// Context object that bridges track listing data with edit functionality.
 ///
@@ -229,7 +229,7 @@ impl ScrobbleEditContext {
     /// ```
     pub async fn execute_edit(
         &self,
-        client: &mut LastFmClient,
+        client: &mut LastFmEditClient,
         new_track_name: String,
         new_album_name: Option<String>,
     ) -> Result<bool> {
@@ -315,7 +315,7 @@ impl ScrobbleEditContext {
     /// ```
     pub async fn execute_edit_with_real_data(
         &self,
-        client: &mut LastFmClient,
+        client: &mut LastFmEditClient,
         new_track_name: String,
         new_album_name: Option<String>,
     ) -> Result<bool> {

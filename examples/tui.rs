@@ -6,7 +6,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use lastfm_edit::{ArtistTracksIterator, LastFmClient, Result, ScrobbleEdit, Track};
+use lastfm_edit::{ArtistTracksIterator, LastFmEditClient, Result, ScrobbleEdit, Track};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
@@ -58,7 +58,7 @@ impl TrackEditorApp {
         }
     }
 
-    pub async fn load_tracks(&mut self, client: &mut LastFmClient) -> Result<()> {
+    pub async fn load_tracks(&mut self, client: &mut LastFmEditClient) -> Result<()> {
         self.mode = AppMode::Loading;
         self.loading_message = format!("Loading tracks for {}...", self.artist);
 
@@ -87,7 +87,7 @@ impl TrackEditorApp {
         Ok(())
     }
 
-    pub async fn load_more_tracks(&mut self, client: &mut LastFmClient) -> Result<()> {
+    pub async fn load_more_tracks(&mut self, client: &mut LastFmEditClient) -> Result<()> {
         if !self.has_more_pages {
             return Ok(());
         }
@@ -198,7 +198,7 @@ impl TrackEditorApp {
         self.edit_field = track.name;
     }
 
-    pub async fn load_edit_form(&mut self, client: &mut LastFmClient) -> Result<()> {
+    pub async fn load_edit_form(&mut self, client: &mut LastFmEditClient) -> Result<()> {
         if let Some(track) = self.tracks.get(self.selected_track_index) {
             match client
                 .load_edit_form_values(&track.name, &track.artist)
@@ -219,7 +219,7 @@ impl TrackEditorApp {
         Ok(())
     }
 
-    pub async fn save_edit(&mut self, client: &mut LastFmClient) -> Result<()> {
+    pub async fn save_edit(&mut self, client: &mut LastFmEditClient) -> Result<()> {
         if let Some(ref edit) = self.current_edit {
             self.mode = AppMode::Loading;
             self.loading_message = format!(
@@ -436,7 +436,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-pub async fn run_track_editor(mut client: LastFmClient, artist: String) -> Result<()> {
+pub async fn run_track_editor(mut client: LastFmEditClient, artist: String) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();

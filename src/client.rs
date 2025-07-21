@@ -34,7 +34,7 @@ use std::path::Path;
 ///     Ok(())
 /// }
 /// ```
-pub struct LastFmClient {
+pub struct LastFmEditClient {
     client: Box<dyn HttpClient>,
     username: String,
     csrf_token: Option<String>,
@@ -44,7 +44,7 @@ pub struct LastFmClient {
     debug_save_responses: bool,
 }
 
-impl LastFmClient {
+impl LastFmEditClient {
     /// Create a new [`LastFmClient`] with the default Last.fm URL.
     ///
     /// # Arguments

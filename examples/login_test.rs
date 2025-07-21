@@ -1,4 +1,4 @@
-use lastfm_edit::{LastFmClient, Result};
+use lastfm_edit::{LastFmEditClient, Result};
 use std::env;
 
 #[tokio::main]
@@ -10,7 +10,7 @@ async fn main() -> Result<()> {
 
     // Create a curl-based HTTP client
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmClient::new(Box::new(http_client));
+    let mut client = LastFmEditClient::new(Box::new(http_client));
 
     println!("Attempting to login as {username}...");
     client.login(&username, &password).await?;
