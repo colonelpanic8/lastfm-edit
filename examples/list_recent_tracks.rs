@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(20);
 
-    println!("Fetching {} recent tracks...", num_tracks);
+    println!("Fetching {num_tracks} recent tracks...");
     println!();
 
     // Get iterator for recent tracks
@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
                         " ({})",
                         chrono::DateTime::from_timestamp(ts as i64, 0)
                             .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                            .unwrap_or_else(|| format!("timestamp: {}", ts))
+                            .unwrap_or_else(|| format!("timestamp: {ts}"))
                     )
                 } else {
                     " (no timestamp)".to_string()
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     }
 
     println!();
-    println!("Fetched {} tracks total.", count);
+    println!("Fetched {count} tracks total.");
 
     Ok(())
 }
