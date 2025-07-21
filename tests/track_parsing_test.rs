@@ -5,7 +5,7 @@ use std::fs;
 #[tokio::test]
 async fn test_neil_young_track_parsing() -> Result<()> {
     // Load the saved HTML file
-    let html_file = "neil_young_tracks_page_1.html";
+    let html_file = "tests/fixtures/neil_young_tracks_page_1.html";
     let html_content = fs::read_to_string(html_file)
         .map_err(|e| lastfm_edit::LastFmError::Parse(format!("Failed to read HTML file: {e}")))?;
 
@@ -62,8 +62,8 @@ async fn test_neil_young_track_parsing() -> Result<()> {
 #[test]
 fn test_html_contains_comes_a_time() {
     // Verify the HTML file actually contains the track we're looking for
-    let html_content =
-        fs::read_to_string("neil_young_tracks_page_1.html").expect("HTML file should exist");
+    let html_content = fs::read_to_string("tests/fixtures/neil_young_tracks_page_1.html")
+        .expect("HTML file should exist");
 
     assert!(
         html_content.contains("Comes a Time - 2016"),

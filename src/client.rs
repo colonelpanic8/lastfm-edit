@@ -983,6 +983,182 @@ impl LastFmClient {
         Ok(EditResponse { success, message })
     }
 
+    /// Edit artist metadata for a specific track only
+    /// This edits only the specified track if found in recent scrobbles
+    pub async fn edit_artist_for_track(
+        &mut self,
+        track_name: &str,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse> {
+        log::debug!("Editing artist for track '{track_name}' from '{old_artist_name}' -> '{new_artist_name}'");
+
+        match self.load_edit_form_values(track_name, old_artist_name).await {
+            Ok(mut edit_data) => {
+                // Update the artist name and album artist name
+                edit_data.artist_name = new_artist_name.to_string();
+                edit_data.album_artist_name = new_artist_name.to_string();
+
+                log::info!("Updating artist for track '{track_name}' from '{old_artist_name}' to '{new_artist_name}'");
+
+                // Perform the edit
+                match self.edit_scrobble(&edit_data).await {
+                    Ok(response) => {
+                        if response.success {
+                            Ok(EditResponse {
+                                success: true,
+                                message: Some(format!(
+                                    "Successfully renamed artist for track '{track_name}' from '{old_artist_name}' to '{new_artist_name}'"
+                                )),
+                            })
+                        } else {
+                            Ok(EditResponse {
+                                success: false,
+                                message: Some(format!(
+                                    "Failed to rename artist for track '{track_name}': {}",
+                                    response.message.unwrap_or_else(|| "Unknown error".to_string())
+                                )),
+                            })
+                        }
+                    }
+                    Err(e) => Ok(EditResponse {
+                        success: false,
+                        message: Some(format!("Error editing track '{track_name}': {e}")),
+                    }),
+                }
+            }
+            Err(e) => Ok(EditResponse {
+                success: false,
+                message: Some(format!(
+                    "Could not load edit form for track '{track_name}' by '{old_artist_name}': {e}. The track may not be in your recent scrobbles."
+                )),
+            }),
+        }
+    }
+
+    /// Edit artist metadata for all tracks in a specific album
+    /// This edits ALL tracks from the specified album that are found in recent scrobbles
+    pub async fn edit_artist_for_album(
+        &mut self,
+        album_name: &str,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse> {
+        log::debug!("Editing artist for album '{album_name}' from '{old_artist_name}' -> '{new_artist_name}'");
+
+        // Get all tracks from the album page
+        let tracks = self.get_album_tracks(album_name, old_artist_name).await?;
+
+        if tracks.is_empty() {
+            return Ok(EditResponse {
+                success: false,
+                message: Some(format!(
+                    "No tracks found for album '{album_name}' by '{old_artist_name}'. Make sure the album name matches exactly."
+                )),
+            });
+        }
+
+        log::info!(
+            "Found {} tracks in album '{}' by '{}'",
+            tracks.len(),
+            album_name,
+            old_artist_name
+        );
+
+        let mut successful_edits = 0;
+        let mut failed_edits = 0;
+        let mut error_messages = Vec::new();
+        let mut skipped_tracks = 0;
+
+        // For each track, try to load and edit it
+        for (index, track) in tracks.iter().enumerate() {
+            log::debug!(
+                "Processing track {}/{}: '{}'",
+                index + 1,
+                tracks.len(),
+                track.name
+            );
+
+            match self
+                .load_edit_form_values(&track.name, old_artist_name)
+                .await
+            {
+                Ok(mut edit_data) => {
+                    // Update the artist name and album artist name
+                    edit_data.artist_name = new_artist_name.to_string();
+                    edit_data.album_artist_name = new_artist_name.to_string();
+
+                    // Perform the edit
+                    match self.edit_scrobble(&edit_data).await {
+                        Ok(response) => {
+                            if response.success {
+                                successful_edits += 1;
+                                log::info!("✅ Successfully edited track '{}'", track.name);
+                            } else {
+                                failed_edits += 1;
+                                let error_msg = format!(
+                                    "Failed to edit track '{}': {}",
+                                    track.name,
+                                    response
+                                        .message
+                                        .unwrap_or_else(|| "Unknown error".to_string())
+                                );
+                                error_messages.push(error_msg);
+                                log::debug!("❌ {}", error_messages.last().unwrap());
+                            }
+                        }
+                        Err(e) => {
+                            failed_edits += 1;
+                            let error_msg = format!("Error editing track '{}': {}", track.name, e);
+                            error_messages.push(error_msg);
+                            log::info!("❌ {}", error_messages.last().unwrap());
+                        }
+                    }
+                }
+                Err(e) => {
+                    skipped_tracks += 1;
+                    log::debug!("Could not load edit form for track '{}': {e}", track.name);
+                    // Continue to next track - some tracks might not be in recent scrobbles
+                }
+            }
+
+            // Add delay between edits to be respectful to the server
+            if index < tracks.len() - 1 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+            }
+        }
+
+        let total_processed = successful_edits + failed_edits;
+        let success = successful_edits > 0 && failed_edits == 0;
+
+        let message = if success {
+            Some(format!(
+                "Successfully renamed artist for album '{album_name}' from '{old_artist_name}' to '{new_artist_name}' for all {successful_edits} editable tracks ({skipped_tracks} tracks were not in recent scrobbles)"
+            ))
+        } else if successful_edits > 0 {
+            Some(format!(
+                "Partially successful: {} of {} editable tracks renamed ({} skipped, {} failed). Errors: {}",
+                successful_edits,
+                total_processed,
+                skipped_tracks,
+                failed_edits,
+                error_messages.join("; ")
+            ))
+        } else if total_processed == 0 {
+            Some(format!(
+                "No editable tracks found for album '{album_name}' by '{old_artist_name}'. All {} tracks were skipped because they're not in recent scrobbles.",
+                tracks.len()
+            ))
+        } else {
+            Some(format!(
+                "Failed to rename any tracks. Errors: {}",
+                error_messages.join("; ")
+            ))
+        };
+
+        Ok(EditResponse { success, message })
+    }
+
     pub async fn get_artist_tracks_page(&mut self, artist: &str, page: u32) -> Result<TrackPage> {
         // Use AJAX endpoint for page content
         let url = format!(
