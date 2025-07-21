@@ -2,6 +2,8 @@
 name = "lastfm-edit"
 version = "0.1.0"
 edition = "2021"
+description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
+license = "MIT"
 
 [dependencies]
 http-client = { version = "6.5", features = ["curl_client"] }
