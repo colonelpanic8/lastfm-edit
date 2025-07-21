@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use crate::rewrite::RewriteRule;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -15,6 +16,112 @@ pub struct RewriteRulesState {
     pub rewrite_rules: Vec<RewriteRule>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingEdit {
+    /// Unique identifier for this pending edit
+    pub id: Uuid,
+    /// Timestamp when this edit was created
+    pub created_at: DateTime<Utc>,
+    /// Original track information
+    pub original_track_name: String,
+    pub original_artist_name: String,
+    pub original_album_name: Option<String>,
+    pub original_album_artist_name: Option<String>,
+    /// Proposed changes
+    pub new_track_name: Option<String>,
+    pub new_artist_name: Option<String>,
+    pub new_album_name: Option<String>,
+    pub new_album_artist_name: Option<String>,
+    /// Timestamp of the scrobble being edited
+    pub scrobble_timestamp: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PendingEditsState {
+    /// List of pending edits awaiting confirmation
+    pub pending_edits: Vec<PendingEdit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingRewriteRule {
+    /// Unique identifier for this pending rule
+    pub id: Uuid,
+    /// Timestamp when this rule suggestion was created
+    pub created_at: DateTime<Utc>,
+    /// The suggested rewrite rule
+    pub rule: RewriteRule,
+    /// Explanation of why this rule was suggested
+    pub reason: String,
+    /// Track that triggered this suggestion
+    pub example_track_name: String,
+    pub example_artist_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PendingRewriteRulesState {
+    /// List of pending rewrite rules awaiting approval
+    pub pending_rules: Vec<PendingRewriteRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettingsState {
+    /// Global setting to require confirmation for all edits
+    pub require_confirmation: bool,
+}
+
+impl Default for SettingsState {
+    fn default() -> Self {
+        Self {
+            require_confirmation: false,
+        }
+    }
+}
+
+impl PendingEdit {
+    pub fn new(
+        original_track_name: String,
+        original_artist_name: String,
+        original_album_name: Option<String>,
+        original_album_artist_name: Option<String>,
+        new_track_name: Option<String>,
+        new_artist_name: Option<String>,
+        new_album_name: Option<String>,
+        new_album_artist_name: Option<String>,
+        scrobble_timestamp: Option<u64>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            created_at: Utc::now(),
+            original_track_name,
+            original_artist_name,
+            original_album_name,
+            original_album_artist_name,
+            new_track_name,
+            new_artist_name,
+            new_album_name,
+            new_album_artist_name,
+            scrobble_timestamp,
+        }
+    }
+}
+
+impl PendingRewriteRule {
+    pub fn new(
+        rule: RewriteRule,
+        reason: String,
+        example_track_name: String,
+        example_artist_name: String,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            created_at: Utc::now(),
+            rule,
+            reason,
+            example_track_name,
+            example_artist_name,
+        }
+    }
+}
 
 #[async_trait]
 pub trait StateStorage: Send + Sync {
@@ -35,6 +142,24 @@ pub trait StateStorage: Send + Sync {
 
     /// Save the rewrite rules state
     async fn save_rewrite_rules_state(&mut self, state: &RewriteRulesState) -> Result<(), Self::Error>;
+
+    /// Load the pending edits state
+    async fn load_pending_edits_state(&self) -> Result<PendingEditsState, Self::Error>;
+
+    /// Save the pending edits state
+    async fn save_pending_edits_state(&mut self, state: &PendingEditsState) -> Result<(), Self::Error>;
+
+    /// Load the pending rewrite rules state
+    async fn load_pending_rewrite_rules_state(&self) -> Result<PendingRewriteRulesState, Self::Error>;
+
+    /// Save the pending rewrite rules state
+    async fn save_pending_rewrite_rules_state(&mut self, state: &PendingRewriteRulesState) -> Result<(), Self::Error>;
+
+    /// Load the settings state
+    async fn load_settings_state(&self) -> Result<SettingsState, Self::Error>;
+
+    /// Save the settings state
+    async fn save_settings_state(&mut self, state: &SettingsState) -> Result<(), Self::Error>;
 }
 
 /// File-based storage implementation using pickledb
@@ -85,12 +210,51 @@ impl StateStorage for FileStorage {
         self.db.set("rewrite_rules_state", state)?;
         Ok(())
     }
+
+    async fn load_pending_edits_state(&self) -> Result<PendingEditsState, Self::Error> {
+        match self.db.get("pending_edits_state") {
+            Some(state) => Ok(state),
+            None => Ok(PendingEditsState::default()),
+        }
+    }
+
+    async fn save_pending_edits_state(&mut self, state: &PendingEditsState) -> Result<(), Self::Error> {
+        self.db.set("pending_edits_state", state)?;
+        Ok(())
+    }
+
+    async fn load_pending_rewrite_rules_state(&self) -> Result<PendingRewriteRulesState, Self::Error> {
+        match self.db.get("pending_rewrite_rules_state") {
+            Some(state) => Ok(state),
+            None => Ok(PendingRewriteRulesState::default()),
+        }
+    }
+
+    async fn save_pending_rewrite_rules_state(&mut self, state: &PendingRewriteRulesState) -> Result<(), Self::Error> {
+        self.db.set("pending_rewrite_rules_state", state)?;
+        Ok(())
+    }
+
+    async fn load_settings_state(&self) -> Result<SettingsState, Self::Error> {
+        match self.db.get("settings_state") {
+            Some(state) => Ok(state),
+            None => Ok(SettingsState::default()),
+        }
+    }
+
+    async fn save_settings_state(&mut self, state: &SettingsState) -> Result<(), Self::Error> {
+        self.db.set("settings_state", state)?;
+        Ok(())
+    }
 }
 
 /// In-memory storage implementation for testing
 pub struct MemoryStorage {
     timestamp_state: tokio::sync::RwLock<TimestampState>,
     rewrite_rules_state: tokio::sync::RwLock<RewriteRulesState>,
+    pending_edits_state: tokio::sync::RwLock<PendingEditsState>,
+    pending_rewrite_rules_state: tokio::sync::RwLock<PendingRewriteRulesState>,
+    settings_state: tokio::sync::RwLock<SettingsState>,
 }
 
 impl MemoryStorage {
@@ -99,6 +263,9 @@ impl MemoryStorage {
         Self {
             timestamp_state: tokio::sync::RwLock::new(TimestampState::default()),
             rewrite_rules_state: tokio::sync::RwLock::new(RewriteRulesState::default()),
+            pending_edits_state: tokio::sync::RwLock::new(PendingEditsState::default()),
+            pending_rewrite_rules_state: tokio::sync::RwLock::new(PendingRewriteRulesState::default()),
+            settings_state: tokio::sync::RwLock::new(SettingsState::default()),
         }
     }
 }
@@ -110,6 +277,9 @@ impl StateStorage for MemoryStorage {
     async fn clear_state(&mut self) -> Result<(), Self::Error> {
         *self.timestamp_state.write().await = TimestampState::default();
         *self.rewrite_rules_state.write().await = RewriteRulesState::default();
+        *self.pending_edits_state.write().await = PendingEditsState::default();
+        *self.pending_rewrite_rules_state.write().await = PendingRewriteRulesState::default();
+        *self.settings_state.write().await = SettingsState::default();
         Ok(())
     }
 
@@ -128,6 +298,33 @@ impl StateStorage for MemoryStorage {
 
     async fn save_rewrite_rules_state(&mut self, state: &RewriteRulesState) -> Result<(), Self::Error> {
         *self.rewrite_rules_state.write().await = state.clone();
+        Ok(())
+    }
+
+    async fn load_pending_edits_state(&self) -> Result<PendingEditsState, Self::Error> {
+        Ok(self.pending_edits_state.read().await.clone())
+    }
+
+    async fn save_pending_edits_state(&mut self, state: &PendingEditsState) -> Result<(), Self::Error> {
+        *self.pending_edits_state.write().await = state.clone();
+        Ok(())
+    }
+
+    async fn load_pending_rewrite_rules_state(&self) -> Result<PendingRewriteRulesState, Self::Error> {
+        Ok(self.pending_rewrite_rules_state.read().await.clone())
+    }
+
+    async fn save_pending_rewrite_rules_state(&mut self, state: &PendingRewriteRulesState) -> Result<(), Self::Error> {
+        *self.pending_rewrite_rules_state.write().await = state.clone();
+        Ok(())
+    }
+
+    async fn load_settings_state(&self) -> Result<SettingsState, Self::Error> {
+        Ok(self.settings_state.read().await.clone())
+    }
+
+    async fn save_settings_state(&mut self, state: &SettingsState) -> Result<(), Self::Error> {
+        *self.settings_state.write().await = state.clone();
         Ok(())
     }
 }

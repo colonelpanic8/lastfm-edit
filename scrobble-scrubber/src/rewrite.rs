@@ -209,6 +209,8 @@ pub struct RewriteRule {
     pub artist_name: Option<SdRule>,
     /// Optional transformation for album artist name
     pub album_artist_name: Option<SdRule>,
+    /// Whether this rule requires user confirmation before applying
+    pub requires_confirmation: bool,
 }
 
 impl RewriteRule {
@@ -219,6 +221,7 @@ impl RewriteRule {
             album_name: None,
             artist_name: None,
             album_artist_name: None,
+            requires_confirmation: false,
         }
     }
 
@@ -243,6 +246,12 @@ impl RewriteRule {
     /// Set transformation for album artist name
     pub fn with_album_artist_name(mut self, rule: SdRule) -> Self {
         self.album_artist_name = Some(rule);
+        self
+    }
+
+    /// Set whether this rule requires confirmation
+    pub fn with_confirmation_required(mut self, requires_confirmation: bool) -> Self {
+        self.requires_confirmation = requires_confirmation;
         self
     }
 

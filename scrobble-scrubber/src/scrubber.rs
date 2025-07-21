@@ -1,222 +1,452 @@
-use chrono::Utc;
-use lastfm_edit::{iterator::AsyncPaginatedIterator, LastFmClient, Result};
+use chrono::{DateTime, Utc};
+use lastfm_edit::{iterator::AsyncPaginatedIterator, LastFmClient, Result, ScrobbleEdit};
 use log::{info, warn};
-use std::collections::HashSet;
 
-use crate::persistence::{RewriteRulesState, StateStorage, TimestampState};
-use crate::rewrite;
+use crate::config::ScrobbleScrubberConfig;
+use crate::persistence::{
+    PendingEdit, PendingRewriteRule, StateStorage, TimestampState,
+};
+use crate::scrub_action_provider::{ScrubActionProvider, ScrubActionSuggestion};
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 
-// Use Args from lib
-use crate::Args;
-
-pub struct ScrobbleScrubber<S: StateStorage> {
+pub struct ScrobbleScrubber<S: StateStorage, P: ScrubActionProvider> {
     client: LastFmClient,
-    args: Args,
-    storage: S,
-    timestamp_state: TimestampState,
-    rules_state: RewriteRulesState,
-    seen_tracks: HashSet<String>,
+    storage: Arc<Mutex<S>>,
+    action_provider: P,
+    config: ScrobbleScrubberConfig,
+    is_running: Arc<RwLock<bool>>,
+    should_stop: Arc<RwLock<bool>>,
 }
 
-impl<S: StateStorage> ScrobbleScrubber<S> {
-    pub async fn new(args: Args, mut storage: S, client: LastFmClient) -> Result<Self> {
-        // Load existing states or create with defaults
-        let timestamp_state = storage.load_timestamp_state().await.map_err(|e| {
-            lastfm_edit::LastFmError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to load timestamp state: {}", e),
-            ))
-        })?;
-
-        let mut rules_state = storage.load_rewrite_rules_state().await.map_err(|e| {
-            lastfm_edit::LastFmError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to load rules state: {}", e),
-            ))
-        })?;
-
-        if rules_state.rewrite_rules.is_empty() {
-            info!("No existing rules found, initializing with default rules");
-            rules_state = RewriteRulesState::with_default_rules();
-            storage
-                .save_rewrite_rules_state(&rules_state)
-                .await
-                .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to save initial rules: {}", e),
-                    ))
-                })?;
-        } else {
-            info!(
-                "Loaded {} rewrite rules from state",
-                rules_state.rewrite_rules.len()
-            );
-        }
-
+impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
+    pub async fn new(
+        storage: Arc<Mutex<S>>,
+        client: LastFmClient,
+        action_provider: P,
+        config: ScrobbleScrubberConfig,
+    ) -> Result<Self> {
         Ok(Self {
             client,
-            args,
             storage,
-            timestamp_state,
-            rules_state,
-            seen_tracks: HashSet::new(),
+            action_provider,
+            config,
+            is_running: Arc::new(RwLock::new(false)),
+            should_stop: Arc::new(RwLock::new(false)),
         })
+    }
+
+    /// Get a reference to the storage for external access (e.g., web interface)
+    pub fn storage(&self) -> Arc<Mutex<S>> {
+        self.storage.clone()
+    }
+
+    /// Check if the scrubber is currently running a cycle
+    pub async fn is_running(&self) -> bool {
+        *self.is_running.read().await
+    }
+
+    /// Request the scrubber to stop gracefully
+    pub async fn stop(&self) {
+        *self.should_stop.write().await = true;
+    }
+
+    /// Trigger a single scrubbing run manually
+    pub async fn trigger_run(&mut self) -> Result<()> {
+        if *self.is_running.read().await {
+            return Err(lastfm_edit::LastFmError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Scrubber is already running",
+            )));
+        }
+
+        self.check_and_process_tracks().await
     }
 
     pub async fn run(&mut self) -> Result<()> {
         loop {
+            // Check if we should stop
+            if *self.should_stop.read().await {
+                info!("Scrubber stop requested, exiting main loop");
+                break;
+            }
+
+            *self.is_running.write().await = true;
             info!("Starting track monitoring cycle...");
 
             if let Err(e) = self.check_and_process_tracks().await {
                 warn!("Error during track processing: {}", e);
             }
 
-            // Update timestamp and save timestamp state
-            self.timestamp_state.last_processed_timestamp = Some(Utc::now());
-            if let Err(e) = self
-                .storage
-                .save_timestamp_state(&self.timestamp_state)
-                .await
-            {
-                warn!("Failed to save timestamp state: {}", e);
-            }
+            *self.is_running.write().await = false;
 
-            info!("Sleeping for {} seconds...", self.args.interval);
-            tokio::time::sleep(std::time::Duration::from_secs(self.args.interval)).await;
+            info!("Sleeping for {} seconds...", self.config.scrubber.interval);
+            
+            // Sleep with periodic checks for stop signal
+            let sleep_duration = std::time::Duration::from_secs(self.config.scrubber.interval);
+            let check_interval = std::time::Duration::from_secs(1);
+            let mut elapsed = std::time::Duration::ZERO;
+            
+            while elapsed < sleep_duration {
+                if *self.should_stop.read().await {
+                    info!("Scrubber stop requested during sleep, exiting");
+                    return Ok(());
+                }
+                
+                let remaining = sleep_duration - elapsed;
+                let sleep_time = std::cmp::min(check_interval, remaining);
+                tokio::time::sleep(sleep_time).await;
+                elapsed += sleep_time;
+            }
         }
+        Ok(())
     }
 
     async fn check_and_process_tracks(&mut self) -> Result<()> {
+        // Load current timestamp state to know where to start reading
+        let timestamp_state = self.storage.lock().await.load_timestamp_state().await.map_err(|e| {
+            lastfm_edit::LastFmError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to load timestamp state: {}", e),
+            ))
+        })?;
+
         let mut recent_iterator = self.client.recent_tracks();
+
         let mut processed = 0;
+        let mut latest_processed_timestamp: Option<DateTime<Utc>> = None;
+        let mut found_anchor = timestamp_state.last_processed_timestamp.is_none();
+
+        // Collect tracks first to avoid borrow checker issues
         let mut tracks_to_process = Vec::new();
-
-        // First, collect all tracks to process
         while let Some(track) = recent_iterator.next().await? {
-            if processed >= self.args.max_tracks {
-                info!(
-                    "Reached maximum track limit ({}), stopping",
-                    self.args.max_tracks
-                );
-                break;
+            if processed >= self.config.scrubber.max_tracks {
+                return Err(lastfm_edit::LastFmError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "Reached maximum track limit ({}), unable to proceed",
+                        self.config.scrubber.max_tracks
+                    ),
+                )));
             }
 
-            let track_id = format!("{}|{}", track.artist, track.name);
-
-            if !self.seen_tracks.contains(&track_id) {
-                tracks_to_process.push((track, track_id));
-                processed += 1;
+            // Check if this track matches our last processed timestamp (our anchor point)
+            if !found_anchor {
+                if let (Some(track_ts), Some(last_processed)) =
+                    (track.timestamp, timestamp_state.last_processed_timestamp)
+                {
+                    let track_time = DateTime::from_timestamp(track_ts as i64, 0);
+                    if let Some(track_time) = track_time {
+                        if track_time == last_processed {
+                            info!("Found anchor track at timestamp {}, starting processing from next track", last_processed);
+                            found_anchor = true;
+                            continue; // Skip this track since we've already processed it
+                        } else if track_time < last_processed {
+                            info!(
+                                "Reached track older than last processed ({}), stopping",
+                                last_processed
+                            );
+                            break;
+                        }
+                    }
+                }
+                // If we haven't found our anchor yet, continue looking but don't process
+                continue;
             }
-        }
 
-        // Now process each track
-        for (track, track_id) in tracks_to_process {
-            info!("Processing new track: {} - {}", track.artist, track.name);
-
-            if let Some(action) = self.analyze_track(&track).await {
-                if self.args.dry_run {
-                    info!("DRY RUN: Would apply action: {:?}", action);
-                } else {
-                    self.apply_action(&track, &action).await?;
+            // Track the timestamp of this track since we're processing it
+            if let Some(ts) = track.timestamp {
+                let track_time =
+                    DateTime::from_timestamp(ts as i64, 0).unwrap_or_else(|| Utc::now());
+                if latest_processed_timestamp.is_none()
+                    || latest_processed_timestamp.unwrap() < track_time
+                {
+                    latest_processed_timestamp = Some(track_time);
                 }
             }
 
-            self.seen_tracks.insert(track_id);
+            tracks_to_process.push(track);
+            processed += 1;
         }
 
-        info!("Processed {} new tracks", processed);
+        // Process collected tracks
+        for track in tracks_to_process {
+            info!("Processing track: {} - {}", track.artist, track.name);
+
+            if let Some(suggestion) = self.analyze_track(&track).await {
+                if self.config.scrubber.dry_run {
+                    info!("DRY RUN: Would apply suggestion: {:?}", suggestion);
+                } else {
+                    self.apply_suggestion(&track, &suggestion).await?;
+                }
+            }
+        }
+
+        // Update timestamp with the latest scrobble timestamp we actually processed
+        if let Some(latest) = latest_processed_timestamp {
+            let updated_state = TimestampState {
+                last_processed_timestamp: Some(latest),
+            };
+
+            self.storage
+                .lock()
+                .await
+                .save_timestamp_state(&updated_state)
+                .await
+                .map_err(|e| {
+                    lastfm_edit::LastFmError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to save timestamp state: {}", e),
+                    ))
+                })?;
+
+            info!("Updated last processed timestamp to: {}", latest);
+        }
+
+        info!("Processed {} tracks", processed);
         Ok(())
     }
 
-    async fn analyze_track(&self, track: &lastfm_edit::Track) -> Option<ScrubAction> {
-        // Check if any rules would apply before creating an edit
-        match rewrite::any_rules_apply(&self.rules_state.rewrite_rules, track) {
-            Ok(false) => return None, // No rules apply, short circuit
-            Err(e) => {
-                warn!("Error checking if rules apply: {}", e);
-                return None;
-            }
-            Ok(true) => {
-                // At least one rule applies, proceed with creating and applying edits
-            }
-        }
-
-        // Create a no-op edit and apply all rules to it
-        let mut edit = rewrite::create_no_op_edit(track);
-
-        match rewrite::apply_all_rules(&self.rules_state.rewrite_rules, &mut edit) {
-            Ok(true) => {
+    async fn analyze_track(&self, track: &lastfm_edit::Track) -> Option<ScrubActionSuggestion> {
+        // Just delegate to the action provider
+        match self.action_provider.analyze_track(track).await {
+            Ok(ScrubActionSuggestion::NoAction) => None,
+            Ok(suggestion) => {
                 info!(
-                    "Rules applied to track '{}' by '{}':",
-                    track.name, track.artist
+                    "Action provider '{}' suggested action for track '{} - {}'",
+                    self.action_provider.provider_name(),
+                    track.artist,
+                    track.name
                 );
-
-                // Convert ScrobbleEdit back to ScrubAction for compatibility
-                // For now, prioritize track name changes, then artist changes
-                if edit.track_name != edit.track_name_original {
-                    info!(
-                        "  Track: '{}' -> '{}'",
-                        edit.track_name_original, edit.track_name
-                    );
-                    return Some(ScrubAction::RenameTrack {
-                        new_name: edit.track_name,
-                    });
-                }
-                if edit.artist_name != edit.artist_name_original {
-                    info!(
-                        "  Artist: '{}' -> '{}'",
-                        edit.artist_name_original, edit.artist_name
-                    );
-                    return Some(ScrubAction::RenameArtist {
-                        new_artist: edit.artist_name,
-                    });
-                }
-                // TODO: Handle album and album_artist changes when ScrubAction supports them
-            }
-            Ok(false) => {
-                // No changes were made (shouldn't happen given the check above, but handle gracefully)
-                return None;
+                Some(suggestion)
             }
             Err(e) => {
-                warn!("Error applying rules: {}", e);
-                return None;
+                warn!("Error from action provider: {}", e);
+                None
             }
         }
-
-        None
     }
 
-    async fn apply_action(
+    async fn apply_suggestion(
         &mut self,
         track: &lastfm_edit::Track,
-        action: &ScrubAction,
+        suggestion: &ScrubActionSuggestion,
     ) -> Result<()> {
-        match action {
-            ScrubAction::RenameTrack { new_name } => {
-                info!("Renaming track '{}' to '{}'", track.name, new_name);
-                // TODO: Implement track name editing in lastfm-edit library
-                warn!(
-                    "Track renaming not yet implemented: '{}' -> '{}'",
-                    track.name, new_name
-                );
+        // Load settings to check global confirmation requirement
+        let settings_state = self.storage.lock().await.load_settings_state().await.map_err(|e| {
+            lastfm_edit::LastFmError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to load settings state: {}", e),
+            ))
+        })?;
+
+        match suggestion {
+            ScrubActionSuggestion::Edit(edit) => {
+                // Check if global settings require confirmation
+                if settings_state.require_confirmation || self.config.scrubber.require_confirmation {
+                    self.create_pending_edit(track, edit).await?;
+                } else {
+                    self.apply_edit(track, edit).await?;
+                }
             }
-            ScrubAction::RenameArtist { new_artist } => {
+            ScrubActionSuggestion::ProposeRule { rule, motivation } => {
                 info!(
-                    "Renaming artist '{}' to '{}' for track '{}'",
-                    track.artist, new_artist, track.name
+                    "Provider proposed new rule for track '{}' by '{}': {}",
+                    track.name, track.artist, motivation
                 );
-                self.client
-                    .edit_artist_for_track(&track.name, &track.artist, new_artist)
-                    .await?;
+                self.handle_proposed_rule(track, rule, motivation).await?;
+            }
+            ScrubActionSuggestion::NoAction => {
+                // This shouldn't happen since we filter NoAction in analyze_track
+                info!("Provider suggested no action needed");
             }
         }
         Ok(())
     }
-}
 
-#[derive(Debug)]
-enum ScrubAction {
-    RenameTrack { new_name: String },
-    RenameArtist { new_artist: String },
+    async fn create_pending_edit(
+        &mut self,
+        track: &lastfm_edit::Track,
+        edit: &ScrobbleEdit,
+    ) -> Result<()> {
+        let new_track_name = if edit.track_name != edit.track_name_original {
+            Some(edit.track_name.clone())
+        } else {
+            None
+        };
+
+        let new_artist_name = if edit.artist_name != edit.artist_name_original {
+            Some(edit.artist_name.clone())
+        } else {
+            None
+        };
+
+        let new_album_name = if edit.album_name != edit.album_name_original {
+            Some(edit.album_name.clone())
+        } else {
+            None
+        };
+
+        let new_album_artist_name = if edit.album_artist_name != edit.album_artist_name_original {
+            Some(edit.album_artist_name.clone())
+        } else {
+            None
+        };
+
+        let pending_edit = PendingEdit::new(
+            track.name.clone(),
+            track.artist.clone(),
+            Some(edit.album_name_original.clone()),
+            Some(edit.album_artist_name_original.clone()),
+            new_track_name,
+            new_artist_name,
+            new_album_name,
+            new_album_artist_name,
+            track.timestamp,
+        );
+
+        // Load and save pending edits
+        let mut pending_edits_state =
+            self.storage.lock().await.load_pending_edits_state().await.map_err(|e| {
+                lastfm_edit::LastFmError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to load pending edits: {}", e),
+                ))
+            })?;
+
+        pending_edits_state.pending_edits.push(pending_edit.clone());
+
+        self.storage
+            .lock()
+            .await
+            .save_pending_edits_state(&pending_edits_state)
+            .await
+            .map_err(|e| {
+                lastfm_edit::LastFmError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to save pending edit: {}", e),
+                ))
+            })?;
+
+        info!(
+            "Created pending edit requiring confirmation (ID: {})",
+            pending_edit.id
+        );
+        Ok(())
+    }
+
+    async fn apply_edit(&mut self, track: &lastfm_edit::Track, edit: &ScrobbleEdit) -> Result<()> {
+        // Check if track name changed
+        if edit.track_name != edit.track_name_original {
+            info!(
+                "Renaming track '{}' to '{}'",
+                edit.track_name_original, edit.track_name
+            );
+            // TODO: Implement track name editing in lastfm-edit library
+            warn!(
+                "Track renaming not yet implemented: '{}' -> '{}'",
+                edit.track_name_original, edit.track_name
+            );
+        }
+
+        // Check if artist name changed
+        if edit.artist_name != edit.artist_name_original {
+            info!(
+                "Renaming artist '{}' to '{}' for track '{}'",
+                edit.artist_name_original, edit.artist_name, track.name
+            );
+            self.client
+                .edit_artist_for_track(&track.name, &track.artist, &edit.artist_name)
+                .await?;
+        }
+
+        // TODO: Handle album and album_artist changes when implemented
+        if edit.album_name != edit.album_name_original {
+            info!("Album name change detected but not yet implemented");
+        }
+        if edit.album_artist_name != edit.album_artist_name_original {
+            info!("Album artist name change detected but not yet implemented");
+        }
+
+        Ok(())
+    }
+
+    async fn handle_proposed_rule(
+        &mut self,
+        track: &lastfm_edit::Track,
+        rule: &crate::rewrite::RewriteRule,
+        motivation: &str,
+    ) -> Result<()> {
+        // Check if confirmation is required for proposed rules
+        if self.config.scrubber.require_proposed_rule_confirmation {
+            // Create a pending rewrite rule for approval
+            let pending_rule = PendingRewriteRule::new(
+                rule.clone(),
+                motivation.to_string(),
+                track.name.clone(),
+                track.artist.clone(),
+            );
+
+            // Load and save pending rewrite rules
+            let mut pending_rules_state = self
+                .storage
+                .lock()
+                .await
+                .load_pending_rewrite_rules_state()
+                .await
+                .map_err(|e| {
+                    lastfm_edit::LastFmError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to load pending rewrite rules: {}", e),
+                    ))
+                })?;
+
+            pending_rules_state.pending_rules.push(pending_rule.clone());
+
+            self.storage
+                .lock()
+                .await
+                .save_pending_rewrite_rules_state(&pending_rules_state)
+                .await
+                .map_err(|e| {
+                    lastfm_edit::LastFmError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to save pending rewrite rule: {}", e),
+                    ))
+                })?;
+
+            info!(
+                "Created pending rewrite rule requiring approval (ID: {})",
+                pending_rule.id
+            );
+        } else {
+            // Auto-approve the rule and add it to active rewrite rules
+            let mut rules_state = self.storage.lock().await.load_rewrite_rules_state().await.map_err(|e| {
+                lastfm_edit::LastFmError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to load rewrite rules: {}", e),
+                ))
+            })?;
+
+            rules_state.rewrite_rules.push(rule.clone());
+
+            self.storage
+                .lock()
+                .await
+                .save_rewrite_rules_state(&rules_state)
+                .await
+                .map_err(|e| {
+                    lastfm_edit::LastFmError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to save rewrite rules: {}", e),
+                    ))
+                })?;
+
+            info!(
+                "Auto-approved and added new rewrite rule: {}",
+                motivation
+            );
+        }
+        Ok(())
+    }
 }
