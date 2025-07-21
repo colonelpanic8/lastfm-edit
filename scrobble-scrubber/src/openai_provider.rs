@@ -18,6 +18,28 @@ use crate::scrub_action_provider::{
     ActionProviderError, ScrubActionProvider, ScrubActionSuggestion,
 };
 
+#[derive(Deserialize)]
+struct ScrobbleEditWithIndex {
+    track_index: usize,
+    track_name: Option<String>,
+    artist_name: Option<String>,
+    album_name: Option<String>,
+    album_artist_name: Option<String>,
+    #[allow(dead_code)]
+    reason: String,
+}
+
+#[derive(Deserialize)]
+struct RewriteRuleSuggestionWithIndex {
+    track_index: usize,
+    track_name: Option<SdRuleData>,
+    album_name: Option<SdRuleData>,
+    artist_name: Option<SdRuleData>,
+    album_artist_name: Option<SdRuleData>,
+    requires_confirmation: Option<bool>,
+    motivation: String,
+}
+
 /// OpenAI-based action provider using function calling
 pub struct OpenAIScrubActionProvider {
     client: Arc<Mutex<OpenAIClient>>,
@@ -26,42 +48,40 @@ pub struct OpenAIScrubActionProvider {
     rewrite_rules: Vec<RewriteRule>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct TrackEditSuggestion {
-    /// The corrected track name (only if it needs changing)
-    new_track_name: Option<String>,
-    /// The corrected artist name (only if it needs changing)
-    new_artist_name: Option<String>,
-    /// The corrected album name (only if it needs changing)
-    new_album_name: Option<String>,
-    /// The corrected album artist name (only if it needs changing)
-    new_album_artist_name: Option<String>,
-    /// Brief explanation of why this change is suggested
-    reason: String,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RewriteRuleSuggestion {
+    /// Optional transformation for track name
+    track_name: Option<SdRuleData>,
+    /// Optional transformation for album name
+    album_name: Option<SdRuleData>,
+    /// Optional transformation for artist name
+    artist_name: Option<SdRuleData>,
+    /// Optional transformation for album artist name
+    album_artist_name: Option<SdRuleData>,
+    /// Whether this rule requires user confirmation before applying
+    requires_confirmation: bool,
+    /// Explanation of why this rule would be helpful
+    motivation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SdRuleData {
     /// The pattern to search for (regex by default, or literal if is_literal is true)
     find: String,
     /// The replacement string (supports $1, $2, ${named}, etc.)
     replace: String,
-    /// The field to target: track_name, artist_name, album_name, or album_artist_name
-    target_field: String,
     /// Whether to use literal string matching instead of regex
     is_literal: bool,
     /// Regex flags (e.g., "i" for case insensitive)
     flags: Option<String>,
     /// Maximum number of replacements (0 = unlimited)
     max_replacements: usize,
-    /// Explanation of why this rule would be helpful
-    motivation: String,
 }
 
-impl RewriteRuleSuggestion {
-    /// Convert this suggestion into a RewriteRule and motivation pair
-    fn into_rule_and_motivation(self) -> Result<(RewriteRule, String), ActionProviderError> {
-        let mut rule = RewriteRule::new();
+impl SdRuleData {
+    /// Convert SdRuleData to SdRule
+    fn to_sd_rule(self) -> crate::rewrite::SdRule {
         let mut sd_rule = if self.is_literal {
             crate::rewrite::SdRule::new_literal(&self.find, &self.replace)
         } else {
@@ -76,20 +96,34 @@ impl RewriteRuleSuggestion {
             sd_rule = sd_rule.with_max_replacements(self.max_replacements);
         }
 
-        match self.target_field.as_str() {
-            "track_name" => rule = rule.with_track_name(sd_rule),
-            "artist_name" => rule = rule.with_artist_name(sd_rule),
-            "album_name" => rule = rule.with_album_name(sd_rule),
-            "album_artist_name" => rule = rule.with_album_artist_name(sd_rule),
-            _ => {
-                return Err(ActionProviderError(format!(
-                    "Invalid target field: {}",
-                    self.target_field
-                )));
-            }
+        sd_rule
+    }
+}
+
+impl RewriteRuleSuggestion {
+    /// Convert this suggestion into a RewriteRule and motivation pair
+    fn into_rule_and_motivation(self) -> (RewriteRule, String) {
+        let mut rule = RewriteRule::new();
+
+        if let Some(track_rule) = self.track_name {
+            rule = rule.with_track_name(track_rule.to_sd_rule());
         }
 
-        Ok((rule, self.motivation))
+        if let Some(album_rule) = self.album_name {
+            rule = rule.with_album_name(album_rule.to_sd_rule());
+        }
+
+        if let Some(artist_rule) = self.artist_name {
+            rule = rule.with_artist_name(artist_rule.to_sd_rule());
+        }
+
+        if let Some(album_artist_rule) = self.album_artist_name {
+            rule = rule.with_album_artist_name(album_artist_rule.to_sd_rule());
+        }
+
+        rule = rule.with_confirmation_required(self.requires_confirmation);
+
+        (rule, self.motivation)
     }
 }
 
@@ -129,11 +163,11 @@ impl OpenAIScrubActionProvider {
         let mut properties = HashMap::new();
 
         properties.insert(
-            "new_track_name".to_string(),
+            "track_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
                 description: Some(
-                    "The corrected track name (only if it needs changing)".to_string(),
+                    "The corrected track name".to_string(),
                 ),
                 enum_values: None,
                 properties: None,
@@ -143,11 +177,11 @@ impl OpenAIScrubActionProvider {
         );
 
         properties.insert(
-            "new_artist_name".to_string(),
+            "artist_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
                 description: Some(
-                    "The corrected artist name (only if it needs changing)".to_string(),
+                    "The corrected artist name".to_string(),
                 ),
                 enum_values: None,
                 properties: None,
@@ -157,11 +191,11 @@ impl OpenAIScrubActionProvider {
         );
 
         properties.insert(
-            "new_album_name".to_string(),
+            "album_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
                 description: Some(
-                    "The corrected album name (only if it needs changing)".to_string(),
+                    "The corrected album name".to_string(),
                 ),
                 enum_values: None,
                 properties: None,
@@ -171,11 +205,11 @@ impl OpenAIScrubActionProvider {
         );
 
         properties.insert(
-            "new_album_artist_name".to_string(),
+            "album_artist_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
                 description: Some(
-                    "The corrected album artist name (only if it needs changing)".to_string(),
+                    "The corrected album artist name".to_string(),
                 ),
                 enum_values: None,
                 properties: None,
@@ -199,7 +233,7 @@ impl OpenAIScrubActionProvider {
         properties
     }
 
-    fn create_rule_function_properties() -> HashMap<String, Box<JSONSchemaDefine>> {
+    fn create_sd_rule_properties() -> HashMap<String, Box<JSONSchemaDefine>> {
         let mut properties = HashMap::new();
 
         properties.insert(
@@ -222,23 +256,6 @@ impl OpenAIScrubActionProvider {
                     "The replacement string (supports $1, $2, ${named}, etc.)".to_string(),
                 ),
                 enum_values: None,
-                properties: None,
-                required: None,
-                items: None,
-            }),
-        );
-
-        properties.insert(
-            "target_field".to_string(),
-            Box::new(JSONSchemaDefine {
-                schema_type: Some(JSONSchemaType::String),
-                description: Some("The field to target: track_name, artist_name, album_name, or album_artist_name".to_string()),
-                enum_values: Some(vec![
-                    "track_name".to_string(),
-                    "artist_name".to_string(),
-                    "album_name".to_string(),
-                    "album_artist_name".to_string(),
-                ]),
                 properties: None,
                 required: None,
                 items: None,
@@ -283,6 +300,72 @@ impl OpenAIScrubActionProvider {
             }),
         );
 
+        properties
+    }
+
+    fn create_rule_function_properties() -> HashMap<String, Box<JSONSchemaDefine>> {
+        let mut properties = HashMap::new();
+
+        properties.insert(
+            "track_name".to_string(),
+            Box::new(JSONSchemaDefine {
+                schema_type: Some(JSONSchemaType::Object),
+                description: Some("Optional transformation for track name".to_string()),
+                enum_values: None,
+                properties: Some(Self::create_sd_rule_properties()),
+                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                items: None,
+            }),
+        );
+
+        properties.insert(
+            "album_name".to_string(),
+            Box::new(JSONSchemaDefine {
+                schema_type: Some(JSONSchemaType::Object),
+                description: Some("Optional transformation for album name".to_string()),
+                enum_values: None,
+                properties: Some(Self::create_sd_rule_properties()),
+                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                items: None,
+            }),
+        );
+
+        properties.insert(
+            "artist_name".to_string(),
+            Box::new(JSONSchemaDefine {
+                schema_type: Some(JSONSchemaType::Object),
+                description: Some("Optional transformation for artist name".to_string()),
+                enum_values: None,
+                properties: Some(Self::create_sd_rule_properties()),
+                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                items: None,
+            }),
+        );
+
+        properties.insert(
+            "album_artist_name".to_string(),
+            Box::new(JSONSchemaDefine {
+                schema_type: Some(JSONSchemaType::Object),
+                description: Some("Optional transformation for album artist name".to_string()),
+                enum_values: None,
+                properties: Some(Self::create_sd_rule_properties()),
+                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                items: None,
+            }),
+        );
+
+        properties.insert(
+            "requires_confirmation".to_string(),
+            Box::new(JSONSchemaDefine {
+                schema_type: Some(JSONSchemaType::Boolean),
+                description: Some("Whether this rule requires user confirmation before applying".to_string()),
+                enum_values: None,
+                properties: None,
+                required: None,
+                items: None,
+            }),
+        );
+
         properties.insert(
             "motivation".to_string(),
             Box::new(JSONSchemaDefine {
@@ -308,6 +391,141 @@ impl OpenAIScrubActionProvider {
             Err(_) => "EXISTING REWRITE RULES: (serialization error)".to_string(),
         }
     }
+
+    fn process_track_edit_suggestion(
+        &self,
+        arguments: &str,
+        tracks: &[Track],
+    ) -> Result<(usize, ScrubActionSuggestion), ActionProviderError> {
+        let args: ScrobbleEditWithIndex = serde_json::from_str(arguments)
+            .map_err(|e| ActionProviderError(format!("Failed to parse function arguments: {}", e)))?;
+
+        if args.track_index >= tracks.len() {
+            return Err(ActionProviderError(format!(
+                "Invalid track index {} for batch size {}",
+                args.track_index,
+                tracks.len()
+            )));
+        }
+
+        let track = &tracks[args.track_index];
+        let mut edit = crate::rewrite::create_no_op_edit(track);
+
+        if let Some(track_name) = args.track_name {
+            edit.track_name = track_name;
+        }
+        if let Some(artist_name) = args.artist_name {
+            edit.artist_name = artist_name;
+        }
+        if let Some(album_name) = args.album_name {
+            edit.album_name = album_name;
+        }
+        if let Some(album_artist_name) = args.album_artist_name {
+            edit.album_artist_name = album_artist_name;
+        }
+
+        Ok((args.track_index, ScrubActionSuggestion::Edit(edit)))
+    }
+
+    fn process_rewrite_rule_suggestion(
+        &self,
+        arguments: &str,
+        tracks: &[Track],
+    ) -> Result<(usize, ScrubActionSuggestion), ActionProviderError> {
+        let args: RewriteRuleSuggestionWithIndex = serde_json::from_str(arguments)
+            .map_err(|e| ActionProviderError(format!("Failed to parse rewrite rule arguments: {}", e)))?;
+
+        if args.track_index >= tracks.len() {
+            return Err(ActionProviderError(format!(
+                "Invalid track index {} for batch size {}",
+                args.track_index,
+                tracks.len()
+            )));
+        }
+
+        let suggestion = RewriteRuleSuggestion {
+            track_name: args.track_name,
+            album_name: args.album_name,
+            artist_name: args.artist_name,
+            album_artist_name: args.album_artist_name,
+            requires_confirmation: args.requires_confirmation.unwrap_or(false),
+            motivation: args.motivation.clone(),
+        };
+
+        let (rule, motivation) = suggestion.into_rule_and_motivation();
+        Ok((
+            args.track_index,
+            ScrubActionSuggestion::ProposeRule { rule, motivation },
+        ))
+    }
+
+    fn add_suggestion_to_results(
+        results: &mut Vec<(usize, Vec<ScrubActionSuggestion>)>,
+        track_index: usize,
+        suggestion: ScrubActionSuggestion,
+    ) {
+        if let Some(existing) = results.iter_mut().find(|(idx, _)| *idx == track_index) {
+            existing.1.push(suggestion);
+        } else {
+            results.push((track_index, vec![suggestion]));
+        }
+    }
+
+    fn process_tool_calls(
+        &self,
+        response: &openai_api_rs::v1::chat_completion::ChatCompletionResponse,
+        tracks: &[Track],
+        results: &mut Vec<(usize, Vec<ScrubActionSuggestion>)>,
+    ) -> Result<(), ActionProviderError> {
+        let Some(choice) = response.choices.first() else {
+            return Ok(());
+        };
+
+        let Some(tool_calls) = &choice.message.tool_calls else {
+            return Ok(());
+        };
+
+        for tool_call in tool_calls {
+            let Some(name) = &tool_call.function.name else {
+                continue;
+            };
+
+            let Some(arguments) = &tool_call.function.arguments else {
+                continue;
+            };
+
+            match name.as_str() {
+                "suggest_track_edit" => {
+                    match self.process_track_edit_suggestion(arguments, tracks) {
+                        Ok((track_index, suggestion)) => {
+                            Self::add_suggestion_to_results(results, track_index, suggestion);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to process track edit suggestion: {}", e);
+                        }
+                    }
+                }
+                "suggest_rewrite_rule" => {
+                    match self.process_rewrite_rule_suggestion(arguments, tracks) {
+                        Ok((track_index, suggestion)) => {
+                            Self::add_suggestion_to_results(results, track_index, suggestion);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to process rewrite rule suggestion: {}", e);
+                        }
+                    }
+                }
+                "no_action_needed" => {
+                    // Do nothing - no suggestions to add
+                }
+                _ => {
+                    log::warn!("Unknown function call: {}", name);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -329,9 +547,14 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
             .iter()
             .enumerate()
             .map(|(idx, track)| {
+                let album_info = if let Some(album) = &track.album {
+                    format!(" from album \"{}\"", album)
+                } else {
+                    String::new()
+                };
                 format!(
-                    "Track {}: \"{}\" by \"{}\" (play count: {})",
-                    idx, track.name, track.artist, track.playcount
+                    "Track {}: \"{}\" by \"{}\"{} (play count: {})",
+                    idx, track.name, track.artist, album_info, track.playcount
                 )
             })
             .collect::<Vec<_>>()
@@ -396,10 +619,6 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
                 properties: Some(rule_properties),
                 required: Some(vec![
                     "track_index".to_string(),
-                    "find".to_string(),
-                    "replace".to_string(),
-                    "target_field".to_string(),
-                    "is_literal".to_string(),
                     "motivation".to_string(),
                 ]),
             },
@@ -463,177 +682,7 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
         let mut results: Vec<(usize, Vec<ScrubActionSuggestion>)> = Vec::new();
 
         // Process the response
-        if let Some(choice) = response.choices.first() {
-            if let Some(tool_calls) = &choice.message.tool_calls {
-                for tool_call in tool_calls {
-                    if let Some(ref name) = tool_call.function.name {
-                        match name.as_str() {
-                            "suggest_track_edit" => {
-                                if let Some(ref arguments) = tool_call.function.arguments {
-                                    #[derive(Deserialize)]
-                                    struct TrackEditSuggestionWithIndex {
-                                        track_index: usize,
-                                        new_track_name: Option<String>,
-                                        new_artist_name: Option<String>,
-                                        new_album_name: Option<String>,
-                                        new_album_artist_name: Option<String>,
-                                        #[allow(dead_code)]
-                                        reason: String,
-                                    }
-
-                                    let args: TrackEditSuggestionWithIndex =
-                                        serde_json::from_str(arguments).map_err(|e| {
-                                            ActionProviderError(format!(
-                                                "Failed to parse function arguments: {}",
-                                                e
-                                            ))
-                                        })?;
-
-                                    if args.track_index >= tracks.len() {
-                                        log::warn!(
-                                            "Invalid track index {} for batch size {}",
-                                            args.track_index,
-                                            tracks.len()
-                                        );
-                                        continue;
-                                    }
-
-                                    // Create a ScrobbleEdit with the suggested changes
-                                    let track = &tracks[args.track_index];
-                                    let mut edit = crate::rewrite::create_no_op_edit(track);
-
-                                    if let Some(new_name) = args.new_track_name {
-                                        edit.track_name = new_name;
-                                    }
-
-                                    if let Some(new_artist) = args.new_artist_name {
-                                        edit.artist_name = new_artist.clone();
-                                        edit.album_artist_name = new_artist; // also update album artist
-                                    }
-
-                                    if let Some(new_album) = args.new_album_name {
-                                        edit.album_name = new_album;
-                                    }
-
-                                    if let Some(new_album_artist) = args.new_album_artist_name {
-                                        edit.album_artist_name = new_album_artist;
-                                    }
-
-                                    // Add to results
-                                    if let Some(existing) =
-                                        results.iter_mut().find(|(idx, _)| *idx == args.track_index)
-                                    {
-                                        existing.1.push(ScrubActionSuggestion::Edit(edit));
-                                    } else {
-                                        results.push((
-                                            args.track_index,
-                                            vec![ScrubActionSuggestion::Edit(edit)],
-                                        ));
-                                    }
-                                }
-                            }
-                            "suggest_rewrite_rule" => {
-                                if let Some(ref arguments) = tool_call.function.arguments {
-                                    #[derive(Deserialize)]
-                                    struct RewriteRuleSuggestionWithIndex {
-                                        track_index: usize,
-                                        find: String,
-                                        replace: String,
-                                        target_field: String,
-                                        is_literal: bool,
-                                        flags: Option<String>,
-                                        max_replacements: Option<usize>,
-                                        motivation: String,
-                                    }
-
-                                    let args: RewriteRuleSuggestionWithIndex =
-                                        serde_json::from_str(arguments).map_err(|e| {
-                                            ActionProviderError(format!(
-                                                "Failed to parse rewrite rule arguments: {}",
-                                                e
-                                            ))
-                                        })?;
-
-                                    if args.track_index >= tracks.len() {
-                                        log::warn!(
-                                            "Invalid track index {} for batch size {}",
-                                            args.track_index,
-                                            tracks.len()
-                                        );
-                                        continue;
-                                    }
-
-                                    // Create a RewriteRule from the suggestion
-                                    let mut rule = crate::rewrite::RewriteRule::new();
-                                    let mut sd_rule = if args.is_literal {
-                                        crate::rewrite::SdRule::new_literal(
-                                            &args.find,
-                                            &args.replace,
-                                        )
-                                    } else {
-                                        crate::rewrite::SdRule::new_regex(
-                                            &args.find,
-                                            &args.replace,
-                                        )
-                                    };
-
-                                    if let Some(flags) = &args.flags {
-                                        sd_rule = sd_rule.with_flags(flags);
-                                    }
-
-                                    if let Some(max_replacements) = args.max_replacements {
-                                        if max_replacements > 0 {
-                                            sd_rule = sd_rule.with_max_replacements(max_replacements);
-                                        }
-                                    }
-
-                                    match args.target_field.as_str() {
-                                        "track_name" => rule = rule.with_track_name(sd_rule),
-                                        "artist_name" => rule = rule.with_artist_name(sd_rule),
-                                        "album_name" => rule = rule.with_album_name(sd_rule),
-                                        "album_artist_name" => {
-                                            rule = rule.with_album_artist_name(sd_rule)
-                                        }
-                                        _ => {
-                                            log::warn!(
-                                                "Invalid target field: {}",
-                                                args.target_field
-                                            );
-                                            continue;
-                                        }
-                                    }
-
-                                    // Add to results
-                                    if let Some(existing) =
-                                        results.iter_mut().find(|(idx, _)| *idx == args.track_index)
-                                    {
-                                        existing.1.push(ScrubActionSuggestion::ProposeRule {
-                                            rule,
-                                            motivation: args.motivation,
-                                        });
-                                    } else {
-                                        results.push((
-                                            args.track_index,
-                                            vec![ScrubActionSuggestion::ProposeRule {
-                                                rule,
-                                                motivation: args.motivation,
-                                            }],
-                                        ));
-                                    }
-                                }
-                            }
-                            "no_action_needed" => {
-                                // Do nothing - no suggestions to add
-                            }
-                            _ => {
-                                log::warn!("Unknown function call: {}", name);
-                                continue;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        self.process_tool_calls(&response, tracks, &mut results)?;
 
         Ok(results)
     }

@@ -5,13 +5,14 @@ use std::borrow::Cow;
 
 /// Create a no-op ScrobbleEdit from a Track (no changes, just a baseline)
 pub fn create_no_op_edit(track: &Track) -> ScrobbleEdit {
+    let album_name = track.album.clone().unwrap_or_default();
     ScrobbleEdit {
         track_name_original: track.name.clone(),
-        album_name_original: String::new(),
+        album_name_original: album_name.clone(),
         artist_name_original: track.artist.clone(),
         album_artist_name_original: String::new(),
         track_name: track.name.clone(),
-        album_name: String::new(),
+        album_name,
         artist_name: track.artist.clone(),
         album_artist_name: String::new(),
         timestamp: track.timestamp.unwrap_or(0),
@@ -271,9 +272,10 @@ impl RewriteRule {
             }
         }
 
-        // Check album name transformation if present (always empty for Track)
+        // Check album name transformation if present
         if let Some(rule) = &self.album_name {
-            if rule.would_modify("")? {
+            let album_name = track.album.as_deref().unwrap_or("");
+            if rule.would_modify(album_name)? {
                 return Ok(true);
             }
         }
