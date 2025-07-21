@@ -1,9 +1,9 @@
-use lastfm_edit::{LastFmEditClient, Result};
+use lastfm_edit::{Result, parsing::LastFmParser};
 use scraper::Html;
 use std::fs;
 
-#[tokio::test]
-async fn test_neil_young_track_parsing() -> Result<()> {
+#[test]
+fn test_neil_young_track_parsing() -> Result<()> {
     // Load the saved HTML file
     let html_file = "tests/fixtures/neil_young_tracks_page_1.html";
     let html_content = fs::read_to_string(html_file)
@@ -12,12 +12,11 @@ async fn test_neil_young_track_parsing() -> Result<()> {
     // Parse the HTML using scraper
     let document = Html::parse_document(&html_content);
 
-    // Create a client to access the parsing method (we don't need to login for parsing)
-    let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClient::new(Box::new(http_client));
+    // Create parser directly for testing
+    let parser = LastFmParser::new();
 
     // Test the parsing function
-    let track_page = client.parse_tracks_page(&document, 1, "Neil Young")?;
+    let track_page = parser.parse_tracks_page(&document, 1, "Neil Young")?;
 
     // Basic sanity checks
     assert!(!track_page.tracks.is_empty(), "Should find some tracks");

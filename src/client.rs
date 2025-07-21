@@ -1,7 +1,8 @@
 use crate::{
-    Album, AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator,
+    AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator,
     EditResponse, LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
 };
+use crate::parsing::LastFmParser;
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};
@@ -17,13 +18,13 @@ use std::path::Path;
 /// # Examples
 ///
 /// ```rust,no_run
-/// use lastfm_edit::{LastFmClient, Result};
+/// use lastfm_edit::{LastFmEditClient, Result};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<()> {
 ///     // Create client with any HTTP implementation
 ///     let http_client = http_client::native::NativeClient::new();
-///     let mut client = LastFmClient::new(Box::new(http_client));
+///     let mut client = LastFmEditClient::new(Box::new(http_client));
 ///
 ///     // Login to Last.fm
 ///     client.login("username", "password").await?;
@@ -42,10 +43,11 @@ pub struct LastFmEditClient {
     session_cookies: Vec<String>,
     rate_limit_patterns: Vec<String>,
     debug_save_responses: bool,
+    parser: LastFmParser,
 }
 
 impl LastFmEditClient {
-    /// Create a new [`LastFmClient`] with the default Last.fm URL.
+    /// Create a new [`LastFmEditClient`] with the default Last.fm URL.
     ///
     /// # Arguments
     ///
@@ -54,16 +56,16 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::LastFmClient;
+    /// use lastfm_edit::LastFmEditClient;
     ///
     /// let http_client = http_client::native::NativeClient::new();
-    /// let client = LastFmClient::new(Box::new(http_client));
+    /// let client = LastFmEditClient::new(Box::new(http_client));
     /// ```
     pub fn new(client: Box<dyn HttpClient>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
     }
 
-    /// Create a new [`LastFmClient`] with a custom base URL.
+    /// Create a new [`LastFmEditClient`] with a custom base URL.
     ///
     /// This is useful for testing or if Last.fm changes their domain.
     ///
@@ -96,7 +98,7 @@ impl LastFmEditClient {
         )
     }
 
-    /// Create a new [`LastFmClient`] with custom rate limit detection patterns.
+    /// Create a new [`LastFmEditClient`] with custom rate limit detection patterns.
     ///
     /// # Arguments
     ///
@@ -116,6 +118,7 @@ impl LastFmEditClient {
             session_cookies: Vec::new(),
             rate_limit_patterns,
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
+            parser: LastFmParser::new(),
         }
     }
 
@@ -139,9 +142,9 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmClient, Result};
+    /// # use lastfm_edit::{LastFmEditClient, Result};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     /// client.login("username", "password").await?;
     /// assert!(client.is_logged_in());
     /// # Ok::<(), lastfm_edit::LastFmError>(())
@@ -359,9 +362,9 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
+    /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     /// // client.login(...).await?;
     ///
     /// let mut tracks = client.artist_tracks("Radiohead");
@@ -400,9 +403,9 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
+    /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     /// // client.login(...).await?;
     ///
     /// let mut recent = client.recent_tracks();
@@ -440,7 +443,7 @@ impl LastFmEditClient {
         );
 
         let document = Html::parse_document(&content);
-        self.parse_recent_scrobbles(&document)
+        self.parser.parse_recent_scrobbles(&document)
     }
 
     /// Find the most recent scrobble for a specific track
@@ -874,7 +877,7 @@ impl LastFmEditClient {
         let document = Html::parse_document(&html);
 
         // Use the shared track extraction function
-        let tracks = self.extract_tracks_from_document(&document, artist_name)?;
+        let tracks = self.parser.extract_tracks_from_document(&document, artist_name)?;
 
         log::debug!(
             "Successfully parsed {} tracks from album page",
@@ -1341,10 +1344,11 @@ impl LastFmEditClient {
         } else {
             log::debug!("Parsing HTML response from AJAX endpoint");
             let document = Html::parse_document(&content);
-            self.parse_tracks_page(&document, page, artist)
+            self.parser.parse_tracks_page(&document, page, artist)
         }
     }
 
+    /// Parse JSON tracks page (delegates to parser)
     fn parse_json_tracks_page(
         &self,
         _json_content: &str,
@@ -1361,446 +1365,28 @@ impl LastFmEditClient {
         })
     }
 
-    /// Extract tracks from HTML document using multiple parsing strategies
+    /// Extract tracks from HTML document (delegates to parser)
     pub fn extract_tracks_from_document(
         &self,
         document: &Html,
         artist: &str,
     ) -> Result<Vec<Track>> {
-        let mut tracks = Vec::new();
-        let mut seen_tracks = std::collections::HashSet::new();
-
-        // Strategy 1: Try parsing track data from data-track-name attributes (AJAX response)
-        let track_selector = Selector::parse("[data-track-name]").unwrap();
-        let track_elements: Vec<_> = document.select(&track_selector).collect();
-
-        if !track_elements.is_empty() {
-            log::debug!(
-                "Found {} track elements with data-track-name",
-                track_elements.len()
-            );
-
-            for element in track_elements {
-                if let Some(track_name) = element.value().attr("data-track-name") {
-                    if seen_tracks.contains(track_name) {
-                        continue;
-                    }
-                    seen_tracks.insert(track_name.to_string());
-
-                    // Find the play count for this track
-                    if let Ok(playcount) = self.find_playcount_for_track(document, track_name) {
-                        // Try to find timestamp for this track
-                        let timestamp = self.find_timestamp_for_track(document, track_name);
-
-                        let track = Track {
-                            name: track_name.to_string(),
-                            artist: artist.to_string(),
-                            playcount,
-                            timestamp,
-                            album: None, // JSON parsing doesn't have album info
-                        };
-                        tracks.push(track);
-                    }
-
-                    if tracks.len() >= 50 {
-                        break; // Last.fm shows 50 tracks per page
-                    }
-                }
-            }
-        }
-
-        // Strategy 2: Parse tracks from hidden form inputs (for tracks like "Comes a Time - 2016")
-        let form_input_selector = Selector::parse("input[name='track']").unwrap();
-        let form_inputs: Vec<_> = document.select(&form_input_selector).collect();
-
-        if !form_inputs.is_empty() {
-            log::debug!("Found {} form inputs with track names", form_inputs.len());
-
-            for input in form_inputs {
-                if let Some(track_name) = input.value().attr("value") {
-                    if seen_tracks.contains(track_name) {
-                        continue;
-                    }
-                    seen_tracks.insert(track_name.to_string());
-
-                    // Try to find play count - may not always succeed for form-based tracks
-                    let playcount = self
-                        .find_playcount_for_track(document, track_name)
-                        .unwrap_or(0);
-                    let timestamp = self.find_timestamp_for_track(document, track_name);
-
-                    let track = Track {
-                        name: track_name.to_string(),
-                        artist: artist.to_string(),
-                        playcount,
-                        timestamp,
-                        album: None, // Form parsing doesn't have album info
-                    };
-                    tracks.push(track);
-
-                    if tracks.len() >= 50 {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Strategy 3: Fallback to table parsing method if we didn't find enough tracks
-        if tracks.len() < 10 {
-            log::debug!("Found {} tracks so far, trying table parsing", tracks.len());
-
-            let table_selector = Selector::parse("table.chartlist").unwrap();
-            let row_selector = Selector::parse("tbody tr").unwrap();
-
-            if let Some(table) = document.select(&table_selector).next() {
-                for row in table.select(&row_selector) {
-                    if let Ok(mut track) = self.parse_track_row(&row) {
-                        if !seen_tracks.contains(&track.name) {
-                            track.artist = artist.to_string();
-                            seen_tracks.insert(track.name.clone());
-                            tracks.push(track);
-                        }
-                    }
-                }
-            }
-        }
-
-        log::debug!("Successfully extracted {} unique tracks", tracks.len());
-        Ok(tracks)
+        self.parser.extract_tracks_from_document(document, artist)
     }
 
+    /// Parse tracks page (delegates to parser)
     pub fn parse_tracks_page(
         &self,
         document: &Html,
         page_number: u32,
         artist: &str,
     ) -> Result<TrackPage> {
-        let tracks = self.extract_tracks_from_document(document, artist)?;
-
-        // Check for pagination
-        let (has_next_page, total_pages) = self.parse_pagination(document, page_number)?;
-
-        Ok(TrackPage {
-            tracks,
-            page_number,
-            has_next_page,
-            total_pages,
-        })
+        self.parser.parse_tracks_page(document, page_number, artist)
     }
 
-    fn find_timestamp_for_track(&self, document: &Html, track_name: &str) -> Option<u64> {
-        // Look for timestamp in hidden form inputs for edit scrobble forms
-        let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
-        let timestamp_selector = Selector::parse("input[name=\"timestamp\"]").unwrap();
-
-        for form in document.select(&form_selector) {
-            // Check if this form is for our track
-            let track_input_selector = Selector::parse("input[name=\"track_name\"]").unwrap();
-            if let Some(track_input) = form.select(&track_input_selector).next() {
-                if let Some(value) = track_input.value().attr("value") {
-                    if value == track_name {
-                        // Found the form for our track, get the timestamp
-                        if let Some(timestamp_input) = form.select(&timestamp_selector).next() {
-                            if let Some(timestamp_str) = timestamp_input.value().attr("value") {
-                                if let Ok(timestamp) = timestamp_str.parse::<u64>() {
-                                    return Some(timestamp);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    fn find_playcount_for_track(&self, document: &Html, track_name: &str) -> Result<u32> {
-        // Look for chartlist-count-bar-value elements near the track
-        let count_selector = Selector::parse(".chartlist-count-bar-value").unwrap();
-        let link_selector = Selector::parse("a[href*=\"/music/\"]").unwrap();
-
-        // Find all track links that match our track name
-        for link in document.select(&link_selector) {
-            let link_text = link.text().collect::<String>().trim().to_string();
-            if link_text == track_name {
-                // Found the track link, now look for the play count in the same row
-                if let Some(row) = self.find_ancestor_row(link) {
-                    // Look for play count in this row
-                    for count_elem in row.select(&count_selector) {
-                        let count_text = count_elem.text().collect::<String>();
-                        if let Some(number_part) = count_text.split_whitespace().next() {
-                            if let Ok(count) = number_part.parse::<u32>() {
-                                return Ok(count);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Default fallback
-        Ok(1)
-    }
-
-    fn find_ancestor_row<'a>(
-        &self,
-        element: scraper::ElementRef<'a>,
-    ) -> Option<scraper::ElementRef<'a>> {
-        let mut current = element;
-
-        // Traverse up the DOM to find the table row
-        while let Some(parent) = current.parent() {
-            if let Some(parent_elem) = scraper::ElementRef::wrap(parent) {
-                if parent_elem.value().name() == "tr" {
-                    return Some(parent_elem);
-                }
-                current = parent_elem;
-            } else {
-                break;
-            }
-        }
-        None
-    }
-
-    fn parse_track_row(&self, row: &scraper::ElementRef) -> Result<Track> {
-        let name_selector = Selector::parse(".chartlist-name a").unwrap();
-
-        let name = row
-            .select(&name_selector)
-            .next()
-            .map(|el| el.text().collect::<String>().trim().to_string())
-            .ok_or_else(|| LastFmError::Parse("Missing track name".to_string()))?;
-
-        // Parse play count from .chartlist-count-bar-value
-        // Format is like "59 scrobbles" or just "59"
-        let playcount_selector = Selector::parse(".chartlist-count-bar-value").unwrap();
-        let mut playcount = 1; // default fallback
-
-        if let Some(element) = row.select(&playcount_selector).next() {
-            let text = element.text().collect::<String>().trim().to_string();
-            // Extract just the number part (before "scrobbles" if present)
-            if let Some(number_part) = text.split_whitespace().next() {
-                if let Ok(count) = number_part.parse::<u32>() {
-                    playcount = count;
-                }
-            }
-        }
-
-        // On artist tracks pages, the artist is consistent (it's the artist we're looking at)
-        // We could extract it from the page context, but for now let's keep it simple
-        let artist = "".to_string(); // We'll fill this in when we call the method
-
-        Ok(Track {
-            name,
-            artist,
-            playcount,
-            timestamp: None, // Not available in table parsing mode
-            album: None,     // Not available in table parsing mode
-        })
-    }
-
-    /// Parse recent scrobbles from the user's library page
-    /// This extracts real scrobble data with timestamps for editing
+    /// Parse recent scrobbles from HTML document (for testing)
     pub fn parse_recent_scrobbles(&self, document: &Html) -> Result<Vec<Track>> {
-        let mut tracks = Vec::new();
-
-        // Recent scrobbles are typically in chartlist tables - there can be multiple
-        let table_selector = Selector::parse("table.chartlist").unwrap();
-        let row_selector = Selector::parse("tbody tr").unwrap();
-
-        let tables: Vec<_> = document.select(&table_selector).collect();
-        log::debug!("Found {} chartlist tables", tables.len());
-
-        for table in tables {
-            for row in table.select(&row_selector) {
-                if let Ok(track) = self.parse_recent_scrobble_row(&row) {
-                    tracks.push(track);
-                }
-            }
-        }
-
-        if tracks.is_empty() {
-            log::debug!("No tracks found in recent scrobbles");
-        }
-
-        log::debug!("Parsed {} recent scrobbles", tracks.len());
-        Ok(tracks)
-    }
-
-    /// Parse a single row from the recent scrobbles table
-    fn parse_recent_scrobble_row(&self, row: &scraper::ElementRef) -> Result<Track> {
-        // Extract track name
-        let name_selector = Selector::parse(".chartlist-name a").unwrap();
-        let name = row
-            .select(&name_selector)
-            .next()
-            .ok_or(LastFmError::Parse("Missing track name".to_string()))?
-            .text()
-            .collect::<String>()
-            .trim()
-            .to_string();
-
-        // Extract artist name
-        let artist_selector = Selector::parse(".chartlist-artist a").unwrap();
-        let artist = row
-            .select(&artist_selector)
-            .next()
-            .ok_or(LastFmError::Parse("Missing artist name".to_string()))?
-            .text()
-            .collect::<String>()
-            .trim()
-            .to_string();
-
-        // Extract timestamp from data attributes or hidden inputs
-        let timestamp = self.extract_scrobble_timestamp(row);
-
-        // Extract album from hidden inputs in edit form
-        let album = self.extract_scrobble_album(row);
-
-        // For recent scrobbles, playcount is typically 1 since they're individual scrobbles
-        let playcount = 1;
-
-        Ok(Track {
-            name,
-            artist,
-            playcount,
-            timestamp,
-            album,
-        })
-    }
-
-    /// Extract timestamp from scrobble row elements
-    fn extract_scrobble_timestamp(&self, row: &scraper::ElementRef) -> Option<u64> {
-        // Look for timestamp in various places:
-
-        // 1. Check for data-timestamp attribute
-        if let Some(timestamp_str) = row.value().attr("data-timestamp") {
-            if let Ok(timestamp) = timestamp_str.parse::<u64>() {
-                return Some(timestamp);
-            }
-        }
-
-        // 2. Look for hidden timestamp input
-        let timestamp_input_selector = Selector::parse("input[name='timestamp']").unwrap();
-        if let Some(input) = row.select(&timestamp_input_selector).next() {
-            if let Some(value) = input.value().attr("value") {
-                if let Ok(timestamp) = value.parse::<u64>() {
-                    return Some(timestamp);
-                }
-            }
-        }
-
-        // 3. Look for edit form with timestamp
-        let edit_form_selector =
-            Selector::parse("form[data-edit-scrobble] input[name='timestamp']").unwrap();
-        if let Some(timestamp_input) = row.select(&edit_form_selector).next() {
-            if let Some(value) = timestamp_input.value().attr("value") {
-                if let Ok(timestamp) = value.parse::<u64>() {
-                    return Some(timestamp);
-                }
-            }
-        }
-
-        // 4. Look for time element with datetime attribute
-        let time_selector = Selector::parse("time").unwrap();
-        if let Some(time_elem) = row.select(&time_selector).next() {
-            if let Some(datetime) = time_elem.value().attr("datetime") {
-                // Parse ISO datetime to timestamp
-                if let Ok(parsed_time) = chrono::DateTime::parse_from_rfc3339(datetime) {
-                    return Some(parsed_time.timestamp() as u64);
-                }
-            }
-        }
-
-        None
-    }
-
-    /// Extract album name from scrobble row elements
-    fn extract_scrobble_album(&self, row: &scraper::ElementRef) -> Option<String> {
-        // Look for album_name in hidden inputs within edit forms
-        let album_input_selector =
-            Selector::parse("form[data-edit-scrobble] input[name='album_name']").unwrap();
-
-        if let Some(album_input) = row.select(&album_input_selector).next() {
-            if let Some(album_name) = album_input.value().attr("value") {
-                if !album_name.is_empty() {
-                    return Some(album_name.to_string());
-                }
-            }
-        }
-
-        None
-    }
-
-    fn parse_pagination(&self, document: &Html, current_page: u32) -> Result<(bool, Option<u32>)> {
-        let pagination_selector = Selector::parse(".pagination-list").unwrap();
-
-        if let Some(pagination) = document.select(&pagination_selector).next() {
-            // Try multiple possible selectors for next page link
-            let next_selectors = [
-                "a[aria-label=\"Next\"]",
-                ".pagination-next a",
-                "a:contains(\"Next\")",
-                ".next a",
-            ];
-
-            let mut has_next = false;
-            for selector_str in &next_selectors {
-                if let Ok(selector) = Selector::parse(selector_str) {
-                    if pagination.select(&selector).next().is_some() {
-                        has_next = true;
-                        break;
-                    }
-                }
-            }
-
-            // Alternative: check if there are more page numbers after current
-            if !has_next {
-                let page_link_selector = Selector::parse("a").unwrap();
-                for link in pagination.select(&page_link_selector) {
-                    if let Some(href) = link.value().attr("href") {
-                        if href.contains(&format!("page={}", current_page + 1)) {
-                            has_next = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Try to find total pages from pagination numbers
-            let page_link_selector = Selector::parse("a").unwrap();
-            let mut max_page = current_page;
-
-            for link in pagination.select(&page_link_selector) {
-                if let Some(href) = link.value().attr("href") {
-                    if let Some(page_param) = href.split("page=").nth(1) {
-                        if let Some(page_num_str) = page_param.split('&').next() {
-                            if let Ok(page_num) = page_num_str.parse::<u32>() {
-                                max_page = max_page.max(page_num);
-                            }
-                        }
-                    }
-                }
-
-                // Also check link text for page numbers
-                let link_text = link.text().collect::<String>().trim().to_string();
-                if let Ok(page_num) = link_text.parse::<u32>() {
-                    max_page = max_page.max(page_num);
-                }
-            }
-
-            Ok((
-                has_next,
-                if max_page > current_page {
-                    Some(max_page)
-                } else {
-                    None
-                },
-            ))
-        } else {
-            // No pagination found, single page
-            Ok((false, Some(1)))
-        }
+        self.parser.parse_recent_scrobbles(document)
     }
 
     fn extract_csrf_token(&self, document: &Html) -> Result<String> {
@@ -2122,7 +1708,7 @@ impl LastFmEditClient {
         } else {
             log::debug!("Parsing HTML response from AJAX endpoint");
             let document = Html::parse_document(&content);
-            self.parse_albums_page(&document, page, artist)
+            self.parser.parse_albums_page(&document, page, artist)
         }
     }
 
@@ -2142,169 +1728,4 @@ impl LastFmEditClient {
         })
     }
 
-    fn parse_albums_page(
-        &self,
-        document: &Html,
-        page_number: u32,
-        artist: &str,
-    ) -> Result<AlbumPage> {
-        let mut albums = Vec::new();
-
-        // Try parsing album data from data attributes (AJAX response)
-        let album_selector = Selector::parse("[data-album-name]").unwrap();
-        let album_elements: Vec<_> = document.select(&album_selector).collect();
-
-        if !album_elements.is_empty() {
-            log::debug!(
-                "Found {} album elements with data-album-name",
-                album_elements.len()
-            );
-
-            // Use a set to track unique albums
-            let mut seen_albums = std::collections::HashSet::new();
-
-            for element in album_elements {
-                if let Some(album_name) = element.value().attr("data-album-name") {
-                    // Skip if we've already processed this album
-                    if seen_albums.contains(album_name) {
-                        continue;
-                    }
-                    seen_albums.insert(album_name.to_string());
-
-                    // Find the play count for this album
-                    let playcount = self.find_playcount_for_album(document, album_name)?;
-
-                    // Try to find timestamp for this album
-                    let timestamp = self.find_timestamp_for_album(document, album_name);
-
-                    let album = Album {
-                        name: album_name.to_string(),
-                        artist: artist.to_string(),
-                        playcount,
-                        timestamp,
-                    };
-                    albums.push(album);
-
-                    if albums.len() >= 50 {
-                        break; // Last.fm shows 50 albums per page
-                    }
-                }
-            }
-
-            log::debug!("Successfully parsed {} unique albums", albums.len());
-        } else {
-            // Fallback to table parsing method
-            log::debug!("No data-album-name elements found, trying table parsing");
-
-            let table_selector = Selector::parse("table.chartlist").unwrap();
-            let row_selector = Selector::parse("tbody tr").unwrap();
-
-            if let Some(table) = document.select(&table_selector).next() {
-                for row in table.select(&row_selector) {
-                    if let Ok(mut album) = self.parse_album_row(&row) {
-                        album.artist = artist.to_string();
-                        albums.push(album);
-                    }
-                }
-            } else {
-                log::debug!("No table.chartlist found either");
-            }
-        }
-
-        // Check for pagination
-        let (has_next_page, total_pages) = self.parse_pagination(document, page_number)?;
-
-        Ok(AlbumPage {
-            albums,
-            page_number,
-            has_next_page,
-            total_pages,
-        })
-    }
-
-    fn find_timestamp_for_album(&self, document: &Html, album_name: &str) -> Option<u64> {
-        // Look for timestamp in hidden form inputs for edit scrobble forms
-        let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
-        let timestamp_selector = Selector::parse("input[name=\"timestamp\"]").unwrap();
-
-        for form in document.select(&form_selector) {
-            // Check if this form is for our album
-            let album_input_selector = Selector::parse("input[name=\"album_name\"]").unwrap();
-            if let Some(album_input) = form.select(&album_input_selector).next() {
-                if let Some(value) = album_input.value().attr("value") {
-                    if value == album_name {
-                        // Found the form for our album, get the timestamp
-                        if let Some(timestamp_input) = form.select(&timestamp_selector).next() {
-                            if let Some(timestamp_str) = timestamp_input.value().attr("value") {
-                                if let Ok(timestamp) = timestamp_str.parse::<u64>() {
-                                    return Some(timestamp);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    fn find_playcount_for_album(&self, document: &Html, album_name: &str) -> Result<u32> {
-        // Look for chartlist-count-bar-value elements near the album
-        let count_selector = Selector::parse(".chartlist-count-bar-value").unwrap();
-        let link_selector = Selector::parse("a[href*=\"/music/\"]").unwrap();
-
-        // Find all album links that match our album name
-        for link in document.select(&link_selector) {
-            let link_text = link.text().collect::<String>().trim().to_string();
-            if link_text == album_name {
-                // Found the album link, now look for the play count in the same row
-                if let Some(row) = self.find_ancestor_row(link) {
-                    // Look for play count in this row
-                    for count_elem in row.select(&count_selector) {
-                        let count_text = count_elem.text().collect::<String>();
-                        if let Some(number_part) = count_text.split_whitespace().next() {
-                            if let Ok(count) = number_part.parse::<u32>() {
-                                return Ok(count);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Default fallback
-        Ok(1)
-    }
-
-    fn parse_album_row(&self, row: &scraper::ElementRef) -> Result<Album> {
-        let name_selector = Selector::parse(".chartlist-name a").unwrap();
-
-        let name = row
-            .select(&name_selector)
-            .next()
-            .map(|el| el.text().collect::<String>().trim().to_string())
-            .ok_or_else(|| LastFmError::Parse("Missing album name".to_string()))?;
-
-        // Parse play count from .chartlist-count-bar-value
-        let playcount_selector = Selector::parse(".chartlist-count-bar-value").unwrap();
-        let mut playcount = 1; // default fallback
-
-        if let Some(element) = row.select(&playcount_selector).next() {
-            let text = element.text().collect::<String>().trim().to_string();
-            if let Some(number_part) = text.split_whitespace().next() {
-                if let Ok(count) = number_part.parse::<u32>() {
-                    playcount = count;
-                }
-            }
-        }
-
-        let artist = "".to_string(); // We'll fill this in when we call the method
-
-        Ok(Album {
-            name,
-            artist,
-            playcount,
-            timestamp: None, // Not available in table parsing mode
-        })
-    }
 }
