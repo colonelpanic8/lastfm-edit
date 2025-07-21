@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 /// Create a no-op `ScrobbleEdit` from a Track (no changes, just a baseline)
-#[must_use] pub fn create_no_op_edit(track: &Track) -> ScrobbleEdit {
+#[must_use]
+pub fn create_no_op_edit(track: &Track) -> ScrobbleEdit {
     let album_name = track.album.clone().unwrap_or_default();
     ScrobbleEdit {
         track_name_original: track.name.clone(),
@@ -31,7 +32,10 @@ pub fn any_rules_apply(rules: &[RewriteRule], track: &Track) -> Result<bool, Rew
 }
 
 /// Apply all rewrite rules to a `ScrobbleEdit`, returning true if any changes were made
-pub fn apply_all_rules(rules: &[RewriteRule], edit: &mut ScrobbleEdit) -> Result<bool, RewriteError> {
+pub fn apply_all_rules(
+    rules: &[RewriteRule],
+    edit: &mut ScrobbleEdit,
+) -> Result<bool, RewriteError> {
     let mut any_changes = false;
     for rule in rules {
         let changed = rule.apply(edit)?;
@@ -59,7 +63,8 @@ pub struct SdRule {
 
 impl SdRule {
     /// Create a new regex-based rule
-    #[must_use] pub fn new_regex(find: &str, replace: &str) -> Self {
+    #[must_use]
+    pub fn new_regex(find: &str, replace: &str) -> Self {
         Self {
             find: find.to_string(),
             replace: replace.to_string(),
@@ -70,7 +75,8 @@ impl SdRule {
     }
 
     /// Create a new literal string rule
-    #[must_use] pub fn new_literal(find: &str, replace: &str) -> Self {
+    #[must_use]
+    pub fn new_literal(find: &str, replace: &str) -> Self {
         Self {
             find: find.to_string(),
             replace: replace.to_string(),
@@ -81,13 +87,15 @@ impl SdRule {
     }
 
     /// Add regex flags
-    #[must_use] pub fn with_flags(mut self, flags: &str) -> Self {
+    #[must_use]
+    pub fn with_flags(mut self, flags: &str) -> Self {
         self.flags = Some(flags.to_string());
         self
     }
 
     /// Set maximum number of replacements
-    #[must_use] pub const fn with_max_replacements(mut self, max: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_replacements(mut self, max: usize) -> Self {
         self.max_replacements = max;
         self
     }
@@ -215,7 +223,8 @@ pub struct RewriteRule {
 
 impl RewriteRule {
     /// Create a new empty rewrite rule
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             track_name: None,
             album_name: None,
@@ -226,31 +235,36 @@ impl RewriteRule {
     }
 
     /// Set transformation for track name
-    #[must_use] pub fn with_track_name(mut self, rule: SdRule) -> Self {
+    #[must_use]
+    pub fn with_track_name(mut self, rule: SdRule) -> Self {
         self.track_name = Some(rule);
         self
     }
 
     /// Set transformation for album name
-    #[must_use] pub fn with_album_name(mut self, rule: SdRule) -> Self {
+    #[must_use]
+    pub fn with_album_name(mut self, rule: SdRule) -> Self {
         self.album_name = Some(rule);
         self
     }
 
     /// Set transformation for artist name
-    #[must_use] pub fn with_artist_name(mut self, rule: SdRule) -> Self {
+    #[must_use]
+    pub fn with_artist_name(mut self, rule: SdRule) -> Self {
         self.artist_name = Some(rule);
         self
     }
 
     /// Set transformation for album artist name
-    #[must_use] pub fn with_album_artist_name(mut self, rule: SdRule) -> Self {
+    #[must_use]
+    pub fn with_album_artist_name(mut self, rule: SdRule) -> Self {
         self.album_artist_name = Some(rule);
         self
     }
 
     /// Set whether this rule requires confirmation
-    #[must_use] pub const fn with_confirmation_required(mut self, requires_confirmation: bool) -> Self {
+    #[must_use]
+    pub const fn with_confirmation_required(mut self, requires_confirmation: bool) -> Self {
         self.requires_confirmation = requires_confirmation;
         self
     }
@@ -356,7 +370,8 @@ pub enum RewriteError {
 }
 
 /// Default rewrite rules for common cleanup tasks
-#[must_use] pub fn default_rules() -> Vec<RewriteRule> {
+#[must_use]
+pub fn default_rules() -> Vec<RewriteRule> {
     vec![
         // Remove remaster suffixes from track names
         RewriteRule::new()
@@ -468,4 +483,3 @@ fn validate_replace(s: &str) -> Result<(), RewriteError> {
     }
     Ok(())
 }
-

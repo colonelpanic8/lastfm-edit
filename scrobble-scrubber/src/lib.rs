@@ -1,9 +1,9 @@
-pub mod rewrite;
-pub mod persistence;
-pub mod scrubber;
-pub mod scrub_action_provider;
-pub mod openai_provider;
 pub mod config;
+pub mod openai_provider;
+pub mod persistence;
+pub mod rewrite;
+pub mod scrub_action_provider;
+pub mod scrubber;
 pub mod web_interface;
 
 use clap::Parser;

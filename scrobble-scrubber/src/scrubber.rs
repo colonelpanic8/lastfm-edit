@@ -23,7 +23,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
         client: LastFmEditClient,
         action_provider: P,
         config: ScrobbleScrubberConfig,
-) -> Self {
+    ) -> Self {
         Self {
             client,
             storage,
@@ -108,9 +108,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .load_timestamp_state()
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::other(
-                    format!("Failed to load timestamp state: {e}"),
-                ))
+                lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                    "Failed to load timestamp state: {e}"
+                )))
             })?;
 
         let mut recent_iterator = self.client.recent_tracks();
@@ -156,8 +156,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
 
             // Track the timestamp of this track since we're processing it
             if let Some(ts) = track.timestamp {
-                let track_time =
-                    DateTime::from_timestamp(ts as i64, 0).unwrap_or_else(Utc::now);
+                let track_time = DateTime::from_timestamp(ts as i64, 0).unwrap_or_else(Utc::now);
                 if latest_processed_timestamp.is_none()
                     || latest_processed_timestamp.unwrap() < track_time
                 {
@@ -213,9 +212,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .save_timestamp_state(&updated_state)
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::other(
-                        format!("Failed to save timestamp state: {e}"),
-                    ))
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                        "Failed to save timestamp state: {e}"
+                    )))
                 })?;
 
             info!("Updated last processed timestamp to: {latest}");
@@ -320,9 +319,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .load_settings_state()
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::other(
-                    format!("Failed to load settings state: {e}"),
-                ))
+                lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                    "Failed to load settings state: {e}"
+                )))
             })?;
 
         match suggestion {
@@ -399,9 +398,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .load_pending_edits_state()
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::other(
-                    format!("Failed to load pending edits: {e}"),
-                ))
+                lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                    "Failed to load pending edits: {e}"
+                )))
             })?;
 
         pending_edits_state.pending_edits.push(pending_edit.clone());
@@ -412,9 +411,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             .save_pending_edits_state(&pending_edits_state)
             .await
             .map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::other(
-                    format!("Failed to save pending edit: {e}"),
-                ))
+                lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                    "Failed to save pending edit: {e}"
+                )))
             })?;
 
         info!(
@@ -484,9 +483,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .load_pending_rewrite_rules_state()
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::other(
-                        format!("Failed to load pending rewrite rules: {e}"),
-                    ))
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                        "Failed to load pending rewrite rules: {e}"
+                    )))
                 })?;
 
             pending_rules_state.pending_rules.push(pending_rule.clone());
@@ -497,9 +496,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .save_pending_rewrite_rules_state(&pending_rules_state)
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::other(
-                        format!("Failed to save pending rewrite rule: {e}"),
-                    ))
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                        "Failed to save pending rewrite rule: {e}"
+                    )))
                 })?;
 
             info!(
@@ -515,9 +514,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .load_rewrite_rules_state()
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::other(
-                        format!("Failed to load rewrite rules: {e}"),
-                    ))
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                        "Failed to load rewrite rules: {e}"
+                    )))
                 })?;
 
             rules_state.rewrite_rules.push(rule.clone());
@@ -528,9 +527,9 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                 .save_rewrite_rules_state(&rules_state)
                 .await
                 .map_err(|e| {
-                    lastfm_edit::LastFmError::Io(std::io::Error::other(
-                        format!("Failed to save rewrite rules: {e}"),
-                    ))
+                    lastfm_edit::LastFmError::Io(std::io::Error::other(format!(
+                        "Failed to save rewrite rules: {e}"
+                    )))
                 })?;
 
             info!("Auto-approved and added new rewrite rule: {motivation}");

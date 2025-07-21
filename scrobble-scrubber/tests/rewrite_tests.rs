@@ -1,5 +1,7 @@
 use lastfm_edit::Track;
-use scrobble_scrubber::rewrite::{RewriteRule, SdRule, create_no_op_edit, apply_all_rules, any_rules_apply};
+use scrobble_scrubber::rewrite::{
+    any_rules_apply, apply_all_rules, create_no_op_edit, RewriteRule, SdRule,
+};
 
 #[test]
 fn test_sd_rule_regex() {
@@ -35,7 +37,7 @@ fn test_rewrite_rule_application() {
 
     let mut edit = create_no_op_edit(&track);
     let changed = rule.apply(&mut edit).unwrap();
-    
+
     assert!(changed);
     assert_eq!(edit.track_name, "Song");
     assert_eq!(edit.artist_name, "Artist feat. Someone");
@@ -61,14 +63,13 @@ fn test_no_changes() {
         playcount: 0,
     };
 
-    let rule = RewriteRule::new()
-        .with_track_name(SdRule::new_regex(r" - \d{4} Remaster", ""));
+    let rule = RewriteRule::new().with_track_name(SdRule::new_regex(r" - \d{4} Remaster", ""));
 
     assert!(!rule.applies_to(&track).unwrap());
-    
+
     let mut edit = create_no_op_edit(&track);
     let changed = rule.apply(&mut edit).unwrap();
-    
+
     assert!(!changed);
 }
 
@@ -83,12 +84,9 @@ fn test_multiple_rules_application() {
     };
 
     let rules = vec![
-        RewriteRule::new()
-            .with_track_name(SdRule::new_regex(r" - \d{4} Remaster", "")),
-        RewriteRule::new()
-            .with_artist_name(SdRule::new_regex(r" ft\. ", " feat. ")),
-        RewriteRule::new()
-            .with_track_name(SdRule::new_regex(r"\s+$", "")), // Remove trailing spaces
+        RewriteRule::new().with_track_name(SdRule::new_regex(r" - \d{4} Remaster", "")),
+        RewriteRule::new().with_artist_name(SdRule::new_regex(r" ft\. ", " feat. ")),
+        RewriteRule::new().with_track_name(SdRule::new_regex(r"\s+$", "")), // Remove trailing spaces
     ];
 
     // Check that rules apply
@@ -97,7 +95,7 @@ fn test_multiple_rules_application() {
     // Apply all rules
     let mut edit = create_no_op_edit(&track);
     let changed = apply_all_rules(&rules, &mut edit).unwrap();
-    
+
     assert!(changed);
     assert_eq!(edit.track_name, "Song"); // Remaster removed and spaces trimmed
     assert_eq!(edit.artist_name, "Artist feat. Someone"); // ft. -> feat.
@@ -113,11 +111,11 @@ fn test_applies_to_check() {
         playcount: 0,
     };
 
-    let rule_that_applies = RewriteRule::new()
-        .with_track_name(SdRule::new_regex(r" - \d{4} Remaster", ""));
-        
-    let rule_that_doesnt_apply = RewriteRule::new()
-        .with_track_name(SdRule::new_regex(r"Nonexistent", ""));
+    let rule_that_applies =
+        RewriteRule::new().with_track_name(SdRule::new_regex(r" - \d{4} Remaster", ""));
+
+    let rule_that_doesnt_apply =
+        RewriteRule::new().with_track_name(SdRule::new_regex(r"Nonexistent", ""));
 
     assert!(rule_that_applies.applies_to(&track).unwrap());
     assert!(!rule_that_doesnt_apply.applies_to(&track).unwrap());

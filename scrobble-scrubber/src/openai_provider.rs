@@ -48,7 +48,6 @@ pub struct OpenAIScrubActionProvider {
     rewrite_rules: Vec<RewriteRule>,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RewriteRuleSuggestion {
     /// Optional transformation for track name
@@ -165,9 +164,7 @@ impl OpenAIScrubActionProvider {
             "track_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
-                description: Some(
-                    "The corrected track name".to_string(),
-                ),
+                description: Some("The corrected track name".to_string()),
                 enum_values: None,
                 properties: None,
                 required: None,
@@ -179,9 +176,7 @@ impl OpenAIScrubActionProvider {
             "artist_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
-                description: Some(
-                    "The corrected artist name".to_string(),
-                ),
+                description: Some("The corrected artist name".to_string()),
                 enum_values: None,
                 properties: None,
                 required: None,
@@ -193,9 +188,7 @@ impl OpenAIScrubActionProvider {
             "album_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
-                description: Some(
-                    "The corrected album name".to_string(),
-                ),
+                description: Some("The corrected album name".to_string()),
                 enum_values: None,
                 properties: None,
                 required: None,
@@ -207,9 +200,7 @@ impl OpenAIScrubActionProvider {
             "album_artist_name".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::String),
-                description: Some(
-                    "The corrected album artist name".to_string(),
-                ),
+                description: Some("The corrected album artist name".to_string()),
                 enum_values: None,
                 properties: None,
                 required: None,
@@ -312,7 +303,11 @@ impl OpenAIScrubActionProvider {
                 description: Some("Optional transformation for track name".to_string()),
                 enum_values: None,
                 properties: Some(Self::create_sd_rule_properties()),
-                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                required: Some(vec![
+                    "find".to_string(),
+                    "replace".to_string(),
+                    "is_literal".to_string(),
+                ]),
                 items: None,
             }),
         );
@@ -324,7 +319,11 @@ impl OpenAIScrubActionProvider {
                 description: Some("Optional transformation for album name".to_string()),
                 enum_values: None,
                 properties: Some(Self::create_sd_rule_properties()),
-                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                required: Some(vec![
+                    "find".to_string(),
+                    "replace".to_string(),
+                    "is_literal".to_string(),
+                ]),
                 items: None,
             }),
         );
@@ -336,7 +335,11 @@ impl OpenAIScrubActionProvider {
                 description: Some("Optional transformation for artist name".to_string()),
                 enum_values: None,
                 properties: Some(Self::create_sd_rule_properties()),
-                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                required: Some(vec![
+                    "find".to_string(),
+                    "replace".to_string(),
+                    "is_literal".to_string(),
+                ]),
                 items: None,
             }),
         );
@@ -348,7 +351,11 @@ impl OpenAIScrubActionProvider {
                 description: Some("Optional transformation for album artist name".to_string()),
                 enum_values: None,
                 properties: Some(Self::create_sd_rule_properties()),
-                required: Some(vec!["find".to_string(), "replace".to_string(), "is_literal".to_string()]),
+                required: Some(vec![
+                    "find".to_string(),
+                    "replace".to_string(),
+                    "is_literal".to_string(),
+                ]),
                 items: None,
             }),
         );
@@ -357,7 +364,9 @@ impl OpenAIScrubActionProvider {
             "requires_confirmation".to_string(),
             Box::new(JSONSchemaDefine {
                 schema_type: Some(JSONSchemaType::Boolean),
-                description: Some("Whether this rule requires user confirmation before applying".to_string()),
+                description: Some(
+                    "Whether this rule requires user confirmation before applying".to_string(),
+                ),
                 enum_values: None,
                 properties: None,
                 required: None,
@@ -431,8 +440,10 @@ impl OpenAIScrubActionProvider {
         arguments: &str,
         tracks: &[Track],
     ) -> Result<(usize, ScrubActionSuggestion), ActionProviderError> {
-        let args: RewriteRuleSuggestionWithIndex = serde_json::from_str(arguments)
-            .map_err(|e| ActionProviderError(format!("Failed to parse rewrite rule arguments: {e}")))?;
+        let args: RewriteRuleSuggestionWithIndex =
+            serde_json::from_str(arguments).map_err(|e| {
+                ActionProviderError(format!("Failed to parse rewrite rule arguments: {e}"))
+            })?;
 
         if args.track_index >= tracks.len() {
             return Err(ActionProviderError(format!(
@@ -615,10 +626,7 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
             parameters: FunctionParameters {
                 schema_type: JSONSchemaType::Object,
                 properties: Some(rule_properties),
-                required: Some(vec![
-                    "track_index".to_string(),
-                    "motivation".to_string(),
-                ]),
+                required: Some(vec!["track_index".to_string(), "motivation".to_string()]),
             },
         };
 
@@ -672,7 +680,8 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
         // Log the request being sent to OpenAI
         log::info!(
             "OpenAI request: {}",
-            serde_json::to_string_pretty(&req).unwrap_or_else(|_| "Failed to serialize request".to_string())
+            serde_json::to_string_pretty(&req)
+                .unwrap_or_else(|_| "Failed to serialize request".to_string())
         );
 
         let response = self
@@ -686,7 +695,8 @@ impl ScrubActionProvider for OpenAIScrubActionProvider {
         // Log the full OpenAI response for debugging
         log::info!(
             "OpenAI response: {}",
-            serde_json::to_string_pretty(&response).unwrap_or_else(|_| "Failed to serialize response".to_string())
+            serde_json::to_string_pretty(&response)
+                .unwrap_or_else(|_| "Failed to serialize response".to_string())
         );
 
         let mut results: Vec<(usize, Vec<ScrubActionSuggestion>)> = Vec::new();

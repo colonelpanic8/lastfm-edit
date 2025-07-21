@@ -20,9 +20,9 @@ async fn main() -> Result<()> {
 
     // Load configuration from args, env vars, and config files
     let config = ScrobbleScrubberConfig::load_from_args(&args).map_err(|e| {
-        LastFmError::Io(std::io::Error::other(
-            format!("Failed to load configuration: {e}"),
-        ))
+        LastFmError::Io(std::io::Error::other(format!(
+            "Failed to load configuration: {e}"
+        )))
     })?;
 
     info!(
@@ -43,9 +43,9 @@ async fn main() -> Result<()> {
     // Create storage wrapped in Arc<Mutex<>>
     let storage = Arc::new(Mutex::new(
         FileStorage::new(&config.storage.state_file).map_err(|e| {
-            LastFmError::Io(std::io::Error::other(
-                format!("Failed to create storage: {e}"),
-            ))
+            LastFmError::Io(std::io::Error::other(format!(
+                "Failed to create storage: {e}"
+            )))
         })?,
     ));
 
@@ -56,9 +56,9 @@ async fn main() -> Result<()> {
         .load_rewrite_rules_state()
         .await
         .map_err(|e| {
-            LastFmError::Io(std::io::Error::other(
-                format!("Failed to load rewrite rules: {e}"),
-            ))
+            LastFmError::Io(std::io::Error::other(format!(
+                "Failed to load rewrite rules: {e}"
+            )))
         })?;
 
     let mut action_provider = OrScrubActionProvider::new();
@@ -91,9 +91,12 @@ async fn main() -> Result<()> {
     }
 
     // Create scrubber wrapped in Arc<Mutex<>>
-    let scrubber = Arc::new(Mutex::new(
-        ScrobbleScrubber::new(storage.clone(), client, action_provider, config.clone()),
-    ));
+    let scrubber = Arc::new(Mutex::new(ScrobbleScrubber::new(
+        storage.clone(),
+        client,
+        action_provider,
+        config.clone(),
+    )));
 
     // Start web interface if enabled
     if config.scrubber.enable_web_interface {

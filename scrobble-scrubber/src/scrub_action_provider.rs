@@ -56,12 +56,14 @@ pub trait ScrubActionProvider: Send + Sync {
 
     /// Analyze multiple tracks and provide suggestions for improvements
     /// Returns a vector of (track_index, suggestions) pairs
-    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error>;
+    async fn analyze_tracks(
+        &self,
+        tracks: &[Track],
+    ) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error>;
 
     /// Get a human-readable name for this provider
     fn provider_name(&self) -> &str;
 }
-
 
 /// Rewrite rules-based action provider
 pub struct RewriteRulesScrubActionProvider {
@@ -69,13 +71,15 @@ pub struct RewriteRulesScrubActionProvider {
 }
 
 impl RewriteRulesScrubActionProvider {
-    #[must_use] pub fn new(rules_state: &RewriteRulesState) -> Self {
+    #[must_use]
+    pub fn new(rules_state: &RewriteRulesState) -> Self {
         Self {
             rules: rules_state.rewrite_rules.clone(),
         }
     }
 
-    #[must_use] pub const fn from_rules(rules: Vec<RewriteRule>) -> Self {
+    #[must_use]
+    pub const fn from_rules(rules: Vec<RewriteRule>) -> Self {
         Self { rules }
     }
 }
@@ -84,7 +88,10 @@ impl RewriteRulesScrubActionProvider {
 impl ScrubActionProvider for RewriteRulesScrubActionProvider {
     type Error = ActionProviderError;
 
-    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
+    async fn analyze_tracks(
+        &self,
+        tracks: &[Track],
+    ) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
         let mut results = Vec::new();
 
         for (index, track) in tracks.iter().enumerate() {
@@ -100,10 +107,9 @@ impl ScrubActionProvider for RewriteRulesScrubActionProvider {
 
                 if changes_made {
                     // Check if any of the applicable rules require confirmation
-                    let needs_confirmation = self
-                        .rules
-                        .iter()
-                        .any(|rule| rule.applies_to(track).unwrap_or(false) && rule.requires_confirmation);
+                    let needs_confirmation = self.rules.iter().any(|rule| {
+                        rule.applies_to(track).unwrap_or(false) && rule.requires_confirmation
+                    });
 
                     // If confirmation needed, propose a rule instead of immediate action
                     if needs_confirmation {
@@ -133,7 +139,6 @@ impl ScrubActionProvider for RewriteRulesScrubActionProvider {
     }
 }
 
-
 /// Combines multiple providers, trying each one in order until one returns a non-NoAction result
 pub struct OrScrubActionProvider {
     providers: Vec<Box<dyn ScrubActionProvider<Error = ActionProviderError>>>,
@@ -147,7 +152,8 @@ impl Default for OrScrubActionProvider {
 }
 
 impl OrScrubActionProvider {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             providers: Vec::new(),
             provider_names: Vec::new(),
@@ -168,7 +174,8 @@ impl OrScrubActionProvider {
         self
     }
 
-    #[must_use] pub fn with_providers<P>(providers: Vec<P>) -> Self
+    #[must_use]
+    pub fn with_providers<P>(providers: Vec<P>) -> Self
     where
         P: ScrubActionProvider + 'static,
         P::Error: Into<ActionProviderError>,
@@ -194,7 +201,10 @@ where
 {
     type Error = ActionProviderError;
 
-    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
+    async fn analyze_tracks(
+        &self,
+        tracks: &[Track],
+    ) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
         self.inner
             .analyze_tracks(tracks)
             .await
@@ -210,9 +220,12 @@ where
 impl ScrubActionProvider for OrScrubActionProvider {
     type Error = ActionProviderError;
 
-    async fn analyze_tracks(&self, tracks: &[Track]) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
+    async fn analyze_tracks(
+        &self,
+        tracks: &[Track],
+    ) -> Result<Vec<(usize, Vec<ScrubActionSuggestion>)>, Self::Error> {
         let mut combined_results: Vec<(usize, Vec<ScrubActionSuggestion>)> = Vec::new();
-        
+
         // Try each provider in sequence and combine results
         for (provider_idx, provider) in self.providers.iter().enumerate() {
             match provider.analyze_tracks(tracks).await {
@@ -220,7 +233,10 @@ impl ScrubActionProvider for OrScrubActionProvider {
                     // Add these results to our combined results
                     for (track_idx, suggestions) in provider_results {
                         // Check if we already have suggestions for this track
-                        if let Some(existing) = combined_results.iter_mut().find(|(idx, _)| *idx == track_idx) {
+                        if let Some(existing) = combined_results
+                            .iter_mut()
+                            .find(|(idx, _)| *idx == track_idx)
+                        {
                             // Add to existing suggestions
                             existing.1.extend(suggestions);
                         } else {
@@ -233,7 +249,9 @@ impl ScrubActionProvider for OrScrubActionProvider {
                     // Log error but continue to next provider
                     log::warn!(
                         "Error from provider '{}': {}",
-                        self.provider_names.get(provider_idx).unwrap_or(&"unknown".to_string()),
+                        self.provider_names
+                            .get(provider_idx)
+                            .unwrap_or(&"unknown".to_string()),
                         e
                     );
                 }

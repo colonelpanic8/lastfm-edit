@@ -11,8 +11,8 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::persistence::StateStorage;
-use crate::scrubber::ScrobbleScrubber;
 use crate::scrub_action_provider::ScrubActionProvider;
+use crate::scrubber::ScrobbleScrubber;
 
 #[derive(Serialize, Deserialize)]
 struct ApproveEditRequest {
@@ -23,7 +23,6 @@ struct ApproveEditRequest {
 struct ApproveRuleRequest {
     action: String, // "approve" or "reject"
 }
-
 
 #[derive(Serialize, Deserialize)]
 struct ApiResponse {
@@ -45,7 +44,8 @@ impl<S: StateStorage, P: ScrubActionProvider> Clone for WebInterfaceState<S, P> 
     }
 }
 
-pub fn create_router<S: StateStorage + 'static, P: ScrubActionProvider + 'static>() -> Router<WebInterfaceState<S, P>> {
+pub fn create_router<S: StateStorage + 'static, P: ScrubActionProvider + 'static>(
+) -> Router<WebInterfaceState<S, P>> {
     Router::new()
         .route("/", get(dashboard))
         .route("/api/edits/:id/:action", post(handle_edit_action))
@@ -57,20 +57,21 @@ async fn dashboard<S: StateStorage, P: ScrubActionProvider>(
     State(state): State<WebInterfaceState<S, P>>,
 ) -> Result<Html<String>, StatusCode> {
     let storage = state.storage.lock().await;
-    
+
     let pending_edits = storage
         .load_pending_edits_state()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .pending_edits;
-    
+
     let pending_rules = storage
         .load_pending_rewrite_rules_state()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .pending_rules;
 
-    let html = format!(r#"
+    let html = format!(
+        r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -113,41 +114,58 @@ async fn dashboard<S: StateStorage, P: ScrubActionProvider>(
     </script>
 </body>
 </html>
-    "#, 
+    "#,
         pending_edits.len(),
-        pending_edits.iter().take(5).map(|edit| {
-            format!(r#"
+        pending_edits
+            .iter()
+            .take(5)
+            .map(|edit| {
+                format!(
+                    r#"
                 <div class="item">
                     <strong>{} - {}</strong><br>
                     <small>ID: {}</small><br>
                     <button class="btn" onclick="handleEdit('{}', 'approve')">Approve</button>
                     <button class="btn danger" onclick="handleEdit('{}', 'reject')">Reject</button>
                 </div>
-            "#, edit.original_artist_name, edit.original_track_name, edit.id, edit.id, edit.id)
-        }).collect::<String>(),
+            "#,
+                    edit.original_artist_name, edit.original_track_name, edit.id, edit.id, edit.id
+                )
+            })
+            .collect::<String>(),
         pending_rules.len(),
-        pending_rules.iter().take(5).map(|rule| {
-            format!(r#"
+        pending_rules
+            .iter()
+            .take(5)
+            .map(|rule| {
+                format!(
+                    r#"
                 <div class="item">
                     <strong>{}</strong><br>
                     <small>Example: {} - {}</small><br>
                     <button class="btn" onclick="handleRule('{}', 'approve')">Approve</button>
                     <button class="btn danger" onclick="handleRule('{}', 'reject')">Reject</button>
                 </div>
-            "#, rule.reason, rule.example_artist_name, rule.example_track_name, rule.id, rule.id)
-        }).collect::<String>()
+            "#,
+                    rule.reason,
+                    rule.example_artist_name,
+                    rule.example_track_name,
+                    rule.id,
+                    rule.id
+                )
+            })
+            .collect::<String>()
     );
 
     Ok(Html(html))
 }
-
 
 async fn handle_edit_action<S: StateStorage, P: ScrubActionProvider>(
     State(state): State<WebInterfaceState<S, P>>,
     Path((id, action)): Path<(String, String)>,
 ) -> Result<Json<ApiResponse>, StatusCode> {
     let edit_id = Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     if action != "approve" && action != "reject" {
         return Ok(Json(ApiResponse {
             success: false,
@@ -156,7 +174,7 @@ async fn handle_edit_action<S: StateStorage, P: ScrubActionProvider>(
     }
 
     let mut storage = state.storage.lock().await;
-    
+
     // Load current pending edits
     let mut pending_edits_state = storage
         .load_pending_edits_state()
@@ -180,9 +198,15 @@ async fn handle_edit_action<S: StateStorage, P: ScrubActionProvider>(
 
     let message = if action == "approve" {
         // TODO: Apply the edit to Last.fm here
-        format!("Edit approved: {} - {}", pending_edit.original_artist_name, pending_edit.original_track_name)
+        format!(
+            "Edit approved: {} - {}",
+            pending_edit.original_artist_name, pending_edit.original_track_name
+        )
     } else {
-        format!("Edit rejected: {} - {}", pending_edit.original_artist_name, pending_edit.original_track_name)
+        format!(
+            "Edit rejected: {} - {}",
+            pending_edit.original_artist_name, pending_edit.original_track_name
+        )
     };
 
     Ok(Json(ApiResponse {
@@ -196,7 +220,7 @@ async fn handle_rule_action<S: StateStorage, P: ScrubActionProvider>(
     Path((id, action)): Path<(String, String)>,
 ) -> Result<Json<ApiResponse>, StatusCode> {
     let rule_id = Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    
+
     if action != "approve" && action != "reject" {
         return Ok(Json(ApiResponse {
             success: false,
@@ -205,7 +229,7 @@ async fn handle_rule_action<S: StateStorage, P: ScrubActionProvider>(
     }
 
     let mut storage = state.storage.lock().await;
-    
+
     // Load current pending rules
     let mut pending_rules_state = storage
         .load_pending_rewrite_rules_state()
@@ -234,7 +258,9 @@ async fn handle_rule_action<S: StateStorage, P: ScrubActionProvider>(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        rewrite_rules_state.rewrite_rules.push(pending_rule.rule.clone());
+        rewrite_rules_state
+            .rewrite_rules
+            .push(pending_rule.rule.clone());
 
         storage
             .save_rewrite_rules_state(&rewrite_rules_state)
@@ -257,13 +283,12 @@ async fn scrubber_status<S: StateStorage, P: ScrubActionProvider>(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let scrubber = state.scrubber.lock().await;
     let is_running = scrubber.is_running().await;
-    
+
     Ok(Json(serde_json::json!({
         "is_running": is_running,
         "status": if is_running { "running" } else { "idle" }
     })))
 }
-
 
 pub async fn start_web_server<S: StateStorage + 'static, P: ScrubActionProvider + 'static>(
     storage: Arc<Mutex<S>>,
@@ -271,14 +296,14 @@ pub async fn start_web_server<S: StateStorage + 'static, P: ScrubActionProvider 
     port: u16,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state = WebInterfaceState { storage, scrubber };
-    
+
     let app = create_router().with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
-    
+
     log::info!("Web interface available at http://localhost:{port}");
-    
+
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }

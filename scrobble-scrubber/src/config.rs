@@ -188,7 +188,8 @@ impl Default for ScrobbleScrubberConfig {
 impl ScrobbleScrubberConfig {
     /// Get default configuration file paths in order of preference
     /// Uses XDG Base Directory specification
-    #[must_use] pub fn get_default_config_paths() -> Vec<PathBuf> {
+    #[must_use]
+    pub fn get_default_config_paths() -> Vec<PathBuf> {
         let mut paths = Vec::new();
 
         // Current directory
@@ -221,7 +222,8 @@ impl ScrobbleScrubberConfig {
 
     /// Get the preferred configuration file path for creating new config files
     /// Returns the XDG config directory path
-    #[must_use] pub fn get_preferred_config_path() -> Option<PathBuf> {
+    #[must_use]
+    pub fn get_preferred_config_path() -> Option<PathBuf> {
         dirs::config_dir()
             .map(|config_dir| config_dir.join("scrobble-scrubber").join("config.toml"))
     }
@@ -281,7 +283,8 @@ impl ScrobbleScrubberConfig {
     }
 
     /// Merge command line arguments into the configuration
-    #[must_use] pub fn merge_args(mut self, args: &crate::Args) -> Self {
+    #[must_use]
+    pub fn merge_args(mut self, args: &crate::Args) -> Self {
         // Override with command line arguments if provided
         if let Some(interval) = args.interval {
             self.scrubber.interval = interval;
@@ -332,11 +335,11 @@ impl ScrobbleScrubberConfig {
     }
 
     /// Get the Last.fm base URL with fallback to default
-    #[must_use] pub fn lastfm_base_url(&self) -> &str {
+    #[must_use]
+    pub fn lastfm_base_url(&self) -> &str {
         self.lastfm
             .base_url
             .as_deref()
             .unwrap_or("https://www.last.fm")
     }
 }
-
