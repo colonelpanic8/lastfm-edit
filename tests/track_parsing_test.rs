@@ -7,7 +7,7 @@ async fn test_neil_young_track_parsing() -> Result<()> {
     // Load the saved HTML file
     let html_file = "neil_young_tracks_page_1.html";
     let html_content = fs::read_to_string(html_file)
-        .map_err(|e| lastfm_edit::LastFmError::Parse(format!("Failed to read HTML file: {}", e)))?;
+        .map_err(|e| lastfm_edit::LastFmError::Parse(format!("Failed to read HTML file: {e}")))?;
 
     // Parse the HTML using scraper
     let document = Html::parse_document(&html_content);
@@ -35,7 +35,7 @@ async fn test_neil_young_track_parsing() -> Result<()> {
 
     if !found_target {
         // Print debug info before failing
-        println!("❌ Track '{}' not found in parsed results", target_track);
+        println!("❌ Track '{target_track}' not found in parsed results");
         println!("📊 Total tracks parsed: {}", track_page.tracks.len());
         println!("🔍 All parsed tracks:");
         for (i, track) in track_page.tracks.iter().enumerate() {
@@ -44,10 +44,7 @@ async fn test_neil_young_track_parsing() -> Result<()> {
 
         // Check if it exists in the HTML
         let html_contains_track = html_content.contains(target_track);
-        println!(
-            "📂 HTML contains '{}': {}",
-            target_track, html_contains_track
-        );
+        println!("📂 HTML contains '{target_track}': {html_contains_track}");
 
         if html_contains_track {
             println!("💥 PARSING BUG: Track exists in HTML but not in parsed results!");
@@ -56,8 +53,7 @@ async fn test_neil_young_track_parsing() -> Result<()> {
 
     assert!(
         found_target,
-        "Track '{}' should be found in parsed tracks",
-        target_track
+        "Track '{target_track}' should be found in parsed tracks"
     );
 
     Ok(())
@@ -81,8 +77,5 @@ fn test_html_contains_comes_a_time() {
         "Should find multiple occurrences of the track"
     );
 
-    println!(
-        "✅ HTML contains 'Comes a Time - 2016' {} times",
-        occurrences
-    );
+    println!("✅ HTML contains 'Comes a Time - 2016' {occurrences} times");
 }

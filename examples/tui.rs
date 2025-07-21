@@ -176,10 +176,9 @@ impl TrackEditorApp {
             }
             KeyCode::Char(c) => {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    match c {
-                        'c' => return true, // Ctrl+C to quit
-                        _ => {}
-                    }
+                    if c == 'c' {
+                        return true;
+                    } // Ctrl+C to quit
                 } else {
                     self.edit_buffer.push(c);
                     if let Some(ref mut edit) = self.current_edit {
@@ -213,7 +212,7 @@ impl TrackEditorApp {
                         "Editing track name. Press Enter to save, Esc to cancel.".to_string();
                 }
                 Err(e) => {
-                    self.mode = AppMode::Error(format!("Failed to load edit form: {}", e));
+                    self.mode = AppMode::Error(format!("Failed to load edit form: {e}"));
                 }
             }
         }
@@ -250,7 +249,7 @@ impl TrackEditorApp {
                     }
                 }
                 Err(e) => {
-                    self.status_message = format!("❌ Edit error: {}", e);
+                    self.status_message = format!("❌ Edit error: {e}");
                 }
             }
 
@@ -287,7 +286,7 @@ fn render_loading_screen(f: &mut Frame, area: Rect, message: &str) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow));
 
-    let paragraph = Paragraph::new(format!("{}\n\nPlease wait...", message))
+    let paragraph = Paragraph::new(format!("{message}\n\nPlease wait..."))
         .block(block)
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
@@ -302,7 +301,7 @@ fn render_error_screen(f: &mut Frame, area: Rect, error: &str) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red));
 
-    let paragraph = Paragraph::new(format!("{}\n\nPress any key to continue...", error))
+    let paragraph = Paragraph::new(format!("{error}\n\nPress any key to continue..."))
         .block(block)
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
@@ -501,8 +500,8 @@ async fn main() -> Result<()> {
     }
 
     let artist = &args[1];
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
-    println!("🎵 Starting track editor for: {}", artist);
+    println!("🎵 Starting track editor for: {artist}");
     run_track_editor(client, artist.to_string()).await
 }

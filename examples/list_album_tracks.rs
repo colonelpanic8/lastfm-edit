@@ -20,13 +20,13 @@ async fn main() -> Result<()> {
     let artist = &args[2];
     let mut client = common::setup_client().await?;
 
-    println!("💿 All tracks from '{}' by {}:\n", album, artist);
+    println!("💿 All tracks from '{album}' by {artist}:\n");
 
     // Get tracks from the album page (single request)
     match client.get_album_tracks(album, artist).await {
         Ok(tracks) => {
             if tracks.is_empty() {
-                println!("❌ No tracks found for album '{}' by '{}'", album, artist);
+                println!("❌ No tracks found for album '{album}' by '{artist}'");
                 println!("\n💡 This might mean:");
                 println!("   • The album name doesn't match exactly as it appears on Last.fm");
                 println!("   • The album doesn't exist in your library");
@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
             println!("\n📊 Total: {} tracks from '{}'", tracks.len(), album);
         }
         Err(e) => {
-            println!("❌ Error loading album tracks: {}", e);
+            println!("❌ Error loading album tracks: {e}");
             println!("\n💡 This might happen if:");
             println!("   • The album doesn't exist in your library");
             println!("   • There are network issues");

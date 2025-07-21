@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     let artist = &args[1];
     let mut client = common::setup_client().await?;
 
-    println!("🎵 Tracks by {}:\n", artist);
+    println!("🎵 Tracks by {artist}:\n");
 
     let mut iterator = client.artist_tracks(artist);
     let mut count = 0;
@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
         println!("{}. {} ({} plays)", count, track.name, track.playcount);
     }
 
-    println!("\n📊 Total: {} tracks", count);
+    println!("\n📊 Total: {count} tracks");
 
     Ok(())
 }

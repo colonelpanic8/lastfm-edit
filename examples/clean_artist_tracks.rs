@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
     let regex = match Regex::new(pattern) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("❌ Invalid regex pattern '{}': {}", pattern, e);
+            eprintln!("❌ Invalid regex pattern '{pattern}': {e}");
             std::process::exit(1);
         }
     };
@@ -38,8 +38,8 @@ async fn main() -> Result<()> {
     let mut client = common::setup_client().await?;
 
     println!("=== Artist Catalog Cleanup Tool ===\n");
-    println!("🎨 ARTIST: {}", artist);
-    println!("🔍 PATTERN: {}", pattern);
+    println!("🎨 ARTIST: {artist}");
+    println!("🔍 PATTERN: {pattern}");
     println!("📝 This will clean track names by removing text matching the regex pattern");
     println!("\n🚀 Starting catalog scan...\n");
 
@@ -51,10 +51,7 @@ async fn main() -> Result<()> {
     let mut already_cleaned_tracks = HashSet::new();
 
     // Step 1: Collect all matching tracks first
-    println!(
-        "🔍 Step 1: Scanning entire {} catalog for matching tracks...",
-        artist
-    );
+    println!("🔍 Step 1: Scanning entire {artist} catalog for matching tracks...");
     let mut all_matching_tracks = Vec::new();
 
     {
@@ -69,7 +66,7 @@ async fn main() -> Result<()> {
 
                     // Print progress every 50 tracks
                     if track_count % 50 == 0 {
-                        println!("📖 Scanned {} tracks so far...", track_count);
+                        println!("📖 Scanned {track_count} tracks so far...");
                     }
 
                     // Check if this track matches our pattern
@@ -84,13 +81,12 @@ async fn main() -> Result<()> {
                 }
                 Ok(None) => {
                     println!(
-                        "📚 Reached end of {} catalog - scanned {} tracks total",
-                        artist, track_count
+                        "📚 Reached end of {artist} catalog - scanned {track_count} tracks total"
                     );
                     break;
                 }
                 Err(e) => {
-                    println!("❌ Error fetching tracks: {}", e);
+                    println!("❌ Error fetching tracks: {e}");
                     break;
                 }
             }
@@ -99,10 +95,7 @@ async fn main() -> Result<()> {
 
     // Step 2: Process all found matching tracks
     if all_matching_tracks.is_empty() {
-        println!(
-            "\n🎉 No matching tracks found! Your {} catalog is already clean.",
-            artist
-        );
+        println!("\n🎉 No matching tracks found! Your {artist} catalog is already clean.");
         return Ok(());
     }
 
@@ -145,7 +138,7 @@ async fn main() -> Result<()> {
                 // Perform the edit
                 match client.edit_scrobble(&edit_data).await {
                     Ok(_response) => {
-                        println!("   ✅ Successfully cleaned: '{}'", clean_name);
+                        println!("   ✅ Successfully cleaned: '{clean_name}'");
                         tracks_successfully_cleaned += 1;
                         already_cleaned_tracks.insert(clean_name);
                     }
@@ -172,18 +165,14 @@ async fn main() -> Result<()> {
     println!("🎼 {} CATALOG CLEANUP COMPLETE", artist.to_uppercase());
     println!("{}", "=".repeat(60));
     println!("📊 STATISTICS:");
-    println!("   • Total tracks scanned: {}", total_tracks_scanned);
-    println!("   • Matching tracks found: {}", matching_tracks_found);
-    println!(
-        "   • Tracks successfully cleaned: {}",
-        tracks_successfully_cleaned
-    );
-    println!("   • Tracks failed to clean: {}", tracks_failed_to_clean);
+    println!("   • Total tracks scanned: {total_tracks_scanned}");
+    println!("   • Matching tracks found: {matching_tracks_found}");
+    println!("   • Tracks successfully cleaned: {tracks_successfully_cleaned}");
+    println!("   • Tracks failed to clean: {tracks_failed_to_clean}");
 
     if tracks_successfully_cleaned > 0 {
         println!(
-            "\n✨ Your {} catalog is now cleaner! Pattern '{}' has been removed from track names.",
-            artist, pattern
+            "\n✨ Your {artist} catalog is now cleaner! Pattern '{pattern}' has been removed from track names."
         );
     }
 
@@ -195,7 +184,7 @@ async fn main() -> Result<()> {
         println!("\n💡 You can re-run this script later to try cleaning the remaining tracks.");
     }
 
-    println!("\n🎵 {} catalog cleanup completed!", artist);
+    println!("\n🎵 {artist} catalog cleanup completed!");
 
     Ok(())
 }

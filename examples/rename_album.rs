@@ -21,8 +21,8 @@ async fn main() -> Result<()> {
     let mut client = common::setup_client().await?;
 
     println!("=== Album Rename Tool ===\n");
-    println!("🎨 Artist: {}", artist_name);
-    println!("💿 Renaming: '{}' → '{}'", old_album_name, new_album_name);
+    println!("🎨 Artist: {artist_name}");
+    println!("💿 Renaming: '{old_album_name}' → '{new_album_name}'");
     println!();
 
     println!("🔍 Loading album edit form data...");
@@ -32,15 +32,15 @@ async fn main() -> Result<()> {
     {
         Ok(_response) => {
             println!("✅ Successfully renamed album!");
-            println!("   From: '{}'", old_album_name);
-            println!("   To:   '{}'", new_album_name);
-            println!("   Artist: {}", artist_name);
+            println!("   From: '{old_album_name}'");
+            println!("   To:   '{new_album_name}'");
+            println!("   Artist: {artist_name}");
             println!(
                 "\n💡 All scrobbles from this album have been updated with the new album name."
             );
         }
         Err(e) => {
-            println!("❌ Failed to rename album: {}", e);
+            println!("❌ Failed to rename album: {e}");
             println!("\nThis might happen if:");
             println!("   • The album hasn't been scrobbled recently");
             println!("   • The album name doesn't match exactly");

@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
     let http_client = http_client::native::NativeClient::new();
     let mut client = LastFmClient::new(Box::new(http_client));
 
-    println!("Attempting to login as {}...", username);
+    println!("Attempting to login as {username}...");
     client.login(&username, &password).await?;
 
     println!("Successfully logged in as {}", client.username());
