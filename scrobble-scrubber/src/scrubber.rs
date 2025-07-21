@@ -3,9 +3,7 @@ use lastfm_edit::{iterator::AsyncPaginatedIterator, LastFmClient, Result, Scrobb
 use log::{info, warn};
 
 use crate::config::ScrobbleScrubberConfig;
-use crate::persistence::{
-    PendingEdit, PendingRewriteRule, StateStorage, TimestampState,
-};
+use crate::persistence::{PendingEdit, PendingRewriteRule, StateStorage, TimestampState};
 use crate::scrub_action_provider::{ScrubActionProvider, ScrubActionSuggestion};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -81,18 +79,18 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             *self.is_running.write().await = false;
 
             info!("Sleeping for {} seconds...", self.config.scrubber.interval);
-            
+
             // Sleep with periodic checks for stop signal
             let sleep_duration = std::time::Duration::from_secs(self.config.scrubber.interval);
             let check_interval = std::time::Duration::from_secs(1);
             let mut elapsed = std::time::Duration::ZERO;
-            
+
             while elapsed < sleep_duration {
                 if *self.should_stop.read().await {
                     info!("Scrubber stop requested during sleep, exiting");
                     return Ok(());
                 }
-                
+
                 let remaining = sleep_duration - elapsed;
                 let sleep_time = std::cmp::min(check_interval, remaining);
                 tokio::time::sleep(sleep_time).await;
@@ -104,12 +102,18 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
 
     async fn check_and_process_tracks(&mut self) -> Result<()> {
         // Load current timestamp state to know where to start reading
-        let timestamp_state = self.storage.lock().await.load_timestamp_state().await.map_err(|e| {
-            lastfm_edit::LastFmError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to load timestamp state: {}", e),
-            ))
-        })?;
+        let timestamp_state = self
+            .storage
+            .lock()
+            .await
+            .load_timestamp_state()
+            .await
+            .map_err(|e| {
+                lastfm_edit::LastFmError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to load timestamp state: {}", e),
+                ))
+            })?;
 
         let mut recent_iterator = self.client.recent_tracks();
 
@@ -208,7 +212,6 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
     }
 
     async fn analyze_track(&self, track: &lastfm_edit::Track) -> Option<ScrubActionSuggestion> {
-        // Just delegate to the action provider
         match self.action_provider.analyze_track(track).await {
             Ok(ScrubActionSuggestion::NoAction) => None,
             Ok(suggestion) => {
@@ -233,17 +236,24 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
         suggestion: &ScrubActionSuggestion,
     ) -> Result<()> {
         // Load settings to check global confirmation requirement
-        let settings_state = self.storage.lock().await.load_settings_state().await.map_err(|e| {
-            lastfm_edit::LastFmError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to load settings state: {}", e),
-            ))
-        })?;
+        let settings_state = self
+            .storage
+            .lock()
+            .await
+            .load_settings_state()
+            .await
+            .map_err(|e| {
+                lastfm_edit::LastFmError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to load settings state: {}", e),
+                ))
+            })?;
 
         match suggestion {
             ScrubActionSuggestion::Edit(edit) => {
                 // Check if global settings require confirmation
-                if settings_state.require_confirmation || self.config.scrubber.require_confirmation {
+                if settings_state.require_confirmation || self.config.scrubber.require_confirmation
+                {
                     self.create_pending_edit(track, edit).await?;
                 } else {
                     self.apply_edit(track, edit).await?;
@@ -306,8 +316,13 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
         );
 
         // Load and save pending edits
-        let mut pending_edits_state =
-            self.storage.lock().await.load_pending_edits_state().await.map_err(|e| {
+        let mut pending_edits_state = self
+            .storage
+            .lock()
+            .await
+            .load_pending_edits_state()
+            .await
+            .map_err(|e| {
                 lastfm_edit::LastFmError::Io(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Failed to load pending edits: {}", e),
@@ -421,12 +436,18 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
             );
         } else {
             // Auto-approve the rule and add it to active rewrite rules
-            let mut rules_state = self.storage.lock().await.load_rewrite_rules_state().await.map_err(|e| {
-                lastfm_edit::LastFmError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to load rewrite rules: {}", e),
-                ))
-            })?;
+            let mut rules_state = self
+                .storage
+                .lock()
+                .await
+                .load_rewrite_rules_state()
+                .await
+                .map_err(|e| {
+                    lastfm_edit::LastFmError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to load rewrite rules: {}", e),
+                    ))
+                })?;
 
             rules_state.rewrite_rules.push(rule.clone());
 
@@ -442,10 +463,7 @@ impl<S: StateStorage, P: ScrubActionProvider> ScrobbleScrubber<S, P> {
                     ))
                 })?;
 
-            info!(
-                "Auto-approved and added new rewrite rule: {}",
-                motivation
-            );
+            info!("Auto-approved and added new rewrite rule: {}", motivation);
         }
         Ok(())
     }
