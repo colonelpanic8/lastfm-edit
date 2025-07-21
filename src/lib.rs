@@ -17,13 +17,13 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, Result};
+//! use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Create client with any HTTP implementation
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmClient::new(Box::new(http_client));
+//!     let mut client = LastFmEditClient::new(Box::new(http_client));
 //!
 //!     // Login to Last.fm
 //!     client.login("username", "password").await?;
@@ -61,12 +61,12 @@
 //! ### Basic Library Browsing
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, Result};
+//! use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmClient::new(Box::new(http_client));
+//!     let mut client = LastFmEditClient::new(Box::new(http_client));
 //!
 //!     client.login("username", "password").await?;
 //!
@@ -83,24 +83,36 @@
 //! ### Bulk Track Editing
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmClient, ScrobbleEditContext, EditStrategy, Result};
+//! use lastfm_edit::{LastFmEditClient, ScrobbleEditContext, EditStrategy, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmClient::new(Box::new(http_client));
+//!     let mut client = LastFmEditClient::new(Box::new(http_client));
 //!
 //!     client.login("username", "password").await?;
 //!
 //!     // Create edit context for bulk operations
-//!     let mut context = ScrobbleEditContext::new(&mut client, EditStrategy::DryRun);
+//!     let mut context = ScrobbleEditContext::from_track_listing(
+//!         "Track Name".to_string(),
+//!         "Artist Name".to_string(),
+//!         42,
+//!         None
+//!     );
 //!
-//!     // Find and edit tracks
+//!     // Find and edit tracks  
 //!     let tracks = client.artist_tracks("Artist Name").collect_all().await?;
 //!     for track in tracks {
 //!         if track.name.contains("(Remaster)") {
 //!             let new_name = track.name.replace(" (Remaster)", "");
-//!             context.edit_track(&track, Some(&new_name), None, None).await?;
+//!             // Create context for this specific track
+//!             let context = ScrobbleEditContext::from_track_listing(
+//!                 track.name.clone(),
+//!                 track.artist.clone(),
+//!                 track.playcount,
+//!                 track.album.clone()
+//!             );
+//!             context.execute_edit(&mut client, new_name, None).await?;
 //!         }
 //!     }
 //!
@@ -111,17 +123,17 @@
 //! ### Recent Tracks Monitoring
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, Result};
+//! use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmClient::new(Box::new(http_client));
+//!     let mut client = LastFmEditClient::new(Box::new(http_client));
 //!
 //!     client.login("username", "password").await?;
 //!
 //!     // Get recent tracks (first 100)
-//!     let recent_tracks = client.recent_tracks().take(100).collect_all().await?;
+//!     let recent_tracks = client.recent_tracks().take(100).await?;
 //!     println!("Found {} recent tracks", recent_tracks.len());
 //!
 //!     Ok(())
@@ -137,6 +149,7 @@ pub mod client;
 pub mod edit;
 pub mod error;
 pub mod iterator;
+pub mod parsing;
 pub mod scrobble_edit_context;
 pub mod track;
 

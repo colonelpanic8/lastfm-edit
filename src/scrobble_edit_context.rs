@@ -10,10 +10,10 @@ use crate::{LastFmEditClient, Result, ScrobbleEdit};
 ///
 /// ```rust,no_run
 /// use lastfm_edit::{ScrobbleEditContext, EditStrategy, IntoEditContext};
-/// use lastfm_edit::{LastFmClient, AsyncPaginatedIterator};
+/// use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
 ///
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// // Find tracks and convert to edit contexts
@@ -209,9 +209,9 @@ impl ScrobbleEditContext {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{ScrobbleEditContext, LastFmClient};
+    /// # use lastfm_edit::{ScrobbleEditContext, LastFmEditClient};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     /// let context = ScrobbleEditContext::from_track_listing(
     ///     "Wrong Name".to_string(),
     ///     "Artist".to_string(),
@@ -294,9 +294,9 @@ impl ScrobbleEditContext {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{ScrobbleEditContext, LastFmClient};
+    /// # use lastfm_edit::{ScrobbleEditContext, LastFmEditClient};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     /// let context = ScrobbleEditContext::from_track_listing(
     ///     "Misspelled Track".to_string(),
     ///     "Artist".to_string(),
@@ -404,10 +404,10 @@ impl ScrobbleEditContext {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use lastfm_edit::{LastFmClient, AsyncPaginatedIterator, IntoEditContext};
+/// use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, IntoEditContext};
 ///
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut tracks = client.artist_tracks("Radiohead");

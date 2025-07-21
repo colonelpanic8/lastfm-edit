@@ -8,11 +8,11 @@ use thiserror::Error;
 /// # Error Handling Examples
 ///
 /// ```rust,no_run
-/// use lastfm_edit::{LastFmClient, LastFmError};
+/// use lastfm_edit::{LastFmEditClient, LastFmError};
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
 ///
 ///     match client.login("username", "password").await {
 ///         Ok(()) => println!("Login successful"),
@@ -28,13 +28,13 @@ use thiserror::Error;
 ///
 /// # Automatic Retry
 ///
-/// Some operations like [`LastFmClient::edit_scrobble_with_retry`](crate::LastFmClient::edit_scrobble_with_retry)
+/// Some operations like [`LastFmEditClient::edit_scrobble_with_retry`](crate::LastFmEditClient::edit_scrobble_with_retry)
 /// automatically handle rate limiting errors by waiting and retrying:
 ///
 /// ```rust,no_run
-/// # use lastfm_edit::{LastFmClient, ScrobbleEdit};
+/// # use lastfm_edit::{LastFmEditClient, ScrobbleEdit};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let edit = ScrobbleEdit::from_track_info("Track", "Album", "Artist", 1640995200);
