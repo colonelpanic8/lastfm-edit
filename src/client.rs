@@ -38,10 +38,7 @@ use std::path::Path;
 /// ```
 pub struct LastFmEditClient {
     client: Box<dyn HttpClient + Send + Sync>,
-    username: String,
-    csrf_token: Option<String>,
-    base_url: String,
-    session_cookies: Vec<String>,
+    session: LastFmEditSession,
     rate_limit_patterns: Vec<String>,
     debug_save_responses: bool,
     parser: LastFmParser,
@@ -124,10 +121,7 @@ impl LastFmEditClient {
     ) -> Self {
         Self {
             client,
-            username: String::new(),
-            csrf_token: None,
-            base_url,
-            session_cookies: Vec::new(),
+            session: LastFmEditSession::new(String::new(), Vec::new(), None, base_url),
             rate_limit_patterns,
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
@@ -181,7 +175,7 @@ impl LastFmEditClient {
     /// # Arguments
     ///
     /// * `client` - Any HTTP client implementation
-    /// * `session` - Previously saved [`ClientSession`]
+    /// * `session` - Previously saved [`LastFmEditSession`]
     ///
     /// # Returns
     ///
@@ -190,12 +184,12 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, ClientSession};
+    /// use lastfm_edit::{LastFmEditClient, LastFmEditSession};
     ///
     /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     ///     // Assume we have a saved session
     ///     let session_json = std::fs::read_to_string("session.json")?;
-    ///     let session = ClientSession::from_json(&session_json)?;
+    ///     let session = LastFmEditSession::from_json(&session_json)?;
     ///
     ///     let client = LastFmEditClient::from_session(
     ///         Box::new(http_client::native::NativeClient::new()),
@@ -211,10 +205,7 @@ impl LastFmEditClient {
     ) -> Self {
         Self {
             client,
-            username: session.username,
-            csrf_token: session.csrf_token,
-            base_url: session.base_url,
-            session_cookies: session.session_cookies,
+            session,
             rate_limit_patterns: vec![
                 "you've tried to log in too many times".to_string(),
                 "you're requesting too many pages".to_string(),
@@ -245,7 +236,7 @@ impl LastFmEditClient {
     ///
     /// # Returns
     ///
-    /// Returns a [`ClientSession`] that can be serialized and saved.
+    /// Returns a [`LastFmEditSession`] that can be serialized and saved.
     ///
     /// # Examples
     ///
@@ -265,15 +256,10 @@ impl LastFmEditClient {
     /// }
     /// ```
     pub fn get_session(&self) -> LastFmEditSession {
-        LastFmEditSession::new(
-            self.username.clone(),
-            self.session_cookies.clone(),
-            self.csrf_token.clone(),
-            self.base_url.clone(),
-        )
+        self.session.clone()
     }
 
-    /// Restore session state from a previously saved [`ClientSession`].
+    /// Restore session state from a previously saved [`LastFmEditSession`].
     ///
     /// This allows you to restore authentication state without logging in again.
     ///
@@ -284,14 +270,14 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, ClientSession};
+    /// use lastfm_edit::{LastFmEditClient, LastFmEditSession};
     ///
     /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     ///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     ///
     ///     // Restore from saved session
     ///     let session_json = std::fs::read_to_string("session.json")?;
-    ///     let session = ClientSession::from_json(&session_json)?;
+    ///     let session = LastFmEditSession::from_json(&session_json)?;
     ///     client.restore_session(session);
     ///
     ///     assert!(client.is_logged_in());
@@ -299,10 +285,7 @@ impl LastFmEditClient {
     /// }
     /// ```
     pub fn restore_session(&mut self, session: LastFmEditSession) {
-        self.username = session.username;
-        self.csrf_token = session.csrf_token;
-        self.base_url = session.base_url;
-        self.session_cookies = session.session_cookies;
+        self.session = session;
     }
 
     /// Authenticate with Last.fm using username and password.
@@ -335,7 +318,7 @@ impl LastFmEditClient {
     /// ```
     pub async fn login(&mut self, username: &str, password: &str) -> Result<()> {
         // Get login page to extract CSRF token
-        let login_url = format!("{}/login", self.base_url);
+        let login_url = format!("{}/login", self.session.base_url);
         let mut response = self.get(&login_url).await?;
 
         // Extract any initial cookies from the login page
@@ -362,7 +345,7 @@ impl LastFmEditClient {
 
         let mut request = Request::new(Method::Post, login_url.parse::<Url>().unwrap());
         let _ = request.insert_header("Referer", &login_url);
-        let _ = request.insert_header("Origin", &self.base_url);
+        let _ = request.insert_header("Origin", &self.session.base_url);
         let _ = request.insert_header("Content-Type", "application/x-www-form-urlencoded");
         let _ = request.insert_header(
             "User-Agent",
@@ -389,8 +372,8 @@ impl LastFmEditClient {
         let _ = request.insert_header("Sec-Fetch-User", "?1");
 
         // Add any cookies we already have
-        if !self.session_cookies.is_empty() {
-            let cookie_header = self.session_cookies.join("; ");
+        if !self.session.cookies.is_empty() {
+            let cookie_header = self.session.cookies.join("; ");
             let _ = request.insert_header("Cookie", &cookie_header);
         }
 
@@ -436,14 +419,15 @@ impl LastFmEditClient {
 
         // Check if we got a new sessionid that looks like a real Last.fm session
         let has_real_session = self
-            .session_cookies
+            .session
+            .cookies
             .iter()
             .any(|cookie| cookie.starts_with("sessionid=.") && cookie.len() > 50);
 
         if has_real_session && (response.status() == 302 || response.status() == 200) {
             // We got a real session ID, login was successful
-            self.username = username.to_string();
-            self.csrf_token = Some(csrf_token);
+            self.session.username = username.to_string();
+            self.session.csrf_token = Some(csrf_token);
             log::debug!("Login successful - authenticated session established");
             return Ok(());
         }
@@ -458,8 +442,8 @@ impl LastFmEditClient {
         let has_login_form = self.check_for_login_form(&response_html);
 
         if !has_login_form && response.status() == 200 {
-            self.username = username.to_string();
-            self.csrf_token = Some(csrf_token);
+            self.session.username = username.to_string();
+            self.session.csrf_token = Some(csrf_token);
             Ok(())
         } else {
             // Parse error messages synchronously
@@ -472,14 +456,14 @@ impl LastFmEditClient {
     ///
     /// Returns an empty string if not logged in.
     pub fn username(&self) -> &str {
-        &self.username
+        &self.session.username
     }
 
     /// Check if the client is currently authenticated.
     ///
     /// Returns `true` if [`login`](Self::login) was successful and session is active.
     pub fn is_logged_in(&self) -> bool {
-        !self.username.is_empty() && self.csrf_token.is_some()
+        self.session.is_valid()
     }
 
     /// Create an iterator for browsing an artist's tracks from the user's library.
@@ -525,7 +509,7 @@ impl LastFmEditClient {
     pub async fn get_recent_scrobbles(&mut self, page: u32) -> Result<Vec<Track>> {
         let url = format!(
             "{}/user/{}/library?page={}",
-            self.base_url, self.username, page
+            self.session.base_url, self.session.username, page
         );
 
         log::debug!("Fetching recent scrobbles page {page}");
@@ -622,7 +606,7 @@ impl LastFmEditClient {
 
         let edit_url = format!(
             "{}/user/{}/library/edit?edited-variation=library-track-scrobble",
-            self.base_url, self.username
+            self.session.base_url, self.session.username
         );
 
         log::debug!("Getting fresh CSRF token for edit");
@@ -670,7 +654,7 @@ impl LastFmEditClient {
             edit.track_name_original,
             edit.track_name
         );
-        log::trace!("Session cookies count: {}", self.session_cookies.len());
+        log::trace!("Session cookies count: {}", self.session.cookies.len());
 
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
 
@@ -695,15 +679,18 @@ impl LastFmEditClient {
         let _ = request.insert_header("sec-ch-ua-platform", "\"Linux\"");
 
         // Add session cookies
-        if !self.session_cookies.is_empty() {
-            let cookie_header = self.session_cookies.join("; ");
+        if !self.session.cookies.is_empty() {
+            let cookie_header = self.session.cookies.join("; ");
             let _ = request.insert_header("Cookie", &cookie_header);
         }
 
         // Add referer header - use the current artist being edited
         let _ = request.insert_header(
             "Referer",
-            format!("{}/user/{}/library", self.base_url, self.username),
+            format!(
+                "{}/user/{}/library",
+                self.session.base_url, self.session.username
+            ),
         );
 
         // Convert form data to URL-encoded string
@@ -852,8 +839,8 @@ impl LastFmEditClient {
         // Use the correct URL format with underscore: artist/_/track
         let track_url = format!(
             "{}/user/{}/library/music/+noredirect/{}/_/{}",
-            self.base_url,
-            self.username,
+            self.session.base_url,
+            self.session.username,
             urlencoding::encode(artist_name),
             urlencoding::encode(track_name)
         );
@@ -965,8 +952,8 @@ impl LastFmEditClient {
         // Get the album page directly - this should contain track listings
         let album_url = format!(
             "{}/user/{}/library/music/{}/{}",
-            self.base_url,
-            self.username,
+            self.session.base_url,
+            self.session.username,
             urlencoding::encode(artist_name),
             urlencoding::encode(album_name)
         );
@@ -1416,8 +1403,8 @@ impl LastFmEditClient {
         // Use AJAX endpoint for page content
         let url = format!(
             "{}/user/{}/library/music/{}/+tracks?page={}&ajax=true",
-            self.base_url,
-            self.username,
+            self.session.base_url,
+            self.session.username,
             artist.replace(" ", "+"),
             page
         );
@@ -1610,8 +1597,8 @@ impl LastFmEditClient {
         let _ = request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
 
         // Add session cookies for all authenticated requests
-        if !self.session_cookies.is_empty() {
-            let cookie_header = self.session_cookies.join("; ");
+        if !self.session.cookies.is_empty() {
+            let cookie_header = self.session.cookies.join("; ");
             let _ = request.insert_header("Cookie", &cookie_header);
         } else if url.contains("page=") {
             log::debug!("No cookies available for paginated request!");
@@ -1666,7 +1653,7 @@ impl LastFmEditClient {
 
                     // Handle relative URLs
                     let full_redirect_url = if redirect_url_str.starts_with('/') {
-                        format!("{}{redirect_url_str}", self.base_url)
+                        format!("{}{redirect_url_str}", self.session.base_url)
                     } else if redirect_url_str.starts_with("http") {
                         redirect_url_str.to_string()
                     } else {
@@ -1705,7 +1692,7 @@ impl LastFmEditClient {
         if response.status() == 403 {
             log::debug!("Got 403 response, checking if it's a rate limit");
             // For now, treat 403s from authenticated endpoints as potential rate limits
-            if !self.session_cookies.is_empty() {
+            if !self.session.cookies.is_empty() {
                 log::debug!("403 on authenticated request - likely rate limit");
                 return Err(LastFmError::RateLimit { retry_after: 60 });
             }
@@ -1739,10 +1726,11 @@ impl LastFmEditClient {
                     let cookie_name = cookie_value.split('=').next().unwrap_or("");
 
                     // Remove any existing cookie with the same name
-                    self.session_cookies
+                    self.session
+                        .cookies
                         .retain(|existing| !existing.starts_with(&format!("{cookie_name}=")));
 
-                    self.session_cookies.push(cookie_value.to_string());
+                    self.session.cookies.push(cookie_value.to_string());
                     new_cookies += 1;
                 }
             }
@@ -1750,12 +1738,12 @@ impl LastFmEditClient {
                 log::trace!(
                     "Extracted {} new cookies, total: {}",
                     new_cookies,
-                    self.session_cookies.len()
+                    self.session.cookies.len()
                 );
-                log::trace!("Updated cookies: {:?}", &self.session_cookies);
+                log::trace!("Updated cookies: {:?}", &self.session.cookies);
 
                 // Check if sessionid changed
-                for cookie in &self.session_cookies {
+                for cookie in &self.session.cookies {
                     if cookie.starts_with("sessionid=") {
                         log::trace!("Current sessionid: {}", &cookie[10..50.min(cookie.len())]);
                         break;
@@ -1796,8 +1784,8 @@ impl LastFmEditClient {
         }
 
         // Extract the path part of the URL (after base_url)
-        let url_path = if url.starts_with(&self.base_url) {
-            &url[self.base_url.len()..]
+        let url_path = if url.starts_with(&self.session.base_url) {
+            &url[self.session.base_url.len()..]
         } else {
             url
         };
@@ -1825,8 +1813,8 @@ impl LastFmEditClient {
         // Use AJAX endpoint for page content
         let url = format!(
             "{}/user/{}/library/music/{}/+albums?page={}&ajax=true",
-            self.base_url,
-            self.username,
+            self.session.base_url,
+            self.session.username,
             artist.replace(" ", "+"),
             page
         );

@@ -9,7 +9,7 @@ pub struct LastFmEditSession {
     /// The authenticated username
     pub username: String,
     /// Session cookies required for authenticated requests
-    pub session_cookies: Vec<String>,
+    pub cookies: Vec<String>,
     /// CSRF token for form submissions
     pub csrf_token: Option<String>,
     /// Base URL for the Last.fm instance
@@ -26,7 +26,7 @@ impl LastFmEditSession {
     ) -> Self {
         Self {
             username,
-            session_cookies,
+            cookies: session_cookies,
             csrf_token,
             base_url,
         }
@@ -38,10 +38,10 @@ impl LastFmEditSession {
     /// is still active on the server.
     pub fn is_valid(&self) -> bool {
         !self.username.is_empty()
-            && !self.session_cookies.is_empty()
+            && !self.cookies.is_empty()
             && self.csrf_token.is_some()
             && self
-                .session_cookies
+                .cookies
                 .iter()
                 .any(|cookie| cookie.starts_with("sessionid=") && cookie.len() > 50)
     }
@@ -96,7 +96,7 @@ mod tests {
         let restored_session = LastFmEditSession::from_json(&json).unwrap();
 
         assert_eq!(session.username, restored_session.username);
-        assert_eq!(session.session_cookies, restored_session.session_cookies);
+        assert_eq!(session.cookies, restored_session.cookies);
         assert_eq!(session.csrf_token, restored_session.csrf_token);
         assert_eq!(session.base_url, restored_session.base_url);
     }
