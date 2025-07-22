@@ -7,7 +7,7 @@ license = "MIT"
 
 [dependencies]
 # Core dependencies
-http-client = { version = "6.6.2", package = "http-client-2", features = ["curl_client"] }
+http-client = { version = "^6.6.3", package = "http-client-2", default-features = false }
 http-types = { version = "^3.1.0", package = "http-types-2" }
 scraper = { version = "0.23.1" }
 chrono = { version = "0.4", features = ["serde"] }
