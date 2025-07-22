@@ -65,10 +65,7 @@ mod tests {
     fn test_session_validity() {
         let valid_session = ClientSession::new(
             "testuser".to_string(),
-            vec![
-                "sessionid=.eJy1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                    .to_string(),
-            ],
+            vec!["sessionid=.eJy1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".to_string()],
             Some("csrf_token_123".to_string()),
             "https://www.last.fm".to_string(),
         );
