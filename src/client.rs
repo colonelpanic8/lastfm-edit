@@ -37,7 +37,7 @@ use std::path::Path;
 /// }
 /// ```
 pub struct LastFmEditClient {
-    client: Box<dyn HttpClient>,
+    client: Box<dyn HttpClient + Send + Sync>,
     username: String,
     csrf_token: Option<String>,
     base_url: String,
@@ -66,7 +66,7 @@ impl LastFmEditClient {
     /// let mut client = LastFmEditClient::new(Box::new(http_client));
     /// client.login("username", "password").await?;
     /// ```
-    pub fn new(client: Box<dyn HttpClient>) -> Self {
+    pub fn new(client: Box<dyn HttpClient + Send + Sync>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
     }
 
@@ -81,7 +81,7 @@ impl LastFmEditClient {
     ///
     /// * `client` - Any HTTP client implementation
     /// * `base_url` - The base URL for Last.fm (e.g., "https://www.last.fm")
-    pub fn with_base_url(client: Box<dyn HttpClient>, base_url: String) -> Self {
+    pub fn with_base_url(client: Box<dyn HttpClient + Send + Sync>, base_url: String) -> Self {
         Self::with_rate_limit_patterns(
             client,
             base_url,
@@ -114,7 +114,7 @@ impl LastFmEditClient {
     /// * `base_url` - The base URL for Last.fm
     /// * `rate_limit_patterns` - Text patterns that indicate rate limiting in responses
     pub fn with_rate_limit_patterns(
-        client: Box<dyn HttpClient>,
+        client: Box<dyn HttpClient + Send + Sync>,
         base_url: String,
         rate_limit_patterns: Vec<String>,
     ) -> Self {
@@ -157,7 +157,7 @@ impl LastFmEditClient {
     /// assert!(client.is_logged_in());
     /// ```
     pub async fn login_with_credentials(
-        client: Box<dyn HttpClient>,
+        client: Box<dyn HttpClient + Send + Sync>,
         username: &str,
         password: &str,
     ) -> Result<Self> {
@@ -194,7 +194,7 @@ impl LastFmEditClient {
     /// );
     /// assert!(client.is_logged_in());
     /// ```
-    pub fn from_session(client: Box<dyn HttpClient>, session: ClientSession) -> Self {
+    pub fn from_session(client: Box<dyn HttpClient + Send + Sync>, session: ClientSession) -> Self {
         Self {
             client,
             username: session.username,
