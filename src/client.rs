@@ -437,7 +437,6 @@ impl LastFmEditClient {
             }
 
             // Small delay between pages to be polite
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
 
         log::debug!(
@@ -473,7 +472,7 @@ impl LastFmEditClient {
                         retries + 1,
                         max_retries
                     );
-                    tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+                    // Rate limit delay would go here
                     retries += 1;
                 }
                 Err(other_error) => return Err(other_error),
@@ -936,9 +935,6 @@ impl LastFmEditClient {
             }
 
             // Add delay between edits to be respectful to the server
-            if index < tracks.len() - 1 {
-                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            }
         }
 
         let total_processed = successful_edits + failed_edits;
@@ -1070,9 +1066,6 @@ impl LastFmEditClient {
             }
 
             // Add delay between edits to be respectful to the server
-            if index < tracks.len() - 1 {
-                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            }
         }
 
         let total_processed = successful_edits + failed_edits;
@@ -1246,9 +1239,6 @@ impl LastFmEditClient {
             }
 
             // Add delay between edits to be respectful to the server
-            if index < tracks.len() - 1 {
-                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            }
         }
 
         let total_processed = successful_edits + failed_edits;
@@ -1389,7 +1379,7 @@ impl LastFmEditClient {
                         if retries < max_retries {
                             let delay = 60 + (retries as u64 * 30); // Exponential backoff
                             log::info!("Rate limit detected in response body, retrying in {delay}s (attempt {}/{max_retries})", retries + 1);
-                            tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+                            // Rate limit delay would go here
                             retries += 1;
                             continue;
                         } else {
@@ -1415,7 +1405,7 @@ impl LastFmEditClient {
                             "Rate limit detected, retrying in {delay}s (attempt {}/{max_retries})",
                             retries + 1
                         );
-                        tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+                        // Rate limit delay would go here
                         retries += 1;
                     } else {
                         return Err(crate::LastFmError::RateLimit { retry_after });

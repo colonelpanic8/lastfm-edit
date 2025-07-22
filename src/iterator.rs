@@ -184,11 +184,6 @@ impl<'a> ArtistTracksIterator<'a> {
             return Ok(None);
         }
 
-        // Add a small delay for paginated requests to be polite to the server
-        if self.current_page > 1 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        }
-
         let page = self
             .client
             .get_artist_tracks_page(&self.artist, self.current_page)
@@ -283,11 +278,6 @@ impl<'a> ArtistAlbumsIterator<'a> {
             return Ok(None);
         }
 
-        // Add a small delay for paginated requests to be polite to the server
-        if self.current_page > 1 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        }
-
         let page = self
             .client
             .get_artist_albums_page(&self.artist, self.current_page)
@@ -353,11 +343,6 @@ impl<'a> AsyncPaginatedIterator for RecentTracksIterator<'a> {
         if self.buffer.is_empty() {
             if !self.has_more {
                 return Ok(None);
-            }
-
-            // Add a small delay for paginated requests to be polite to the server
-            if self.current_page > 1 {
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             }
 
             let tracks = self.client.get_recent_scrobbles(self.current_page).await?;
