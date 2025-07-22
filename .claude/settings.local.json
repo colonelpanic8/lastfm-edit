@@ -49,7 +49,9 @@
       "Bash(just clippy:*)",
       "Bash(just:*)",
       "WebFetch(domain:crates.io)",
-      "Bash(git tag:*)"
+      "Bash(git tag:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rebase:*)"
     ],
     "deny": []
   }
