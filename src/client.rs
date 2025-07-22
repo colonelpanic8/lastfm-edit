@@ -60,11 +60,15 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::LastFmEditClient;
+    /// use lastfm_edit::{LastFmEditClient, Result};
     ///
-    /// let http_client = http_client::native::NativeClient::new();
-    /// let mut client = LastFmEditClient::new(Box::new(http_client));
-    /// client.login("username", "password").await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let http_client = http_client::native::NativeClient::new();
+    ///     let mut client = LastFmEditClient::new(Box::new(http_client));
+    ///     client.login("username", "password").await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn new(client: Box<dyn HttpClient + Send + Sync>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
@@ -147,14 +151,18 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::LastFmEditClient;
+    /// use lastfm_edit::{LastFmEditClient, Result};
     ///
-    /// let client = LastFmEditClient::login(
-    ///     Box::new(http_client::native::NativeClient::new()),
-    ///     "username",
-    ///     "password"
-    /// ).await?;
-    /// assert!(client.is_logged_in());
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let client = LastFmEditClient::login_with_credentials(
+    ///         Box::new(http_client::native::NativeClient::new()),
+    ///         "username",
+    ///         "password"
+    ///     ).await?;
+    ///     assert!(client.is_logged_in());
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn login_with_credentials(
         client: Box<dyn HttpClient + Send + Sync>,
@@ -184,15 +192,18 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// use lastfm_edit::{LastFmEditClient, ClientSession};
     ///
-    /// // Assume we have a saved session
-    /// let session_json = std::fs::read_to_string("session.json")?;
-    /// let session = ClientSession::from_json(&session_json)?;
+    /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    ///     // Assume we have a saved session
+    ///     let session_json = std::fs::read_to_string("session.json")?;
+    ///     let session = ClientSession::from_json(&session_json)?;
     ///
-    /// let client = LastFmEditClient::from_session(
-    ///     Box::new(http_client::native::NativeClient::new()),
-    ///     session
-    /// );
-    /// assert!(client.is_logged_in());
+    ///     let client = LastFmEditClient::from_session(
+    ///         Box::new(http_client::native::NativeClient::new()),
+    ///         session
+    ///     );
+    ///     assert!(client.is_logged_in());
+    ///     Ok(())
+    /// }
     /// ```
     pub fn from_session(client: Box<dyn HttpClient + Send + Sync>, session: ClientSession) -> Self {
         Self {
@@ -236,15 +247,19 @@ impl LastFmEditClient {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::LastFmEditClient;
+    /// use lastfm_edit::{LastFmEditClient, Result};
     ///
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
-    /// client.login("username", "password").await?;
+    /// #[tokio::main]
+    /// async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    ///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    ///     client.login("username", "password").await?;
     ///
-    /// // Save session for later use
-    /// let session = client.get_session();
-    /// let session_json = session.to_json()?;
-    /// std::fs::write("session.json", session_json)?;
+    ///     // Save session for later use
+    ///     let session = client.get_session();
+    ///     let session_json = session.to_json()?;
+    ///     std::fs::write("session.json", session_json)?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn get_session(&self) -> ClientSession {
         ClientSession::new(
@@ -268,14 +283,17 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// use lastfm_edit::{LastFmEditClient, ClientSession};
     ///
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    ///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     ///
-    /// // Restore from saved session
-    /// let session_json = std::fs::read_to_string("session.json")?;
-    /// let session = ClientSession::from_json(&session_json)?;
-    /// client.restore_session(session);
+    ///     // Restore from saved session
+    ///     let session_json = std::fs::read_to_string("session.json")?;
+    ///     let session = ClientSession::from_json(&session_json)?;
+    ///     client.restore_session(session);
     ///
-    /// assert!(client.is_logged_in());
+    ///     assert!(client.is_logged_in());
+    ///     Ok(())
+    /// }
     /// ```
     pub fn restore_session(&mut self, session: ClientSession) {
         self.username = session.username;
