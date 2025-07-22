@@ -1,4 +1,5 @@
 use crate::parsing::LastFmParser;
+use crate::session::ClientSession;
 use crate::{
     AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, EditResponse,
     LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
@@ -49,6 +50,9 @@ pub struct LastFmEditClient {
 impl LastFmEditClient {
     /// Create a new [`LastFmEditClient`] with the default Last.fm URL.
     ///
+    /// **Note:** This creates an unauthenticated client. You must call [`login`](Self::login)
+    /// or [`restore_session`](Self::restore_session) before using most functionality.
+    ///
     /// # Arguments
     ///
     /// * `client` - Any HTTP client implementation that implements [`HttpClient`]
@@ -59,13 +63,17 @@ impl LastFmEditClient {
     /// use lastfm_edit::LastFmEditClient;
     ///
     /// let http_client = http_client::native::NativeClient::new();
-    /// let client = LastFmEditClient::new(Box::new(http_client));
+    /// let mut client = LastFmEditClient::new(Box::new(http_client));
+    /// client.login("username", "password").await?;
     /// ```
     pub fn new(client: Box<dyn HttpClient>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
     }
 
     /// Create a new [`LastFmEditClient`] with a custom base URL.
+    ///
+    /// **Note:** This creates an unauthenticated client. You must call [`login`](Self::login)
+    /// or [`restore_session`](Self::restore_session) before using most functionality.
     ///
     /// This is useful for testing or if Last.fm changes their domain.
     ///
@@ -120,6 +128,160 @@ impl LastFmEditClient {
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
         }
+    }
+
+    /// Create a new authenticated [`LastFmEditClient`] by logging in with username and password.
+    ///
+    /// This is a convenience method that combines client creation and login into one step.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `username` - Last.fm username or email
+    /// * `password` - Last.fm password
+    ///
+    /// # Returns
+    ///
+    /// Returns an authenticated client on success, or [`LastFmError::Auth`] on failure.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::LastFmEditClient;
+    ///
+    /// let client = LastFmEditClient::login(
+    ///     Box::new(http_client::native::NativeClient::new()),
+    ///     "username",
+    ///     "password"
+    /// ).await?;
+    /// assert!(client.is_logged_in());
+    /// ```
+    pub async fn login_with_credentials(
+        client: Box<dyn HttpClient>,
+        username: &str,
+        password: &str,
+    ) -> Result<Self> {
+        let mut new_client = Self::new(client);
+        new_client.login(username, password).await?;
+        Ok(new_client)
+    }
+
+    /// Create a new [`LastFmEditClient`] by restoring a previously saved session.
+    ///
+    /// This allows you to resume a Last.fm session without requiring the user to log in again.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `session` - Previously saved [`ClientSession`]
+    ///
+    /// # Returns
+    ///
+    /// Returns a client with the restored session.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClient, ClientSession};
+    ///
+    /// // Assume we have a saved session
+    /// let session_json = std::fs::read_to_string("session.json")?;
+    /// let session = ClientSession::from_json(&session_json)?;
+    ///
+    /// let client = LastFmEditClient::from_session(
+    ///     Box::new(http_client::native::NativeClient::new()),
+    ///     session
+    /// );
+    /// assert!(client.is_logged_in());
+    /// ```
+    pub fn from_session(client: Box<dyn HttpClient>, session: ClientSession) -> Self {
+        Self {
+            client,
+            username: session.username,
+            csrf_token: session.csrf_token,
+            base_url: session.base_url,
+            session_cookies: session.session_cookies,
+            rate_limit_patterns: vec![
+                "you've tried to log in too many times".to_string(),
+                "you're requesting too many pages".to_string(),
+                "slow down".to_string(),
+                "too fast".to_string(),
+                "rate limit".to_string(),
+                "throttled".to_string(),
+                "temporarily blocked".to_string(),
+                "temporarily restricted".to_string(),
+                "captcha".to_string(),
+                "verify you're human".to_string(),
+                "prove you're not a robot".to_string(),
+                "security check".to_string(),
+                "service temporarily unavailable".to_string(),
+                "quota exceeded".to_string(),
+                "limit exceeded".to_string(),
+                "daily limit".to_string(),
+            ],
+            debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
+            parser: LastFmParser::new(),
+        }
+    }
+
+    /// Extract the current session state for persistence.
+    ///
+    /// This allows you to save the authentication state and restore it later
+    /// without requiring the user to log in again.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`ClientSession`] that can be serialized and saved.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::LastFmEditClient;
+    ///
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// client.login("username", "password").await?;
+    ///
+    /// // Save session for later use
+    /// let session = client.get_session();
+    /// let session_json = session.to_json()?;
+    /// std::fs::write("session.json", session_json)?;
+    /// ```
+    pub fn get_session(&self) -> ClientSession {
+        ClientSession::new(
+            self.username.clone(),
+            self.session_cookies.clone(),
+            self.csrf_token.clone(),
+            self.base_url.clone(),
+        )
+    }
+
+    /// Restore session state from a previously saved [`ClientSession`].
+    ///
+    /// This allows you to restore authentication state without logging in again.
+    ///
+    /// # Arguments
+    ///
+    /// * `session` - Previously saved session state
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClient, ClientSession};
+    ///
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    ///
+    /// // Restore from saved session
+    /// let session_json = std::fs::read_to_string("session.json")?;
+    /// let session = ClientSession::from_json(&session_json)?;
+    /// client.restore_session(session);
+    ///
+    /// assert!(client.is_logged_in());
+    /// ```
+    pub fn restore_session(&mut self, session: ClientSession) {
+        self.username = session.username;
+        self.csrf_token = session.csrf_token;
+        self.base_url = session.base_url;
+        self.session_cookies = session.session_cookies;
     }
 
     /// Authenticate with Last.fm using username and password.

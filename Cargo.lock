@@ -1411,6 +1411,8 @@ dependencies = [
  "ratatui",
  "regex",
  "scraper",
+ "serde",
+ "serde_json",
  "thiserror",
  "time",
  "tokio",

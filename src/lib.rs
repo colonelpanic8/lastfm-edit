@@ -149,6 +149,7 @@ pub mod edit;
 pub mod error;
 pub mod iterator;
 pub mod parsing;
+pub mod session;
 pub mod track;
 
 pub use album::{Album, AlbumPage};
@@ -158,6 +159,7 @@ pub use error::LastFmError;
 pub use iterator::{
     ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, RecentTracksIterator,
 };
+pub use session::ClientSession;
 pub use track::{Track, TrackPage};
 
 // Re-export scraper types for testing
