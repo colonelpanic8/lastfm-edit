@@ -22,13 +22,11 @@ serde_json = "1.0"
 
 # Optional dependencies for CLI features
 tokio = { version = "1.0", features = ["full"], optional = true }
-ratatui = { version = "0.28", optional = true }
-crossterm = { version = "0.28", optional = true }
 env_logger = { version = "0.11", optional = true }
 
 [features]
 default = ["cli", "curl"]
-cli = ["tokio", "ratatui", "crossterm", "env_logger"]
+cli = ["tokio", "env_logger"]
 wasm = ["http-client/wasm_client"]
 curl = ["http-client/curl_client"]
 
@@ -55,9 +53,6 @@ path = "examples/rename_album.rs"
 name = "clean_artist_tracks"
 path = "examples/clean_artist_tracks.rs"
 
-[[example]]
-name = "tui"
-path = "examples/tui.rs"
 
 [[example]]
 name = "remove_remaster"
