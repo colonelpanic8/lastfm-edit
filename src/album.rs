@@ -104,8 +104,9 @@ impl Album {
     ///     println!("Last played: {}", datetime.format("%Y-%m-%d %H:%M:%S UTC"));
     /// }
     /// ```
+    #[must_use]
     pub fn scrobbled_at(&self) -> Option<DateTime<Utc>> {
         self.timestamp
-            .and_then(|ts| DateTime::from_timestamp(ts as i64, 0))
+            .and_then(|ts| DateTime::from_timestamp(i64::try_from(ts).ok()?, 0))
     }
 }

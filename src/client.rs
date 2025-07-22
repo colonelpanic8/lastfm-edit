@@ -62,9 +62,13 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// use lastfm_edit::LastFmEditClient;
     ///
-    /// let http_client = http_client::native::NativeClient::new();
-    /// let mut client = LastFmEditClient::new(Box::new(http_client));
-    /// client.login("username", "password").await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let http_client = http_client::native::NativeClient::new();
+    ///     let mut client = LastFmEditClient::new(Box::new(http_client));
+    ///     client.login("username", "password").await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn new(client: Box<dyn HttpClient + Send + Sync>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
@@ -80,7 +84,7 @@ impl LastFmEditClient {
     /// # Arguments
     ///
     /// * `client` - Any HTTP client implementation
-    /// * `base_url` - The base URL for Last.fm (e.g., "https://www.last.fm")
+    /// * `base_url` - The base URL for Last.fm (e.g., <https://www.last.fm>)
     pub fn with_base_url(client: Box<dyn HttpClient + Send + Sync>, base_url: String) -> Self {
         Self::with_rate_limit_patterns(
             client,
@@ -149,12 +153,16 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// use lastfm_edit::LastFmEditClient;
     ///
-    /// let client = LastFmEditClient::login(
-    ///     Box::new(http_client::native::NativeClient::new()),
-    ///     "username",
-    ///     "password"
-    /// ).await?;
-    /// assert!(client.is_logged_in());
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = LastFmEditClient::login_with_credentials(
+    ///         Box::new(http_client::native::NativeClient::new()),
+    ///         "username",
+    ///         "password"
+    ///     ).await?;
+    ///     assert!(client.is_logged_in());
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn login_with_credentials(
         client: Box<dyn HttpClient + Send + Sync>,
@@ -184,15 +192,18 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// use lastfm_edit::{LastFmEditClient, ClientSession};
     ///
-    /// // Assume we have a saved session
-    /// let session_json = std::fs::read_to_string("session.json")?;
-    /// let session = ClientSession::from_json(&session_json)?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     // Assume we have a saved session
+    ///     let session_json = std::fs::read_to_string("session.json")?;
+    ///     let session = ClientSession::from_json(&session_json)?;
     ///
-    /// let client = LastFmEditClient::from_session(
-    ///     Box::new(http_client::native::NativeClient::new()),
-    ///     session
-    /// );
-    /// assert!(client.is_logged_in());
+    ///     let client = LastFmEditClient::from_session(
+    ///         Box::new(http_client::native::NativeClient::new()),
+    ///         session
+    ///     );
+    ///     assert!(client.is_logged_in());
+    ///     Ok(())
+    /// }
     /// ```
     pub fn from_session(client: Box<dyn HttpClient + Send + Sync>, session: ClientSession) -> Self {
         Self {
@@ -238,13 +249,17 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// use lastfm_edit::LastFmEditClient;
     ///
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
-    /// client.login("username", "password").await?;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    ///     client.login("username", "password").await?;
     ///
-    /// // Save session for later use
-    /// let session = client.get_session();
-    /// let session_json = session.to_json()?;
-    /// std::fs::write("session.json", session_json)?;
+    ///     // Save session for later use
+    ///     let session = client.get_session();
+    ///     let session_json = session.to_json()?;
+    ///     std::fs::write("session.json", session_json)?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn get_session(&self) -> ClientSession {
         ClientSession::new(
@@ -268,14 +283,17 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// use lastfm_edit::{LastFmEditClient, ClientSession};
     ///
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
     ///
-    /// // Restore from saved session
-    /// let session_json = std::fs::read_to_string("session.json")?;
-    /// let session = ClientSession::from_json(&session_json)?;
-    /// client.restore_session(session);
+    ///     // Restore from saved session
+    ///     let session_json = std::fs::read_to_string("session.json")?;
+    ///     let session = ClientSession::from_json(&session_json)?;
+    ///     client.restore_session(session);
     ///
-    /// assert!(client.is_logged_in());
+    ///     assert!(client.is_logged_in());
+    ///     Ok(())
+    /// }
     /// ```
     pub fn restore_session(&mut self, session: ClientSession) {
         self.username = session.username;
@@ -324,9 +342,9 @@ impl LastFmEditClient {
             .body_string()
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
-        let document = Html::parse_document(&html);
 
-        let csrf_token = self.extract_csrf_token(&document)?;
+        // Parse HTML synchronously to avoid holding parser state across await boundaries
+        let (csrf_token, next_field) = self.extract_login_form_data(&html)?;
 
         // Submit login form
         let mut form_data = HashMap::new();
@@ -334,12 +352,9 @@ impl LastFmEditClient {
         form_data.insert("username_or_email", username);
         form_data.insert("password", password);
 
-        // Check if there's a 'next' field in the form
-        let next_selector = Selector::parse("input[name=\"next\"]").unwrap();
-        if let Some(next_input) = document.select(&next_selector).next() {
-            if let Some(next_value) = next_input.value().attr("value") {
-                form_data.insert("next", next_value);
-            }
+        // Add 'next' field if present
+        if let Some(ref next_value) = next_field {
+            form_data.insert("next", next_value);
         }
 
         let mut request = Request::new(Method::Post, login_url.parse::<Url>().unwrap());
@@ -408,39 +423,12 @@ impl LastFmEditClient {
             if self.is_rate_limit_response(&response_html) {
                 log::debug!("403 response appears to be rate limiting");
                 return Err(LastFmError::RateLimit { retry_after: 60 });
-            } else {
-                log::debug!("403 response appears to be authentication failure");
-
-                // Continue with the normal auth failure handling using the response_html
-                let success_doc = Html::parse_document(&response_html);
-                let login_form_selector =
-                    Selector::parse("form[action*=\"login\"], input[name=\"username_or_email\"]")
-                        .unwrap();
-                let has_login_form = success_doc.select(&login_form_selector).next().is_some();
-
-                if !has_login_form {
-                    return Err(LastFmError::Auth(
-                        "Login failed - 403 Forbidden. Check credentials.".to_string(),
-                    ));
-                } else {
-                    // Parse for specific error messages
-                    let error_selector =
-                        Selector::parse(".alert-danger, .form-error, .error-message").unwrap();
-                    let mut error_messages = Vec::new();
-                    for error in success_doc.select(&error_selector) {
-                        let error_text = error.text().collect::<String>().trim().to_string();
-                        if !error_text.is_empty() {
-                            error_messages.push(error_text);
-                        }
-                    }
-                    let error_msg = if error_messages.is_empty() {
-                        "Login failed - 403 Forbidden. Check credentials.".to_string()
-                    } else {
-                        format!("Login failed: {}", error_messages.join("; "))
-                    };
-                    return Err(LastFmError::Auth(error_msg));
-                }
             }
+            log::debug!("403 response appears to be authentication failure");
+
+            // Continue with the normal auth failure handling using the response_html
+            let login_error = self.parse_login_error(&response_html);
+            return Err(LastFmError::Auth(login_error));
         }
 
         // Check if we got a new sessionid that looks like a real Last.fm session
@@ -463,36 +451,16 @@ impl LastFmEditClient {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Check if we were redirected away from login page (success) by looking for login forms in response
-        let success_doc = Html::parse_document(&response_html);
-        let login_form_selector =
-            Selector::parse("form[action*=\"login\"], input[name=\"username_or_email\"]").unwrap();
-        let has_login_form = success_doc.select(&login_form_selector).next().is_some();
+        // Check if we were redirected away from login page (success) by parsing synchronously
+        let has_login_form = self.check_for_login_form(&response_html);
 
         if !has_login_form && response.status() == 200 {
             self.username = username.to_string();
             self.csrf_token = Some(csrf_token);
             Ok(())
         } else {
-            // Parse the login page for specific error messages
-            let error_doc = success_doc;
-            let error_selector =
-                Selector::parse(".alert-danger, .form-error, .error-message").unwrap();
-
-            let mut error_messages = Vec::new();
-            for error in error_doc.select(&error_selector) {
-                let error_text = error.text().collect::<String>().trim().to_string();
-                if !error_text.is_empty() {
-                    error_messages.push(error_text);
-                }
-            }
-
-            let error_msg = if error_messages.is_empty() {
-                "Login failed - please check your credentials".to_string()
-            } else {
-                format!("Login failed: {}", error_messages.join("; "))
-            };
-
+            // Parse error messages synchronously
+            let error_msg = self.parse_login_error(&response_html);
             Err(LastFmError::Auth(error_msg))
         }
     }
@@ -657,15 +625,9 @@ impl LastFmEditClient {
         log::debug!("Getting fresh CSRF token for edit");
 
         // First request: Get the edit form to extract fresh CSRF token
-        let mut form_response = self.get(&edit_url).await?;
-        let form_html = form_response
-            .body_string()
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
+        let form_html = self.get_edit_form_html(&edit_url).await?;
 
-        log::debug!("Edit form response status: {}", form_response.status());
-
-        // Parse HTML to get fresh CSRF token
+        // Parse HTML to get fresh CSRF token - do parsing synchronously
         let form_document = Html::parse_document(&form_html);
         let fresh_csrf_token = self.extract_csrf_token(&form_document)?;
 
@@ -858,6 +820,19 @@ impl LastFmEditClient {
             success: final_success,
             message,
         })
+    }
+
+    /// Fetch raw HTML content for edit form page
+    /// This separates HTTP fetching from parsing to avoid Send/Sync issues
+    async fn get_edit_form_html(&mut self, edit_url: &str) -> Result<String> {
+        let mut form_response = self.get(edit_url).await?;
+        let form_html = form_response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!("Edit form response status: {}", form_response.status());
+        Ok(form_html)
     }
 
     /// Load prepopulated form values for editing a specific track
@@ -1520,6 +1495,52 @@ impl LastFmEditClient {
             .ok_or(LastFmError::CsrfNotFound)
     }
 
+    /// Extract login form data (CSRF token and next field) - synchronous parsing helper
+    fn extract_login_form_data(&self, html: &str) -> Result<(String, Option<String>)> {
+        let document = Html::parse_document(html);
+
+        let csrf_token = self.extract_csrf_token(&document)?;
+
+        // Check if there's a 'next' field in the form
+        let next_selector = Selector::parse("input[name=\"next\"]").unwrap();
+        let next_field = document
+            .select(&next_selector)
+            .next()
+            .and_then(|input| input.value().attr("value"))
+            .map(|s| s.to_string());
+
+        Ok((csrf_token, next_field))
+    }
+
+    /// Parse login error messages from HTML - synchronous parsing helper
+    fn parse_login_error(&self, html: &str) -> String {
+        let document = Html::parse_document(html);
+
+        let error_selector = Selector::parse(".alert-danger, .form-error, .error-message").unwrap();
+
+        let mut error_messages = Vec::new();
+        for error in document.select(&error_selector) {
+            let error_text = error.text().collect::<String>().trim().to_string();
+            if !error_text.is_empty() {
+                error_messages.push(error_text);
+            }
+        }
+
+        if error_messages.is_empty() {
+            "Login failed - please check your credentials".to_string()
+        } else {
+            format!("Login failed: {}", error_messages.join("; "))
+        }
+    }
+
+    /// Check if HTML contains a login form - synchronous parsing helper
+    fn check_for_login_form(&self, html: &str) -> bool {
+        let document = Html::parse_document(html);
+        let login_form_selector =
+            Selector::parse("form[action*=\"login\"], input[name=\"username_or_email\"]").unwrap();
+        document.select(&login_form_selector).next().is_some()
+    }
+
     /// Make an HTTP GET request with authentication and retry logic
     pub async fn get(&mut self, url: &str) -> Result<Response> {
         self.get_with_retry(url, 3).await
@@ -1544,9 +1565,8 @@ impl LastFmEditClient {
                             // Rate limit delay would go here
                             retries += 1;
                             continue;
-                        } else {
-                            return Err(crate::LastFmError::RateLimit { retry_after: 60 });
                         }
+                        return Err(crate::LastFmError::RateLimit { retry_after: 60 });
                     }
 
                     // Recreate response with the body we extracted

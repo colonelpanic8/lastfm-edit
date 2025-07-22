@@ -153,7 +153,7 @@ impl LastFmParser {
         None
     }
 
-    /// Parse a tracks page into a TrackPage structure
+    /// Parse a tracks page into a `TrackPage` structure
     pub fn parse_tracks_page(
         &self,
         document: &Html,
@@ -294,7 +294,7 @@ impl LastFmParser {
         })
     }
 
-    /// Parse albums page into AlbumPage structure
+    /// Parse albums page into `AlbumPage` structure
     pub fn parse_albums_page(
         &self,
         document: &Html,
