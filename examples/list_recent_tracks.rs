@@ -8,17 +8,24 @@ use std::env;
 async fn main() -> Result<()> {
     let client = common::setup_client().await?;
 
-    // Parse command line argument for number of tracks (default 20)
-    let num_tracks: usize = env::args()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(20);
+    // Parse command line arguments
+    let args: Vec<String> = env::args().collect();
+    let num_tracks: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(20);
+    let starting_page: Option<u32> = args.get(2).and_then(|s| s.parse().ok());
 
-    println!("Fetching {num_tracks} recent tracks...");
+    if let Some(page) = starting_page {
+        println!("Fetching {num_tracks} recent tracks starting from page {page}...");
+    } else {
+        println!("Fetching {num_tracks} recent tracks...");
+    }
     println!();
 
-    // Get iterator for recent tracks
-    let mut recent_tracks = client.recent_tracks();
+    // Get iterator for recent tracks - optionally starting from a specific page
+    let mut recent_tracks = if let Some(page) = starting_page {
+        client.recent_tracks_from_page(page)
+    } else {
+        client.recent_tracks()
+    };
 
     // Fetch and print tracks one by one
     let mut count = 0;
@@ -62,6 +69,17 @@ async fn main() -> Result<()> {
 
     println!();
     println!("Fetched {count} tracks total.");
+
+    if starting_page.is_none() {
+        println!();
+        println!("Usage: cargo run --example list_recent_tracks [num_tracks] [starting_page]");
+        println!("  num_tracks    - Number of tracks to fetch (default: 20)");
+        println!("  starting_page - Page number to start from (default: 1)");
+        println!();
+        println!("Examples:");
+        println!("  cargo run --example list_recent_tracks 50     # Fetch 50 tracks from page 1");
+        println!("  cargo run --example list_recent_tracks 20 5   # Fetch 20 tracks starting from page 5");
+    }
 
     Ok(())
 }

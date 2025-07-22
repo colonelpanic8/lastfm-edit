@@ -527,6 +527,37 @@ impl LastFmEditClient {
         RecentTracksIterator::new(self)
     }
 
+    /// Create an iterator for recent tracks starting from a specific page.
+    ///
+    /// This allows resuming pagination from an arbitrary page, useful for
+    /// continuing from where a previous iteration left off.
+    ///
+    /// # Arguments
+    ///
+    /// * `starting_page` - The page number to start from (1-indexed, minimum 1)
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`RecentTracksIterator`] that implements [`AsyncPaginatedIterator`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
+    /// # tokio_test::block_on(async {
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// // client.login(...).await?;
+    ///
+    /// // Resume from page 10
+    /// let mut recent = client.recent_tracks_from_page(10);
+    /// let tracks = recent.take(50).await?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # });
+    /// ```
+    pub fn recent_tracks_from_page<'a>(&'a self, starting_page: u32) -> RecentTracksIterator<'a> {
+        RecentTracksIterator::with_starting_page(self, starting_page)
+    }
+
     /// Fetch recent scrobbles from the user's listening history
     /// This gives us real scrobble data with timestamps for editing
     pub async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>> {

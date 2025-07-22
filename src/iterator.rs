@@ -382,13 +382,41 @@ impl<'a> AsyncPaginatedIterator for RecentTracksIterator<'a> {
 }
 
 impl<'a> RecentTracksIterator<'a> {
-    /// Create a new recent tracks iterator.
+    /// Create a new recent tracks iterator starting from page 1.
     ///
     /// This is typically called via [`LastFmEditClient::recent_tracks`](crate::LastFmEditClient::recent_tracks).
     pub fn new(client: &'a LastFmEditClient) -> Self {
+        Self::with_starting_page(client, 1)
+    }
+
+    /// Create a new recent tracks iterator starting from a specific page.
+    ///
+    /// This allows resuming pagination from an arbitrary page, useful for
+    /// continuing from where a previous iteration left off.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - The LastFmEditClient to use for API calls
+    /// * `starting_page` - The page number to start from (1-indexed)
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
+    /// # tokio_test::block_on(async {
+    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    ///
+    /// // Start from page 5
+    /// let mut recent = client.recent_tracks_from_page(5);
+    /// let tracks = recent.take(10).await?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// # });
+    /// ```
+    pub fn with_starting_page(client: &'a LastFmEditClient, starting_page: u32) -> Self {
+        let page = std::cmp::max(1, starting_page);
         Self {
             client,
-            current_page: 1,
+            current_page: page,
             has_more: true,
             buffer: Vec::new(),
             stop_at_timestamp: None,
