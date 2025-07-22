@@ -1,5 +1,5 @@
 use crate::parsing::LastFmParser;
-use crate::session::ClientSession;
+use crate::session::LastFmEditSession;
 use crate::{
     AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, EditResponse,
     LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
@@ -205,7 +205,10 @@ impl LastFmEditClient {
     ///     Ok(())
     /// }
     /// ```
-    pub fn from_session(client: Box<dyn HttpClient + Send + Sync>, session: ClientSession) -> Self {
+    pub fn from_session(
+        client: Box<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+    ) -> Self {
         Self {
             client,
             username: session.username,
@@ -261,8 +264,8 @@ impl LastFmEditClient {
     ///     Ok(())
     /// }
     /// ```
-    pub fn get_session(&self) -> ClientSession {
-        ClientSession::new(
+    pub fn get_session(&self) -> LastFmEditSession {
+        LastFmEditSession::new(
             self.username.clone(),
             self.session_cookies.clone(),
             self.csrf_token.clone(),
@@ -295,7 +298,7 @@ impl LastFmEditClient {
     ///     Ok(())
     /// }
     /// ```
-    pub fn restore_session(&mut self, session: ClientSession) {
+    pub fn restore_session(&mut self, session: LastFmEditSession) {
         self.username = session.username;
         self.csrf_token = session.csrf_token;
         self.base_url = session.base_url;

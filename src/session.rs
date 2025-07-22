@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// This contains all the authentication state needed to resume a Last.fm session
 /// without requiring the user to log in again.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClientSession {
+pub struct LastFmEditSession {
     /// The authenticated username
     pub username: String,
     /// Session cookies required for authenticated requests
@@ -16,7 +16,7 @@ pub struct ClientSession {
     pub base_url: String,
 }
 
-impl ClientSession {
+impl LastFmEditSession {
     /// Create a new client session with the provided state
     pub fn new(
         username: String,
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn test_session_validity() {
-        let valid_session = ClientSession::new(
+        let valid_session = LastFmEditSession::new(
             "testuser".to_string(),
             vec!["sessionid=.eJy1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".to_string()],
             Some("csrf_token_123".to_string()),
@@ -71,7 +71,7 @@ mod tests {
         );
         assert!(valid_session.is_valid());
 
-        let invalid_session = ClientSession::new(
+        let invalid_session = LastFmEditSession::new(
             "".to_string(),
             vec![],
             None,
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn test_session_serialization() {
-        let session = ClientSession::new(
+        let session = LastFmEditSession::new(
             "testuser".to_string(),
             vec![
                 "sessionid=.test123".to_string(),
@@ -93,7 +93,7 @@ mod tests {
         );
 
         let json = session.to_json().unwrap();
-        let restored_session = ClientSession::from_json(&json).unwrap();
+        let restored_session = LastFmEditSession::from_json(&json).unwrap();
 
         assert_eq!(session.username, restored_session.username);
         assert_eq!(session.session_cookies, restored_session.session_cookies);

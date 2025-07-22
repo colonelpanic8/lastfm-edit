@@ -159,7 +159,7 @@ pub use error::LastFmError;
 pub use iterator::{
     ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, RecentTracksIterator,
 };
-pub use session::ClientSession;
+pub use session::LastFmEditSession;
 pub use track::{Track, TrackPage};
 
 // Re-export scraper types for testing

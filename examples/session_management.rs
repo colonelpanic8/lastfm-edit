@@ -12,7 +12,7 @@
 ///
 ///   # Subsequent runs - will use saved session
 ///   direnv exec . cargo run --example session_management
-use lastfm_edit::{AsyncPaginatedIterator, ClientSession, LastFmEditClient, Result};
+use lastfm_edit::{AsyncPaginatedIterator, LastFmEditClient, LastFmEditSession, Result};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -86,7 +86,7 @@ async fn restore_from_session() -> Result<LastFmEditClient> {
     let session_json = fs::read_to_string(SESSION_FILE)
         .map_err(|e| lastfm_edit::LastFmError::Http(format!("Failed to read session file: {e}")))?;
 
-    let session = ClientSession::from_json(&session_json)
+    let session = LastFmEditSession::from_json(&session_json)
         .map_err(|e| lastfm_edit::LastFmError::Http(format!("Failed to parse session: {e}")))?;
 
     if !session.is_valid() {
