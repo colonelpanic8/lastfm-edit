@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     if Path::new(SESSION_FILE).exists() {
         println!("📁 Found existing session file, attempting to restore...");
         match restore_from_session().await {
-            Ok(mut client) => {
+            Ok(client) => {
                 println!("✅ Session restored successfully!");
                 println!("👤 Logged in as: {}", client.username());
 
@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
 
     // No valid session found, perform fresh login
     println!("🔑 No valid session found, performing fresh login...");
-    let mut client = login_with_credentials().await?;
+    let client = login_with_credentials().await?;
     println!("✅ Login successful!");
     println!("👤 Logged in as: {}", client.username());
 
@@ -107,7 +107,7 @@ async fn login_with_credentials() -> Result<LastFmEditClient> {
     // Method 1: Traditional create + login
     println!("🔧 Using traditional initialization pattern...");
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmEditClient::new(Box::new(http_client));
+    let client = LastFmEditClient::new(Box::new(http_client));
 
     let username = get_username();
     let password = get_password();

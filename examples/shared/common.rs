@@ -12,7 +12,7 @@ pub async fn setup_client() -> Result<LastFmEditClient> {
 
     // Create client and login
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmEditClient::new(Box::new(http_client));
+    let client = LastFmEditClient::new(Box::new(http_client));
 
     println!("Logging in as {username}...");
     client.login(&username, &password).await?;

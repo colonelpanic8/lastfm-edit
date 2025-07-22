@@ -8,7 +8,7 @@ async fn test_client_futures_are_send() {
     fn assert_send<T: Send>(_: T) {}
 
     let client = Box::new(NativeClient::new());
-    let mut lastfm_client = LastFmEditClient::new(client);
+    let lastfm_client = LastFmEditClient::new(client);
 
     // Test that client login future is Send
     let login_future = lastfm_client.login("test", "test");
@@ -30,7 +30,7 @@ async fn test_iterator_futures_are_send() {
     fn assert_send<T: Send>(_: T) {}
 
     let client = Box::new(NativeClient::new());
-    let mut lastfm_client = LastFmEditClient::new(client);
+    let lastfm_client = LastFmEditClient::new(client);
 
     // Test that recent tracks iterator next() future is Send
     let mut recent_tracks = lastfm_client.recent_tracks();
@@ -53,7 +53,7 @@ async fn test_iterator_futures_are_send() {
 #[tokio::test]
 async fn test_futures_can_be_spawned() {
     let client = Box::new(NativeClient::new());
-    let mut lastfm_client = LastFmEditClient::new(client);
+    let lastfm_client = LastFmEditClient::new(client);
 
     // This should compile if futures are Send
     let handle = tokio::spawn(async move {
@@ -70,7 +70,7 @@ async fn test_futures_can_be_spawned() {
 #[tokio::test]
 async fn test_iterator_across_await_boundaries() {
     let client = Box::new(NativeClient::new());
-    let mut lastfm_client = LastFmEditClient::new(client);
+    let lastfm_client = LastFmEditClient::new(client);
 
     // This should compile if the iterator and its futures are Send
     let handle = tokio::spawn(async move {

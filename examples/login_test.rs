@@ -10,7 +10,7 @@ async fn main() -> Result<()> {
 
     // Method 1: Traditional create + login pattern
     let http_client = http_client::native::NativeClient::new();
-    let mut client = LastFmEditClient::new(Box::new(http_client));
+    let client = LastFmEditClient::new(Box::new(http_client));
 
     println!("Attempting to login as {username}...");
     client.login(&username, &password).await?;

@@ -5,7 +5,7 @@ use lastfm_edit::{AsyncPaginatedIterator, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
     let artist = std::env::args()
         .nth(1)

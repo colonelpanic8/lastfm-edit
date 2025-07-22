@@ -8,7 +8,7 @@ use regex::Regex;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
     println!("=== Remaster & Year Removal Tool ===\n");
     println!("🎯 This will remove 'remastered' text and year suffixes from track names");

@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     let new_album_name = &args[2];
     let artist_name = &args[3];
 
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
     println!("=== Album Rename Tool ===\n");
     println!("🎨 Artist: {artist_name}");

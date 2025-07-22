@@ -17,7 +17,7 @@ fn test_parsing_methods_are_send_sync() {
 #[test]
 fn test_iterator_creation_is_send_sync() {
     let client = Box::new(NativeClient::new());
-    let mut lastfm_client = LastFmEditClient::new(client);
+    let lastfm_client = LastFmEditClient::new(client);
 
     // Create iterators one at a time to avoid borrowing issues
     let recent_tracks = lastfm_client.recent_tracks();

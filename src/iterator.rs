@@ -132,7 +132,7 @@ pub trait AsyncPaginatedIterator {
 /// # });
 /// ```
 pub struct ArtistTracksIterator<'a> {
-    client: &'a mut LastFmEditClient,
+    client: &'a LastFmEditClient,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -164,7 +164,7 @@ impl<'a> ArtistTracksIterator<'a> {
     /// Create a new artist tracks iterator.
     ///
     /// This is typically called via [`LastFmEditClient::artist_tracks`](crate::LastFmEditClient::artist_tracks).
-    pub fn new(client: &'a mut LastFmEditClient, artist: String) -> Self {
+    pub fn new(client: &'a LastFmEditClient, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -227,7 +227,7 @@ impl<'a> ArtistTracksIterator<'a> {
 /// # });
 /// ```
 pub struct ArtistAlbumsIterator<'a> {
-    client: &'a mut LastFmEditClient,
+    client: &'a LastFmEditClient,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -259,7 +259,7 @@ impl<'a> ArtistAlbumsIterator<'a> {
     /// Create a new artist albums iterator.
     ///
     /// This is typically called via [`LastFmEditClient::artist_albums`](crate::LastFmEditClient::artist_albums).
-    pub fn new(client: &'a mut LastFmEditClient, artist: String) -> Self {
+    pub fn new(client: &'a LastFmEditClient, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -328,7 +328,7 @@ impl<'a> ArtistAlbumsIterator<'a> {
 /// # });
 /// ```
 pub struct RecentTracksIterator<'a> {
-    client: &'a mut LastFmEditClient,
+    client: &'a LastFmEditClient,
     current_page: u32,
     has_more: bool,
     buffer: Vec<Track>,
@@ -385,7 +385,7 @@ impl<'a> RecentTracksIterator<'a> {
     /// Create a new recent tracks iterator.
     ///
     /// This is typically called via [`LastFmEditClient::recent_tracks`](crate::LastFmEditClient::recent_tracks).
-    pub fn new(client: &'a mut LastFmEditClient) -> Self {
+    pub fn new(client: &'a LastFmEditClient) -> Self {
         Self {
             client,
             current_page: 1,

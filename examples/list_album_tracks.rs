@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
 
     let album = &args[1];
     let artist = &args[2];
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
     println!("💿 All tracks from '{album}' by {artist}:\n");
 

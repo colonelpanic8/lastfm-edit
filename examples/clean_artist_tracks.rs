@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
     println!("=== Artist Catalog Cleanup Tool ===\n");
     println!("🎨 ARTIST: {artist}");

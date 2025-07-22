@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
     }
 
     let artist = &args[1];
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
     println!("🎵 Tracks by {artist}:\n");
 

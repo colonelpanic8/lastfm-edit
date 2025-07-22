@@ -6,7 +6,7 @@ use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client = common::setup_client().await?;
+    let client = common::setup_client().await?;
 
     // Parse command line argument for number of tracks (default 20)
     let num_tracks: usize = env::args()
