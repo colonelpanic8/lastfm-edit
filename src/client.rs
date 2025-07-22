@@ -181,37 +181,37 @@ impl LastFmEditClient {
         }
 
         let mut request = Request::new(Method::Post, login_url.parse::<Url>().unwrap());
-        request.insert_header("Referer", &login_url);
-        request.insert_header("Origin", &self.base_url);
-        request.insert_header("Content-Type", "application/x-www-form-urlencoded");
-        request.insert_header(
+        let _ = request.insert_header("Referer", &login_url);
+        let _ = request.insert_header("Origin", &self.base_url);
+        let _ = request.insert_header("Content-Type", "application/x-www-form-urlencoded");
+        let _ = request.insert_header(
             "User-Agent",
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
         );
-        request.insert_header(
+        let _ = request.insert_header(
             "Accept",
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
         );
-        request.insert_header("Accept-Language", "en-US,en;q=0.9");
-        request.insert_header("Accept-Encoding", "gzip, deflate, br");
-        request.insert_header("DNT", "1");
-        request.insert_header("Connection", "keep-alive");
-        request.insert_header("Upgrade-Insecure-Requests", "1");
-        request.insert_header(
+        let _ = request.insert_header("Accept-Language", "en-US,en;q=0.9");
+        let _ = request.insert_header("Accept-Encoding", "gzip, deflate, br");
+        let _ = request.insert_header("DNT", "1");
+        let _ = request.insert_header("Connection", "keep-alive");
+        let _ = request.insert_header("Upgrade-Insecure-Requests", "1");
+        let _ = request.insert_header(
             "sec-ch-ua",
             "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
         );
-        request.insert_header("sec-ch-ua-mobile", "?0");
-        request.insert_header("sec-ch-ua-platform", "\"Linux\"");
-        request.insert_header("Sec-Fetch-Dest", "document");
-        request.insert_header("Sec-Fetch-Mode", "navigate");
-        request.insert_header("Sec-Fetch-Site", "same-origin");
-        request.insert_header("Sec-Fetch-User", "?1");
+        let _ = request.insert_header("sec-ch-ua-mobile", "?0");
+        let _ = request.insert_header("sec-ch-ua-platform", "\"Linux\"");
+        let _ = request.insert_header("Sec-Fetch-Dest", "document");
+        let _ = request.insert_header("Sec-Fetch-Mode", "navigate");
+        let _ = request.insert_header("Sec-Fetch-Site", "same-origin");
+        let _ = request.insert_header("Sec-Fetch-User", "?1");
 
         // Add any cookies we already have
         if !self.session_cookies.is_empty() {
             let cookie_header = self.session_cookies.join("; ");
-            request.insert_header("Cookie", &cookie_header);
+            let _ = request.insert_header("Cookie", &cookie_header);
         }
 
         // Convert form data to URL-encoded string
@@ -548,33 +548,33 @@ impl LastFmEditClient {
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
 
         // Add comprehensive headers matching your browser request
-        request.insert_header("Accept", "*/*");
-        request.insert_header("Accept-Language", "en-US,en;q=0.9");
-        request.insert_header(
+        let _ = request.insert_header("Accept", "*/*");
+        let _ = request.insert_header("Accept-Language", "en-US,en;q=0.9");
+        let _ = request.insert_header(
             "Content-Type",
             "application/x-www-form-urlencoded;charset=UTF-8",
         );
-        request.insert_header("Priority", "u=1, i");
-        request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
-        request.insert_header("X-Requested-With", "XMLHttpRequest");
-        request.insert_header("Sec-Fetch-Dest", "empty");
-        request.insert_header("Sec-Fetch-Mode", "cors");
-        request.insert_header("Sec-Fetch-Site", "same-origin");
-        request.insert_header(
+        let _ = request.insert_header("Priority", "u=1, i");
+        let _ = request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
+        let _ = request.insert_header("X-Requested-With", "XMLHttpRequest");
+        let _ = request.insert_header("Sec-Fetch-Dest", "empty");
+        let _ = request.insert_header("Sec-Fetch-Mode", "cors");
+        let _ = request.insert_header("Sec-Fetch-Site", "same-origin");
+        let _ = request.insert_header(
             "sec-ch-ua",
             "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
         );
-        request.insert_header("sec-ch-ua-mobile", "?0");
-        request.insert_header("sec-ch-ua-platform", "\"Linux\"");
+        let _ = request.insert_header("sec-ch-ua-mobile", "?0");
+        let _ = request.insert_header("sec-ch-ua-platform", "\"Linux\"");
 
         // Add session cookies
         if !self.session_cookies.is_empty() {
             let cookie_header = self.session_cookies.join("; ");
-            request.insert_header("Cookie", &cookie_header);
+            let _ = request.insert_header("Cookie", &cookie_header);
         }
 
         // Add referer header - use the current artist being edited
-        request.insert_header(
+        let _ = request.insert_header(
             "Referer",
             format!("{}/user/{}/library", self.base_url, self.username),
         );
@@ -1391,7 +1391,7 @@ impl LastFmEditClient {
                     let mut new_response = http_types::Response::new(response.status());
                     for (name, values) in response.iter() {
                         for value in values {
-                            new_response.insert_header(name.clone(), value.clone());
+                            let _ = new_response.insert_header(name.clone(), value.clone());
                         }
                     }
                     new_response.set_body(body);
@@ -1422,12 +1422,12 @@ impl LastFmEditClient {
         }
 
         let mut request = Request::new(Method::Get, url.parse::<Url>().unwrap());
-        request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
+        let _ = request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
 
         // Add session cookies for all authenticated requests
         if !self.session_cookies.is_empty() {
             let cookie_header = self.session_cookies.join("; ");
-            request.insert_header("Cookie", &cookie_header);
+            let _ = request.insert_header("Cookie", &cookie_header);
         } else if url.contains("page=") {
             log::debug!("No cookies available for paginated request!");
         }
@@ -1435,22 +1435,22 @@ impl LastFmEditClient {
         // Add browser-like headers for all requests
         if url.contains("ajax=true") {
             // AJAX request headers
-            request.insert_header("Accept", "*/*");
-            request.insert_header("X-Requested-With", "XMLHttpRequest");
+            let _ = request.insert_header("Accept", "*/*");
+            let _ = request.insert_header("X-Requested-With", "XMLHttpRequest");
         } else {
             // Regular page request headers
-            request.insert_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+            let _ = request.insert_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
         }
-        request.insert_header("Accept-Language", "en-US,en;q=0.9");
-        request.insert_header("Accept-Encoding", "gzip, deflate, br");
-        request.insert_header("DNT", "1");
-        request.insert_header("Connection", "keep-alive");
-        request.insert_header("Upgrade-Insecure-Requests", "1");
+        let _ = request.insert_header("Accept-Language", "en-US,en;q=0.9");
+        let _ = request.insert_header("Accept-Encoding", "gzip, deflate, br");
+        let _ = request.insert_header("DNT", "1");
+        let _ = request.insert_header("Connection", "keep-alive");
+        let _ = request.insert_header("Upgrade-Insecure-Requests", "1");
 
         // Add referer for paginated requests
         if url.contains("page=") {
             let base_url = url.split('?').next().unwrap_or(url);
-            request.insert_header("Referer", base_url);
+            let _ = request.insert_header("Referer", base_url);
         }
 
         let response = self
