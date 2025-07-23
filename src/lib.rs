@@ -145,7 +145,7 @@
 //!
 //! ```toml
 //! [dev-dependencies]
-//! lastfm-edit = { version = "0.7.0", features = ["mock"] }
+//! lastfm-edit = { version = "1.0.0", features = ["mock"] }
 //! mockall = "0.13"
 //! ```
 //!
