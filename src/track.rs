@@ -22,7 +22,7 @@
 ///     println!("From album: {}", album);
 /// }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Track {
     /// The track name/title
     pub name: String,
@@ -81,7 +81,7 @@ pub struct Track {
 ///          page.total_pages,
 ///          page.tracks.len());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TrackPage {
     /// The tracks on this page
     pub tracks: Vec<Track>,

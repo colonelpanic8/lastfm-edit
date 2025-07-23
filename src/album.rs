@@ -24,7 +24,7 @@ use chrono::{DateTime, Utc};
 ///     println!("Last scrobbled: {}", date.format("%Y-%m-%d %H:%M:%S UTC"));
 /// }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Album {
     /// The album name/title
     pub name: String,
@@ -68,7 +68,7 @@ pub struct Album {
 ///          page.total_pages,
 ///          page.albums.len());
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AlbumPage {
     /// The albums on this page
     pub albums: Vec<Album>,
