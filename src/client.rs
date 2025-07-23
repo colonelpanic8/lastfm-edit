@@ -1,9 +1,7 @@
 use crate::parsing::LastFmParser;
 use crate::session::LastFmEditSession;
-use crate::{
-    AlbumPage, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, EditResponse,
-    LastFmError, RecentTracksIterator, Result, ScrobbleEdit, Track, TrackPage,
-};
+use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
+use async_trait::async_trait;
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};
@@ -12,21 +10,140 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-/// Main client for interacting with Last.fm's web interface.
+/// Trait for Last.fm client operations that can be mocked for testing.
 ///
-/// This client handles authentication, session management, and provides methods for
+/// This trait abstracts the core functionality needed for Last.fm scrobble editing
+/// to enable easy mocking and testing. All methods that perform network operations or
+/// state changes are included to support comprehensive test coverage.
+///
+/// # Mocking Support
+///
+/// When the `mock` feature is enabled, this crate provides `MockLastFmEditClient`
+/// that implements this trait using the `mockall` library.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use lastfm_edit::{LastFmEditClient, MockLastFmEditClient, Result};
+///
+/// #[cfg(feature = "mock")]
+/// async fn test_example() -> Result<()> {
+///     let mut mock_client = MockLastFmEditClient::new();
+///     
+///     mock_client
+///         .expect_login()
+///         .with(eq("user"), eq("pass"))
+///         .returning(|_, _| Ok(()));
+///         
+///     mock_client
+///         .expect_is_logged_in()
+///         .returning(|| true);
+///         
+///     // Use mock_client as &dyn LastFmEditClient
+///     let client: &dyn LastFmEditClient = &mock_client;
+///     client.login("user", "pass").await?;
+///     assert!(client.is_logged_in());
+///     Ok(())
+/// }
+/// ```
+#[cfg_attr(feature = "mock", mockall::automock)]
+#[async_trait(?Send)]
+pub trait LastFmEditClient {
+    /// Authenticate with Last.fm using username and password.
+    async fn login(&self, username: &str, password: &str) -> Result<()>;
+
+    /// Get the currently authenticated username.
+    fn username(&self) -> String;
+
+    /// Check if the client is currently authenticated.
+    fn is_logged_in(&self) -> bool;
+
+    /// Fetch recent scrobbles from the user's listening history.
+    async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>>;
+
+    /// Find a scrobble by its timestamp in recent scrobbles.
+    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track>;
+
+    /// Find the most recent scrobble for a specific track.
+    async fn find_recent_scrobble_for_track(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+        max_pages: u32,
+    ) -> Result<Option<Track>>;
+
+    /// Edit a scrobble with the given edit parameters.
+    async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse>;
+
+    /// Load prepopulated form values for editing a specific track.
+    async fn load_edit_form_values(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+    ) -> Result<ScrobbleEdit>;
+
+    /// Get tracks from a specific album page.
+    async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>>;
+
+    /// Edit album metadata by updating scrobbles with new album name.
+    async fn edit_album(
+        &self,
+        old_album_name: &str,
+        new_album_name: &str,
+        artist_name: &str,
+    ) -> Result<EditResponse>;
+
+    /// Edit artist metadata by updating scrobbles with new artist name.
+    async fn edit_artist(
+        &self,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse>;
+
+    /// Edit artist metadata for a specific track only.
+    async fn edit_artist_for_track(
+        &self,
+        track_name: &str,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse>;
+
+    /// Edit artist metadata for all tracks in a specific album.
+    async fn edit_artist_for_album(
+        &self,
+        album_name: &str,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse>;
+
+    /// Get a page of tracks for a specific artist.
+    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage>;
+
+    /// Get a page of albums for a specific artist.
+    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage>;
+
+    /// Extract the current session state for persistence.
+    fn get_session(&self) -> LastFmEditSession;
+
+    /// Restore session state from a previously saved session.
+    fn restore_session(&self, session: LastFmEditSession);
+}
+
+/// Main implementation for interacting with Last.fm's web interface.
+///
+/// This implementation handles authentication, session management, and provides methods for
 /// browsing user libraries and editing scrobble data through web scraping.
 ///
 /// # Examples
 ///
 /// ```rust,no_run
-/// use lastfm_edit::{LastFmEditClient, Result};
+/// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<()> {
 ///     // Create client with any HTTP implementation
 ///     let http_client = http_client::native::NativeClient::new();
-///     let mut client = LastFmEditClient::new(Box::new(http_client));
+///     let mut client = LastFmEditClientImpl::new(Box::new(http_client));
 ///
 ///     // Login to Last.fm
 ///     client.login("username", "password").await?;
@@ -37,7 +154,7 @@ use std::sync::{Arc, Mutex};
 ///     Ok(())
 /// }
 /// ```
-pub struct LastFmEditClient {
+pub struct LastFmEditClientImpl {
     client: Box<dyn HttpClient + Send + Sync>,
     session: Arc<Mutex<LastFmEditSession>>,
     rate_limit_patterns: Vec<String>,
@@ -45,7 +162,7 @@ pub struct LastFmEditClient {
     parser: LastFmParser,
 }
 
-impl LastFmEditClient {
+impl LastFmEditClientImpl {
     /// Create a new [`LastFmEditClient`] with the default Last.fm URL.
     ///
     /// **Note:** This creates an unauthenticated client. You must call [`login`](Self::login)
@@ -63,7 +180,7 @@ impl LastFmEditClient {
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
     ///     let http_client = http_client::native::NativeClient::new();
-    ///     let mut client = LastFmEditClient::new(Box::new(http_client));
+    ///     let mut client = LastFmEditClientImpl::new(Box::new(http_client));
     ///     client.login("username", "password").await?;
     ///     Ok(())
     /// }
@@ -251,7 +368,7 @@ impl LastFmEditClient {
     ///
     /// #[tokio::main]
     /// async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    ///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    ///     let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     ///     client.login("username", "password").await?;
     ///
     ///     // Save session for later use
@@ -279,7 +396,7 @@ impl LastFmEditClient {
     /// use lastfm_edit::{LastFmEditClient, LastFmEditSession};
     ///
     /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    ///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    ///     let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     ///
     ///     // Restore from saved session
     ///     let session_json = std::fs::read_to_string("session.json")?;
@@ -316,7 +433,7 @@ impl LastFmEditClient {
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmEditClient, Result};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     /// client.login("username", "password").await?;
     /// assert!(client.is_logged_in());
     /// # Ok::<(), lastfm_edit::LastFmError>(())
@@ -487,75 +604,6 @@ impl LastFmEditClient {
     /// Returns `true` if [`login`](Self::login) was successful and session is active.
     pub fn is_logged_in(&self) -> bool {
         self.session.lock().unwrap().is_valid()
-    }
-
-    /// Create an iterator for browsing an artist's tracks from the user's library.
-    ///
-    /// # Arguments
-    ///
-    /// * `artist` - The artist name to browse
-    ///
-    /// # Returns
-    ///
-    /// Returns an [`ArtistTracksIterator`] that implements [`AsyncPaginatedIterator`].
-    pub fn artist_tracks<'a>(&'a self, artist: &str) -> ArtistTracksIterator<'a> {
-        ArtistTracksIterator::new(self, artist.to_string())
-    }
-
-    /// Create an iterator for browsing an artist's albums from the user's library.
-    ///
-    /// # Arguments
-    ///
-    /// * `artist` - The artist name to browse
-    ///
-    /// # Returns
-    ///
-    /// Returns an [`ArtistAlbumsIterator`] that implements [`AsyncPaginatedIterator`].
-    pub fn artist_albums<'a>(&'a self, artist: &str) -> ArtistAlbumsIterator<'a> {
-        ArtistAlbumsIterator::new(self, artist.to_string())
-    }
-
-    /// Create an iterator for browsing the user's recent tracks.
-    ///
-    /// This provides access to the user's recent listening history with timestamps,
-    /// which is useful for finding tracks to edit.
-    ///
-    /// # Returns
-    ///
-    /// Returns a [`RecentTracksIterator`] that implements [`AsyncPaginatedIterator`].
-    pub fn recent_tracks<'a>(&'a self) -> RecentTracksIterator<'a> {
-        RecentTracksIterator::new(self)
-    }
-
-    /// Create an iterator for recent tracks starting from a specific page.
-    ///
-    /// This allows resuming pagination from an arbitrary page, useful for
-    /// continuing from where a previous iteration left off.
-    ///
-    /// # Arguments
-    ///
-    /// * `starting_page` - The page number to start from (1-indexed, minimum 1)
-    ///
-    /// # Returns
-    ///
-    /// Returns a [`RecentTracksIterator`] that implements [`AsyncPaginatedIterator`].
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
-    /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
-    /// // client.login(...).await?;
-    ///
-    /// // Resume from page 10
-    /// let mut recent = client.recent_tracks_from_page(10);
-    /// let tracks = recent.take(50).await?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// # });
-    /// ```
-    pub fn recent_tracks_from_page<'a>(&'a self, starting_page: u32) -> RecentTracksIterator<'a> {
-        RecentTracksIterator::with_starting_page(self, starting_page)
     }
 
     /// Fetch recent scrobbles from the user's listening history
@@ -1263,17 +1311,29 @@ impl LastFmEditClient {
     ) -> Result<EditResponse> {
         log::debug!("Editing artist '{old_artist_name}' -> '{new_artist_name}'");
 
-        // Get all tracks from the artist using the iterator
+        // Get all tracks from the artist using pagination
         let mut tracks = Vec::new();
-        let mut iterator = self.artist_tracks(old_artist_name);
+        let mut page = 1;
+        let max_pages = 10; // Limit to reasonable number to avoid infinite processing
 
-        // Collect tracks (limit to reasonable number to avoid infinite processing)
-        while tracks.len() < 200 {
-            match iterator.next().await {
-                Ok(Some(track)) => tracks.push(track),
-                Ok(None) => break,
+        loop {
+            if page > max_pages || tracks.len() >= 200 {
+                break;
+            }
+
+            match self.get_artist_tracks_page(old_artist_name, page).await {
+                Ok(track_page) => {
+                    if track_page.tracks.is_empty() {
+                        break;
+                    }
+                    tracks.extend(track_page.tracks);
+                    if !track_page.has_next_page {
+                        break;
+                    }
+                    page += 1;
+                }
                 Err(e) => {
-                    log::warn!("Error fetching artist tracks: {e}");
+                    log::warn!("Error fetching artist tracks page {page}: {e}");
                     break;
                 }
             }
@@ -2041,5 +2101,108 @@ impl LastFmEditClient {
             has_next_page: false,
             total_pages: Some(1),
         })
+    }
+}
+
+#[async_trait(?Send)]
+impl LastFmEditClient for LastFmEditClientImpl {
+    async fn login(&self, username: &str, password: &str) -> Result<()> {
+        self.login(username, password).await
+    }
+
+    fn username(&self) -> String {
+        self.username()
+    }
+
+    fn is_logged_in(&self) -> bool {
+        self.is_logged_in()
+    }
+
+    async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>> {
+        self.get_recent_scrobbles(page).await
+    }
+
+    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
+        self.find_scrobble_by_timestamp(timestamp).await
+    }
+
+    async fn find_recent_scrobble_for_track(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+        max_pages: u32,
+    ) -> Result<Option<Track>> {
+        self.find_recent_scrobble_for_track(track_name, artist_name, max_pages)
+            .await
+    }
+
+    async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
+        self.edit_scrobble(edit).await
+    }
+
+    async fn load_edit_form_values(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+    ) -> Result<ScrobbleEdit> {
+        self.load_edit_form_values(track_name, artist_name).await
+    }
+
+    async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>> {
+        self.get_album_tracks(album_name, artist_name).await
+    }
+
+    async fn edit_album(
+        &self,
+        old_album_name: &str,
+        new_album_name: &str,
+        artist_name: &str,
+    ) -> Result<EditResponse> {
+        self.edit_album(old_album_name, new_album_name, artist_name)
+            .await
+    }
+
+    async fn edit_artist(
+        &self,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse> {
+        self.edit_artist(old_artist_name, new_artist_name).await
+    }
+
+    async fn edit_artist_for_track(
+        &self,
+        track_name: &str,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse> {
+        self.edit_artist_for_track(track_name, old_artist_name, new_artist_name)
+            .await
+    }
+
+    async fn edit_artist_for_album(
+        &self,
+        album_name: &str,
+        old_artist_name: &str,
+        new_artist_name: &str,
+    ) -> Result<EditResponse> {
+        self.edit_artist_for_album(album_name, old_artist_name, new_artist_name)
+            .await
+    }
+
+    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
+        self.get_artist_tracks_page(artist, page).await
+    }
+
+    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
+        self.get_artist_albums_page(artist, page).await
+    }
+
+    fn get_session(&self) -> LastFmEditSession {
+        self.get_session()
+    }
+
+    fn restore_session(&self, session: LastFmEditSession) {
+        self.restore_session(session)
     }
 }

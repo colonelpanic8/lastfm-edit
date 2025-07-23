@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::{AsyncPaginatedIterator, Result};
+use lastfm_edit::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -14,26 +14,36 @@ async fn main() -> Result<()> {
     println!("=== Artist Tracks Listing ===\n");
     println!("🎵 Listing all tracks for artist: {artist}\n");
 
-    let mut iterator = client.artist_tracks(&artist);
     let mut track_count = 0;
+    let mut page = 1;
 
     println!("🔍 Fetching tracks...\n");
 
     loop {
-        match iterator.next().await {
-            Ok(Some(track)) => {
-                track_count += 1;
-                println!(
-                    "[{:4}] '{}' (plays: {})",
-                    track_count, track.name, track.playcount
-                );
-            }
-            Ok(None) => {
-                println!("\n📚 Reached end of {artist} catalog");
-                break;
+        match client.get_artist_tracks_page(&artist, page).await {
+            Ok(track_page) => {
+                if track_page.tracks.is_empty() {
+                    println!("\n📚 Reached end of {artist} catalog");
+                    break;
+                }
+
+                for track in track_page.tracks {
+                    track_count += 1;
+                    println!(
+                        "[{:4}] '{}' (plays: {})",
+                        track_count, track.name, track.playcount
+                    );
+                }
+
+                if !track_page.has_next_page {
+                    println!("\n📚 Reached end of {artist} catalog");
+                    break;
+                }
+
+                page += 1;
             }
             Err(e) => {
-                println!("❌ Error fetching tracks: {e}");
+                println!("❌ Error fetching tracks page {page}: {e}");
                 break;
             }
         }

@@ -1,5 +1,7 @@
 use crate::{Album, AlbumPage, LastFmEditClient, Result, Track, TrackPage};
 
+use async_trait::async_trait;
+
 /// Async iterator trait for paginated Last.fm data.
 ///
 /// This trait provides a common interface for iterating over paginated data from Last.fm,
@@ -12,7 +14,7 @@ use crate::{Album, AlbumPage, LastFmEditClient, Result, Track, TrackPage};
 /// use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
 ///
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut tracks = client.artist_tracks("Radiohead");
@@ -27,11 +29,9 @@ use crate::{Album, AlbumPage, LastFmEditClient, Result, Track, TrackPage};
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });
 /// ```
-#[allow(async_fn_in_trait)]
-pub trait AsyncPaginatedIterator {
-    /// The item type yielded by this iterator
-    type Item;
-
+#[cfg_attr(feature = "mock", mockall::automock)]
+#[async_trait(?Send)]
+pub trait AsyncPaginatedIterator<T> {
     /// Fetch the next item from the iterator.
     ///
     /// This method automatically handles pagination, fetching new pages as needed.
@@ -42,7 +42,7 @@ pub trait AsyncPaginatedIterator {
     /// - `Ok(Some(item))` - Next item in the sequence
     /// - `Ok(None)` - No more items available
     /// - `Err(...)` - Network or parsing error occurred
-    async fn next(&mut self) -> Result<Option<Self::Item>>;
+    async fn next(&mut self) -> Result<Option<T>>;
 
     /// Collect all remaining items into a Vec.
     ///
@@ -55,14 +55,14 @@ pub trait AsyncPaginatedIterator {
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     /// let mut tracks = client.artist_tracks("Small Artist");
     /// let all_tracks = tracks.collect_all().await?;
     /// println!("Found {} tracks total", all_tracks.len());
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// # });
     /// ```
-    async fn collect_all(&mut self) -> Result<Vec<Self::Item>> {
+    async fn collect_all(&mut self) -> Result<Vec<T>> {
         let mut items = Vec::new();
         while let Some(item) = self.next().await? {
             items.push(item);
@@ -84,14 +84,14 @@ pub trait AsyncPaginatedIterator {
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     /// let mut tracks = client.artist_tracks("Radiohead");
     /// let top_20 = tracks.take(20).await?;
     /// println!("Top 20 tracks: {:?}", top_20);
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// # });
     /// ```
-    async fn take(&mut self, n: usize) -> Result<Vec<Self::Item>> {
+    async fn take(&mut self, n: usize) -> Result<Vec<T>> {
         let mut items = Vec::new();
         for _ in 0..n {
             match self.next().await? {
@@ -118,7 +118,7 @@ pub trait AsyncPaginatedIterator {
 /// ```rust,no_run
 /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut tracks = client.artist_tracks("The Beatles");
@@ -132,7 +132,7 @@ pub trait AsyncPaginatedIterator {
 /// # });
 /// ```
 pub struct ArtistTracksIterator<'a> {
-    client: &'a LastFmEditClient,
+    client: &'a dyn LastFmEditClient,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -140,10 +140,9 @@ pub struct ArtistTracksIterator<'a> {
     total_pages: Option<u32>,
 }
 
-impl<'a> AsyncPaginatedIterator for ArtistTracksIterator<'a> {
-    type Item = Track;
-
-    async fn next(&mut self) -> Result<Option<Self::Item>> {
+#[async_trait(?Send)]
+impl<'a> AsyncPaginatedIterator<Track> for ArtistTracksIterator<'a> {
+    async fn next(&mut self) -> Result<Option<Track>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
             if let Some(page) = self.next_page().await? {
@@ -164,7 +163,7 @@ impl<'a> ArtistTracksIterator<'a> {
     /// Create a new artist tracks iterator.
     ///
     /// This is typically called via [`LastFmEditClient::artist_tracks`](crate::LastFmEditClient::artist_tracks).
-    pub fn new(client: &'a LastFmEditClient, artist: String) -> Self {
+    pub fn new(client: &'a dyn LastFmEditClient, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -214,7 +213,7 @@ impl<'a> ArtistTracksIterator<'a> {
 /// ```rust,no_run
 /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let mut albums = client.artist_albums("Pink Floyd");
@@ -227,7 +226,7 @@ impl<'a> ArtistTracksIterator<'a> {
 /// # });
 /// ```
 pub struct ArtistAlbumsIterator<'a> {
-    client: &'a LastFmEditClient,
+    client: &'a dyn LastFmEditClient,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -235,10 +234,9 @@ pub struct ArtistAlbumsIterator<'a> {
     total_pages: Option<u32>,
 }
 
-impl<'a> AsyncPaginatedIterator for ArtistAlbumsIterator<'a> {
-    type Item = Album;
-
-    async fn next(&mut self) -> Result<Option<Self::Item>> {
+#[async_trait(?Send)]
+impl<'a> AsyncPaginatedIterator<Album> for ArtistAlbumsIterator<'a> {
+    async fn next(&mut self) -> Result<Option<Album>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
             if let Some(page) = self.next_page().await? {
@@ -259,7 +257,7 @@ impl<'a> ArtistAlbumsIterator<'a> {
     /// Create a new artist albums iterator.
     ///
     /// This is typically called via [`LastFmEditClient::artist_albums`](crate::LastFmEditClient::artist_albums).
-    pub fn new(client: &'a LastFmEditClient, artist: String) -> Self {
+    pub fn new(client: &'a dyn LastFmEditClient, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -309,7 +307,7 @@ impl<'a> ArtistAlbumsIterator<'a> {
 /// ```rust,no_run
 /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// // Get recent tracks with timestamps
@@ -328,17 +326,16 @@ impl<'a> ArtistAlbumsIterator<'a> {
 /// # });
 /// ```
 pub struct RecentTracksIterator<'a> {
-    client: &'a LastFmEditClient,
+    client: &'a dyn LastFmEditClient,
     current_page: u32,
     has_more: bool,
     buffer: Vec<Track>,
     stop_at_timestamp: Option<u64>,
 }
 
-impl<'a> AsyncPaginatedIterator for RecentTracksIterator<'a> {
-    type Item = Track;
-
-    async fn next(&mut self) -> Result<Option<Self::Item>> {
+#[async_trait(?Send)]
+impl<'a> AsyncPaginatedIterator<Track> for RecentTracksIterator<'a> {
+    async fn next(&mut self) -> Result<Option<Track>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
             if !self.has_more {
@@ -385,7 +382,7 @@ impl<'a> RecentTracksIterator<'a> {
     /// Create a new recent tracks iterator starting from page 1.
     ///
     /// This is typically called via [`LastFmEditClient::recent_tracks`](crate::LastFmEditClient::recent_tracks).
-    pub fn new(client: &'a LastFmEditClient) -> Self {
+    pub fn new(client: &'a dyn LastFmEditClient) -> Self {
         Self::with_starting_page(client, 1)
     }
 
@@ -404,7 +401,7 @@ impl<'a> RecentTracksIterator<'a> {
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     ///
     /// // Start from page 5
     /// let mut recent = client.recent_tracks_from_page(5);
@@ -412,7 +409,7 @@ impl<'a> RecentTracksIterator<'a> {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// # });
     /// ```
-    pub fn with_starting_page(client: &'a LastFmEditClient, starting_page: u32) -> Self {
+    pub fn with_starting_page(client: &'a dyn LastFmEditClient, starting_page: u32) -> Self {
         let page = std::cmp::max(1, starting_page);
         Self {
             client,
@@ -438,7 +435,7 @@ impl<'a> RecentTracksIterator<'a> {
     /// ```rust,no_run
     /// # use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     /// let last_processed = 1640995200; // Some previous timestamp
     ///
     /// let mut recent = client.recent_tracks().with_stop_timestamp(last_processed);

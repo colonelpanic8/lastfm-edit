@@ -1,7 +1,7 @@
-use lastfm_edit::{LastFmEditClient, Result};
+use lastfm_edit::{LastFmEditClientImpl, Result};
 use std::env;
 
-pub async fn setup_client() -> Result<LastFmEditClient> {
+pub async fn setup_client() -> Result<LastFmEditClientImpl> {
     // Initialize logger to handle log::debug! calls
     env_logger::init();
 
@@ -12,7 +12,7 @@ pub async fn setup_client() -> Result<LastFmEditClient> {
 
     // Create client and login
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClient::new(Box::new(http_client));
+    let client = LastFmEditClientImpl::new(Box::new(http_client));
 
     println!("Logging in as {username}...");
     client.login(&username, &password).await?;

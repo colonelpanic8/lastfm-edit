@@ -27,7 +27,7 @@
 /// .with_artist_name("Radiohead") // corrected
 /// .with_edit_all(true); // update all instances
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScrobbleEdit {
     /// Original track name as it appears in the scrobble
     /// If None, the client will attempt to look up the complete original metadata
@@ -83,7 +83,7 @@ pub struct ScrobbleEdit {
 ///     eprintln!("Edit failed: {}", response.message.unwrap_or_default());
 /// }
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EditResponse {
     /// Whether the edit operation was successful
     pub success: bool,

@@ -1,4 +1,4 @@
-use lastfm_edit::{LastFmEditClient, ScrobbleEdit};
+use lastfm_edit::{LastFmEditClientImpl, ScrobbleEdit};
 use std::env;
 
 #[tokio::main]
@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let password = env::var("LASTFM_PASSWORD").expect("LASTFM_PASSWORD env var required");
 
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClient::new(Box::new(http_client));
+    let client = LastFmEditClientImpl::new(Box::new(http_client));
 
     println!("🔑 Logging in to Last.fm...");
     client.login(&username, &password).await?;

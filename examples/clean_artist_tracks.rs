@@ -1,8 +1,6 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::AsyncPaginatedIterator;
-
 use lastfm_edit::Result;
 use regex::Regex;
 use std::collections::HashSet;
@@ -55,20 +53,24 @@ async fn main() -> Result<()> {
     // Step 1: Collect all matching tracks first
     println!("🔍 Step 1: Scanning entire {artist} catalog for matching tracks...");
     let mut all_matching_tracks = Vec::new();
+    let mut page = 1;
 
-    {
-        let mut iterator = client.artist_tracks(artist);
-        let mut track_count = 0;
+    loop {
+        match client.get_artist_tracks_page(artist, page).await {
+            Ok(track_page) => {
+                if track_page.tracks.is_empty() {
+                    println!(
+                        "📚 Reached end of {artist} catalog - scanned {total_tracks_scanned} tracks total"
+                    );
+                    break;
+                }
 
-        loop {
-            match iterator.next().await {
-                Ok(Some(track)) => {
+                for track in track_page.tracks {
                     total_tracks_scanned += 1;
-                    track_count += 1;
 
                     // Print progress every 50 tracks
-                    if track_count % 50 == 0 {
-                        println!("📖 Scanned {track_count} tracks so far...");
+                    if total_tracks_scanned % 50 == 0 {
+                        println!("📖 Scanned {total_tracks_scanned} tracks so far...");
                     }
 
                     // Check if this track matches our pattern
@@ -81,16 +83,19 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
-                Ok(None) => {
+
+                if !track_page.has_next_page {
                     println!(
-                        "📚 Reached end of {artist} catalog - scanned {track_count} tracks total"
+                        "📚 Reached end of {artist} catalog - scanned {total_tracks_scanned} tracks total"
                     );
                     break;
                 }
-                Err(e) => {
-                    println!("❌ Error fetching tracks: {e}");
-                    break;
-                }
+
+                page += 1;
+            }
+            Err(e) => {
+                println!("❌ Error fetching tracks page {page}: {e}");
+                break;
             }
         }
     }

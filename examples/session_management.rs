@@ -12,7 +12,7 @@
 ///
 ///   # Subsequent runs - will use saved session
 ///   direnv exec . cargo run --example session_management
-use lastfm_edit::{AsyncPaginatedIterator, LastFmEditClient, LastFmEditSession, Result};
+use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, Result};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -37,7 +37,8 @@ async fn main() -> Result<()> {
 
                 // Test the restored session by fetching recent tracks
                 println!("🎧 Testing session by fetching recent tracks...");
-                let recent_tracks = client.recent_tracks().take(3).await?;
+                let tracks = client.get_recent_scrobbles(1).await?;
+                let recent_tracks: Vec<_> = tracks.into_iter().take(3).collect();
                 println!("📊 Found {} recent tracks:", recent_tracks.len());
 
                 for track in recent_tracks {
@@ -68,7 +69,8 @@ async fn main() -> Result<()> {
 
     // Test the new session
     println!("🎧 Testing session by fetching recent tracks...");
-    let recent_tracks = client.recent_tracks().take(3).await?;
+    let tracks = client.get_recent_scrobbles(1).await?;
+    let recent_tracks: Vec<_> = tracks.into_iter().take(3).collect();
     println!("📊 Found {} recent tracks:", recent_tracks.len());
 
     for track in recent_tracks {
@@ -82,7 +84,7 @@ async fn main() -> Result<()> {
 }
 
 /// Restore client from saved session file
-async fn restore_from_session() -> Result<LastFmEditClient> {
+async fn restore_from_session() -> Result<LastFmEditClientImpl> {
     let session_json = fs::read_to_string(SESSION_FILE)
         .map_err(|e| lastfm_edit::LastFmError::Http(format!("Failed to read session file: {e}")))?;
 
@@ -96,18 +98,18 @@ async fn restore_from_session() -> Result<LastFmEditClient> {
     }
 
     let http_client = http_client::native::NativeClient::new();
-    Ok(LastFmEditClient::from_session(
+    Ok(LastFmEditClientImpl::from_session(
         Box::new(http_client),
         session,
     ))
 }
 
 /// Perform fresh login with credentials
-async fn login_with_credentials() -> Result<LastFmEditClient> {
+async fn login_with_credentials() -> Result<LastFmEditClientImpl> {
     // Method 1: Traditional create + login
     println!("🔧 Using traditional initialization pattern...");
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClient::new(Box::new(http_client));
+    let client = LastFmEditClientImpl::new(Box::new(http_client));
 
     let username = get_username();
     let password = get_password();
@@ -122,12 +124,12 @@ async fn login_with_credentials() -> Result<LastFmEditClient> {
     let password = get_password();
 
     let http_client = http_client::native::NativeClient::new();
-    LastFmEditClient::login_with_credentials(Box::new(http_client), &username, &password).await
+    LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password).await
     */
 }
 
 /// Save current session to file
-fn save_session(client: &LastFmEditClient) -> Result<()> {
+fn save_session(client: &dyn LastFmEditClient) -> Result<()> {
     let session = client.get_session();
     let session_json = session
         .to_json()

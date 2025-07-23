@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::{AsyncPaginatedIterator, Result, Track};
+use lastfm_edit::{Result, Track};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -16,13 +16,31 @@ async fn main() -> Result<()> {
     println!("🎵 Listing tracks for artist: {artist} grouped by album\n");
 
     // First, get all albums by the artist
-    let mut albums_iterator = client.artist_albums(&artist);
     let mut albums = Vec::new();
+    let mut page = 1;
 
     println!("🔍 Fetching albums...\n");
 
-    while let Some(album) = albums_iterator.next().await? {
-        albums.push(album);
+    loop {
+        match client.get_artist_albums_page(&artist, page).await {
+            Ok(album_page) => {
+                if album_page.albums.is_empty() {
+                    break;
+                }
+
+                albums.extend(album_page.albums);
+
+                if !album_page.has_next_page {
+                    break;
+                }
+
+                page += 1;
+            }
+            Err(e) => {
+                println!("❌ Error fetching albums page {page}: {e}");
+                break;
+            }
+        }
     }
 
     if albums.is_empty() {

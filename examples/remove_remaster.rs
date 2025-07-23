@@ -1,8 +1,6 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::AsyncPaginatedIterator;
-
 use lastfm_edit::Result;
 use regex::Regex;
 
@@ -54,13 +52,18 @@ async fn main() -> Result<()> {
 
     // First, collect some tracks to process
     let mut tracks_to_process = Vec::new();
-    {
-        let mut iterator = client.artist_tracks(&artist);
-        let mut fetched_count = 0;
+    let mut fetched_count = 0;
+    let mut page = 1;
 
-        loop {
-            match iterator.next().await {
-                Ok(Some(track)) => {
+    loop {
+        match client.get_artist_tracks_page(&artist, page).await {
+            Ok(track_page) => {
+                if track_page.tracks.is_empty() {
+                    println!("\n📚 Fetched all {fetched_count} tracks for {artist}");
+                    break;
+                }
+
+                for track in track_page.tracks {
                     fetched_count += 1;
                     println!("🔍 [{:3}] Found track: '{}'", fetched_count, track.name);
 
@@ -79,14 +82,17 @@ async fn main() -> Result<()> {
                         tracks_to_process.push((track, cleaned_name));
                     }
                 }
-                Ok(None) => {
+
+                if !track_page.has_next_page {
                     println!("\n📚 Fetched all {fetched_count} tracks for {artist}");
                     break;
                 }
-                Err(e) => {
-                    println!("❌ Error fetching tracks: {e}");
-                    break;
-                }
+
+                page += 1;
+            }
+            Err(e) => {
+                println!("❌ Error fetching tracks page {page}: {e}");
+                break;
             }
         }
     }

@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::{AsyncPaginatedIterator, Result};
+use lastfm_edit::Result;
 use std::env;
 
 #[tokio::main]
@@ -11,57 +11,61 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args: Vec<String> = env::args().collect();
     let num_tracks: usize = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(20);
-    let starting_page: Option<u32> = args.get(2).and_then(|s| s.parse().ok());
+    let starting_page: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
 
-    if let Some(page) = starting_page {
-        println!("Fetching {num_tracks} recent tracks starting from page {page}...");
-    } else {
-        println!("Fetching {num_tracks} recent tracks...");
-    }
+    println!("Fetching {num_tracks} recent tracks starting from page {starting_page}...");
     println!();
 
-    // Get iterator for recent tracks - optionally starting from a specific page
-    let mut recent_tracks = if let Some(page) = starting_page {
-        client.recent_tracks_from_page(page)
-    } else {
-        client.recent_tracks()
-    };
-
-    // Fetch and print tracks one by one
     let mut count = 0;
+    let mut page = starting_page;
+
+    // Fetch tracks using pagination directly
     while count < num_tracks {
-        match recent_tracks.next().await? {
-            Some(track) => {
-                let timestamp_str = if let Some(ts) = track.timestamp {
-                    format!(
-                        " ({})",
-                        chrono::DateTime::from_timestamp(ts as i64, 0)
-                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                            .unwrap_or_else(|| format!("timestamp: {ts}"))
-                    )
-                } else {
-                    " (no timestamp)".to_string()
-                };
+        match client.get_recent_scrobbles(page).await {
+            Ok(tracks) => {
+                if tracks.is_empty() {
+                    println!("No more tracks available.");
+                    break;
+                }
 
-                let album_str = if let Some(album) = &track.album {
-                    format!(" [{album}]")
-                } else {
-                    "".to_string()
-                };
+                for track in tracks {
+                    if count >= num_tracks {
+                        break;
+                    }
 
-                println!(
-                    "{}. {} - {}{}{}",
-                    count + 1,
-                    track.artist,
-                    track.name,
-                    album_str,
-                    timestamp_str
-                );
+                    let timestamp_str = if let Some(ts) = track.timestamp {
+                        format!(
+                            " ({})",
+                            chrono::DateTime::from_timestamp(ts as i64, 0)
+                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                .unwrap_or_else(|| format!("timestamp: {ts}"))
+                        )
+                    } else {
+                        " (no timestamp)".to_string()
+                    };
 
-                count += 1;
+                    let album_str = if let Some(album) = &track.album {
+                        format!(" [{album}]")
+                    } else {
+                        "".to_string()
+                    };
+
+                    println!(
+                        "{}. {} - {}{}{}",
+                        count + 1,
+                        track.artist,
+                        track.name,
+                        album_str,
+                        timestamp_str
+                    );
+
+                    count += 1;
+                }
+
+                page += 1;
             }
-            None => {
-                println!("No more tracks available.");
+            Err(e) => {
+                println!("❌ Error fetching tracks from page {page}: {e}");
                 break;
             }
         }
@@ -70,16 +74,16 @@ async fn main() -> Result<()> {
     println!();
     println!("Fetched {count} tracks total.");
 
-    if starting_page.is_none() {
-        println!();
-        println!("Usage: cargo run --example list_recent_tracks [num_tracks] [starting_page]");
-        println!("  num_tracks    - Number of tracks to fetch (default: 20)");
-        println!("  starting_page - Page number to start from (default: 1)");
-        println!();
-        println!("Examples:");
-        println!("  cargo run --example list_recent_tracks 50     # Fetch 50 tracks from page 1");
-        println!("  cargo run --example list_recent_tracks 20 5   # Fetch 20 tracks starting from page 5");
-    }
+    println!();
+    println!("Usage: cargo run --example list_recent_tracks [num_tracks] [starting_page]");
+    println!("  num_tracks    - Number of tracks to fetch (default: 20)");
+    println!("  starting_page - Page number to start from (default: 1)");
+    println!();
+    println!("Examples:");
+    println!("  cargo run --example list_recent_tracks 50     # Fetch 50 tracks from page 1");
+    println!(
+        "  cargo run --example list_recent_tracks 20 5   # Fetch 20 tracks starting from page 5"
+    );
 
     Ok(())
 }

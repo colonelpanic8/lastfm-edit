@@ -23,7 +23,7 @@
 //! async fn main() -> Result<()> {
 //!     // Create client with any HTTP implementation
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmEditClient::new(Box::new(http_client));
+//!     let mut client = LastFmEditClientImpl::new(Box::new(http_client));
 //!
 //!     // Login to Last.fm
 //!     client.login("username", "password").await?;
@@ -61,12 +61,12 @@
 //! ### Basic Library Browsing
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
+//! use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmEditClient::new(Box::new(http_client));
+//!     let client = LastFmEditClientImpl::new(Box::new(http_client));
 //!
 //!     client.login("username", "password").await?;
 //!
@@ -83,12 +83,12 @@
 //! ### Bulk Track Editing
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmEditClient, ScrobbleEdit, AsyncPaginatedIterator, Result};
+//! use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmEditClient::new(Box::new(http_client));
+//!     let client = LastFmEditClientImpl::new(Box::new(http_client));
 //!
 //!     client.login("username", "password").await?;
 //!
@@ -122,12 +122,12 @@
 //! ### Recent Tracks Monitoring
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
+//! use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmEditClient::new(Box::new(http_client));
+//!     let client = LastFmEditClientImpl::new(Box::new(http_client));
 //!
 //!     client.login("username", "password").await?;
 //!
@@ -136,6 +136,67 @@
 //!     println!("Found {} recent tracks", recent_tracks.len());
 //!
 //!     Ok(())
+//! }
+//! ```
+//!
+//! ### Mocking for Testing
+//!
+//! Enable the `mock` feature to use `MockLastFmEditClient` for testing:
+//!
+//! ```toml
+//! [dev-dependencies]
+//! lastfm-edit = { version = "0.7.0", features = ["mock"] }
+//! mockall = "0.13"
+//! ```
+//!
+//! ```rust,ignore
+//! #[cfg(feature = "mock")]
+//! mod tests {
+//!     use lastfm_edit::{LastFmEditClient, MockLastFmEditClient, Result, EditResponse, ScrobbleEdit};
+//!     use mockall::predicate::*;
+//!
+//!     #[tokio::test]
+//!     async fn test_edit_workflow() -> Result<()> {
+//!         let mut mock_client = MockLastFmEditClient::new();
+//!
+//!         // Set up expectations
+//!         mock_client
+//!             .expect_login()
+//!             .with(eq("testuser"), eq("testpass"))
+//!             .times(1)
+//!             .returning(|_, _| Ok(()));
+//!
+//!         mock_client
+//!             .expect_edit_scrobble()
+//!             .times(1)
+//!             .returning(|_| Ok(EditResponse {
+//!                 success: true,
+//!                 message: Some("Edit successful".to_string()),
+//!             }));
+//!
+//!         // Use as trait object
+//!         let client: &dyn LastFmEditClient = &mock_client;
+//!
+//!         client.login("testuser", "testpass").await?;
+//!
+//!         let edit = ScrobbleEdit::new(
+//!             Some("Old Track".to_string()),
+//!             Some("Old Album".to_string()),
+//!             Some("Old Artist".to_string()),
+//!             Some("Old Artist".to_string()),
+//!             "New Track".to_string(),
+//!             "New Album".to_string(),
+//!             "New Artist".to_string(),
+//!             "New Artist".to_string(),
+//!             1640995200,
+//!             false,
+//!         );
+//!
+//!         let response = client.edit_scrobble(&edit).await?;
+//!         assert!(response.success);
+//!
+//!         Ok(())
+//!     }
 //! }
 //! ```
 //!
@@ -153,12 +214,43 @@ pub mod session;
 pub mod track;
 
 pub use album::{Album, AlbumPage};
-pub use client::LastFmEditClient;
+pub use client::{LastFmEditClient, LastFmEditClientImpl};
+
+// Re-export the mock when the mock feature is enabled
+#[cfg(feature = "mock")]
+pub use client::MockLastFmEditClient;
 pub use edit::{EditResponse, ScrobbleEdit};
 pub use error::LastFmError;
 pub use iterator::{
     ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, RecentTracksIterator,
 };
+
+// Iterator-based convenience methods for the client
+impl LastFmEditClientImpl {
+    /// Create an iterator for browsing an artist's tracks from the user's library.
+    pub fn artist_tracks(&self, artist: &str) -> ArtistTracksIterator {
+        ArtistTracksIterator::new(self, artist.to_string())
+    }
+
+    /// Create an iterator for browsing an artist's albums from the user's library.
+    pub fn artist_albums(&self, artist: &str) -> ArtistAlbumsIterator {
+        ArtistAlbumsIterator::new(self, artist.to_string())
+    }
+
+    /// Create an iterator for browsing the user's recent tracks/scrobbles.
+    pub fn recent_tracks(&self) -> RecentTracksIterator {
+        RecentTracksIterator::new(self)
+    }
+
+    /// Create an iterator for browsing the user's recent tracks starting from a specific page.
+    pub fn recent_tracks_from_page(&self, starting_page: u32) -> RecentTracksIterator {
+        RecentTracksIterator::with_starting_page(self, starting_page)
+    }
+}
+
+// Re-export the mock iterator when the mock feature is enabled
+#[cfg(feature = "mock")]
+pub use iterator::MockAsyncPaginatedIterator;
 pub use session::LastFmEditSession;
 pub use track::{Track, TrackPage};
 

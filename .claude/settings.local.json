@@ -51,7 +51,9 @@
       "WebFetch(domain:crates.io)",
       "Bash(git tag:*)",
       "Bash(git fetch:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(if grep -q \"use lastfm_edit::\" \"$file\")",
+      "Bash(! grep -q \"LastFmEditClient\" \"$file\")"
     ],
     "deny": []
   }

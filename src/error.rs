@@ -12,7 +12,7 @@ use thiserror::Error;
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+///     let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
 ///
 ///     match client.login("username", "password").await {
 ///         Ok(()) => println!("Login successful"),
@@ -34,7 +34,7 @@ use thiserror::Error;
 /// ```rust,no_run
 /// # use lastfm_edit::{LastFmEditClient, ScrobbleEdit};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClient::new(Box::new(http_client::native::NativeClient::new()));
+/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;
 ///
 /// let edit = ScrobbleEdit::from_track_info("Track", "Album", "Artist", 1640995200);
