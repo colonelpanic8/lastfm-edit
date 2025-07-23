@@ -30,13 +30,17 @@
 #[derive(Debug, Clone)]
 pub struct ScrobbleEdit {
     /// Original track name as it appears in the scrobble
-    pub track_name_original: String,
-    /// Original album name as it appears in the scrobble
-    pub album_name_original: String,
+    /// If None, the client will attempt to look up the complete original metadata
+    pub track_name_original: Option<String>,
+    /// Original album name as it appears in the scrobble  
+    /// If None, the client will attempt to look up the complete original metadata
+    pub album_name_original: Option<String>,
     /// Original artist name as it appears in the scrobble
-    pub artist_name_original: String,
+    /// If None, the client will attempt to look up the complete original metadata
+    pub artist_name_original: Option<String>,
     /// Original album artist name as it appears in the scrobble
-    pub album_artist_name_original: String,
+    /// If None, the client will attempt to look up the complete original metadata
+    pub album_artist_name_original: Option<String>,
 
     /// New track name to set
     pub track_name: String,
@@ -107,10 +111,10 @@ impl ScrobbleEdit {
     /// * `edit_all` - Whether to edit all matching scrobbles or just this one
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        track_name_original: String,
-        album_name_original: String,
-        artist_name_original: String,
-        album_artist_name_original: String,
+        track_name_original: Option<String>,
+        album_name_original: Option<String>,
+        artist_name_original: Option<String>,
+        album_artist_name_original: Option<String>,
         track_name: String,
         album_name: String,
         artist_name: String,
@@ -165,10 +169,10 @@ impl ScrobbleEdit {
         timestamp: u64,
     ) -> Self {
         Self::new(
-            original_track.to_string(),
-            original_album.to_string(),
-            original_artist.to_string(),
-            original_artist.to_string(), // album_artist defaults to artist
+            Some(original_track.to_string()),
+            Some(original_album.to_string()),
+            Some(original_artist.to_string()),
+            Some(original_artist.to_string()), // album_artist defaults to artist
             original_track.to_string(),
             original_album.to_string(),
             original_artist.to_string(),
@@ -239,5 +243,50 @@ impl ScrobbleEdit {
     pub fn with_edit_all(mut self, edit_all: bool) -> Self {
         self.edit_all = edit_all;
         self
+    }
+
+    /// Create an edit request with minimal information, letting the client look up missing metadata.
+    ///
+    /// This constructor is useful when you only know some of the original metadata and want
+    /// the client to automatically fill in missing information by looking up the scrobble.
+    ///
+    /// # Arguments
+    ///
+    /// * `track_name` - The new track name to set
+    /// * `artist_name` - The new artist name to set
+    /// * `album_name` - The new album name to set
+    /// * `timestamp` - Unix timestamp identifying the scrobble
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use lastfm_edit::ScrobbleEdit;
+    ///
+    /// // Create an edit where the client will look up original metadata
+    /// let edit = ScrobbleEdit::with_minimal_info(
+    ///     "Corrected Track Name",
+    ///     "Corrected Artist",
+    ///     "Corrected Album",
+    ///     1640995200
+    /// );
+    /// ```
+    pub fn with_minimal_info(
+        track_name: &str,
+        artist_name: &str,
+        album_name: &str,
+        timestamp: u64,
+    ) -> Self {
+        Self::new(
+            None, // Client will look up original track name
+            None, // Client will look up original album name
+            None, // Client will look up original artist name
+            None, // Client will look up original album artist name
+            track_name.to_string(),
+            album_name.to_string(),
+            artist_name.to_string(),
+            artist_name.to_string(), // album_artist defaults to artist
+            timestamp,
+            false,
+        )
     }
 }

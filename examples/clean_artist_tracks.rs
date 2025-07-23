@@ -129,7 +129,10 @@ async fn main() -> Result<()> {
             Ok(mut edit_data) => {
                 println!(
                     "   📋 Loaded edit form data - Album: '{}'",
-                    edit_data.album_name_original
+                    edit_data
+                        .album_name_original
+                        .as_deref()
+                        .unwrap_or("unknown")
                 );
 
                 // Update the track name to the cleaned version

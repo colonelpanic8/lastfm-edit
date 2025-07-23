@@ -14,6 +14,7 @@
 ///     playcount: 42,
 ///     timestamp: Some(1640995200), // Unix timestamp
 ///     album: Some("OK Computer".to_string()),
+///     album_artist: Some("Radiohead".to_string()),
 /// };
 ///
 /// println!("{} by {} (played {} times)", track.name, track.artist, track.playcount);
@@ -40,6 +41,13 @@ pub struct Track {
     /// where album information is available in the edit forms. May be `None`
     /// for aggregate track listings or when album information is not available.
     pub album: Option<String>,
+    /// The album artist name (if available and different from track artist)
+    ///
+    /// This field is populated when tracks are retrieved from recent scrobbles
+    /// where album artist information is available. May be `None` for tracks
+    /// where the album artist is the same as the track artist, or when this
+    /// information is not available.
+    pub album_artist: Option<String>,
 }
 
 /// Represents a paginated collection of tracks.
@@ -60,6 +68,7 @@ pub struct Track {
 ///             playcount: 10,
 ///             timestamp: None,
 ///             album: None,
+///             album_artist: None,
 ///         }
 ///     ],
 ///     page_number: 1,

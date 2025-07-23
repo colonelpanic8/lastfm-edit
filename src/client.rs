@@ -620,7 +620,91 @@ impl LastFmEditClient {
     }
 
     pub async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
-        self.edit_scrobble_with_retry(edit, 3).await
+        // First, try to enrich the edit with complete metadata if missing
+        let enriched_edit = self.enrich_edit_metadata(edit).await.unwrap_or_else(|e| {
+            log::debug!("Could not enrich metadata ({e}), using original edit");
+            edit.clone()
+        });
+
+        self.edit_scrobble_with_retry(&enriched_edit, 3).await
+    }
+
+    /// Enrich a ScrobbleEdit with complete metadata by looking up missing original values
+    async fn enrich_edit_metadata(&self, edit: &ScrobbleEdit) -> Result<ScrobbleEdit> {
+        // Check if we need to look up any missing original metadata
+        let needs_lookup = edit.track_name_original.is_none()
+            || edit.album_name_original.is_none()
+            || edit.artist_name_original.is_none()
+            || edit.album_artist_name_original.is_none();
+
+        if !needs_lookup {
+            // No missing metadata, return as-is
+            return Ok(edit.clone());
+        }
+
+        log::debug!(
+            "Looking up missing original metadata for scrobble with timestamp {}",
+            edit.timestamp
+        );
+
+        // Try to find the scrobble by timestamp in recent scrobbles
+        let found_scrobble = self.find_scrobble_by_timestamp(edit.timestamp).await?;
+
+        Ok(ScrobbleEdit {
+            track_name_original: edit
+                .track_name_original
+                .clone()
+                .or_else(|| Some(found_scrobble.name.clone())),
+            album_name_original: edit
+                .album_name_original
+                .clone()
+                .or_else(|| found_scrobble.album.clone()),
+            artist_name_original: edit
+                .artist_name_original
+                .clone()
+                .or_else(|| Some(found_scrobble.artist.clone())),
+            album_artist_name_original: edit
+                .album_artist_name_original
+                .clone()
+                .or_else(|| found_scrobble.album_artist.clone())
+                .or_else(|| Some(found_scrobble.artist.clone())), // fallback to artist
+            track_name: edit.track_name.clone(),
+            album_name: edit.album_name.clone(),
+            artist_name: edit.artist_name.clone(),
+            album_artist_name: edit.album_artist_name.clone(),
+            timestamp: edit.timestamp,
+            edit_all: edit.edit_all,
+        })
+    }
+
+    /// Find a scrobble by its timestamp in recent scrobbles
+    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
+        log::debug!("Searching for scrobble with timestamp {timestamp}");
+
+        // Search through recent scrobbles to find the one with matching timestamp
+        for page in 1..=10 {
+            // Search up to 10 pages of recent scrobbles
+            let scrobbles = self.get_recent_scrobbles(page).await?;
+
+            for scrobble in scrobbles {
+                if let Some(scrobble_timestamp) = scrobble.timestamp {
+                    if scrobble_timestamp == timestamp {
+                        log::debug!(
+                            "Found scrobble: '{}' by '{}' with album: '{:?}', album_artist: '{:?}'",
+                            scrobble.name,
+                            scrobble.artist,
+                            scrobble.album,
+                            scrobble.album_artist
+                        );
+                        return Ok(scrobble);
+                    }
+                }
+            }
+        }
+
+        Err(LastFmError::Parse(format!(
+            "Could not find scrobble with timestamp {timestamp}"
+        )))
     }
 
     pub async fn edit_scrobble_with_retry(
@@ -686,16 +770,19 @@ impl LastFmEditClient {
         form_data.insert("csrfmiddlewaretoken", fresh_csrf_token.as_str());
 
         // Include ALL form fields as they were extracted from the track page
-        form_data.insert("track_name_original", &edit.track_name_original);
+        // For optional fields, provide empty string as fallback
+        let track_name_original = edit.track_name_original.as_deref().unwrap_or("");
+        let artist_name_original = edit.artist_name_original.as_deref().unwrap_or("");
+        let album_name_original = edit.album_name_original.as_deref().unwrap_or("");
+        let album_artist_name_original = edit.album_artist_name_original.as_deref().unwrap_or("");
+
+        form_data.insert("track_name_original", track_name_original);
         form_data.insert("track_name", &edit.track_name);
-        form_data.insert("artist_name_original", &edit.artist_name_original);
+        form_data.insert("artist_name_original", artist_name_original);
         form_data.insert("artist_name", &edit.artist_name);
-        form_data.insert("album_name_original", &edit.album_name_original);
+        form_data.insert("album_name_original", album_name_original);
         form_data.insert("album_name", &edit.album_name);
-        form_data.insert(
-            "album_artist_name_original",
-            &edit.album_artist_name_original,
-        );
+        form_data.insert("album_artist_name_original", album_artist_name_original);
         form_data.insert("album_artist_name", &edit.album_artist_name);
 
         // ALWAYS include timestamp - Last.fm requires it even with edit_all=true
@@ -711,7 +798,7 @@ impl LastFmEditClient {
 
         log::debug!(
             "Editing scrobble: '{}' -> '{}'",
-            edit.track_name_original,
+            edit.track_name_original.as_deref().unwrap_or("unknown"),
             edit.track_name
         );
         {
@@ -989,10 +1076,10 @@ impl LastFmEditClient {
 
                     // Create ScrobbleEdit with the extracted values
                     return Ok(crate::ScrobbleEdit::new(
-                        form_track.clone(),
-                        form_album.clone(),
-                        form_artist.clone(),
-                        form_album_artist.clone(),
+                        Some(form_track.clone()),
+                        Some(form_album.clone()),
+                        Some(form_artist.clone()),
+                        Some(form_album_artist.clone()),
                         form_track,
                         form_album,
                         form_artist,

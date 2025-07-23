@@ -78,6 +78,9 @@ impl LastFmParser {
         // Extract album from hidden inputs in edit form
         let album = self.extract_scrobble_album(row);
 
+        // Extract album artist from hidden inputs in edit form
+        let album_artist = self.extract_scrobble_album_artist(row);
+
         // For recent scrobbles, playcount is typically 1 since they're individual scrobbles
         let playcount = 1;
 
@@ -87,6 +90,7 @@ impl LastFmParser {
             playcount,
             timestamp,
             album,
+            album_artist,
         })
     }
 
@@ -153,6 +157,23 @@ impl LastFmParser {
         None
     }
 
+    /// Extract album artist name from scrobble row elements
+    fn extract_scrobble_album_artist(&self, row: &scraper::ElementRef) -> Option<String> {
+        // Look for album_artist_name in hidden inputs within edit forms
+        let album_artist_input_selector =
+            Selector::parse("form[data-edit-scrobble] input[name='album_artist_name']").unwrap();
+
+        if let Some(album_artist_input) = row.select(&album_artist_input_selector).next() {
+            if let Some(album_artist_name) = album_artist_input.value().attr("value") {
+                if !album_artist_name.is_empty() {
+                    return Some(album_artist_name.to_string());
+                }
+            }
+        }
+
+        None
+    }
+
     /// Parse a tracks page into a `TrackPage` structure
     pub fn parse_tracks_page(
         &self,
@@ -207,6 +228,7 @@ impl LastFmParser {
                             playcount,
                             timestamp,
                             album: album.map(|a| a.to_string()),
+                            album_artist: None, // Not available in aggregate track listings
                         };
                         tracks.push(track);
                     }
@@ -235,6 +257,7 @@ impl LastFmParser {
                             playcount,
                             timestamp,
                             album: album.map(|a| a.to_string()),
+                            album_artist: None, // Not available in form input parsing
                         };
                         tracks.push(track);
                         if tracks.len() >= 50 {
@@ -297,8 +320,9 @@ impl LastFmParser {
             name,
             artist,
             playcount,
-            timestamp: None, // Not available in table parsing mode
-            album: None,     // Not available in table parsing mode
+            timestamp: None,    // Not available in table parsing mode
+            album: None,        // Not available in table parsing mode
+            album_artist: None, // Not available in table parsing mode
         })
     }
 
