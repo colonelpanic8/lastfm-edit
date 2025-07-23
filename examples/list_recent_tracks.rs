@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::Result;
+use lastfm_edit::{AsyncPaginatedIterator, Result};
 use std::env;
 
 #[tokio::main]
@@ -16,56 +16,44 @@ async fn main() -> Result<()> {
     println!("Fetching {num_tracks} recent tracks starting from page {starting_page}...");
     println!();
 
+    // Create iterator starting from the specified page
+    let mut recent_tracks = client.recent_tracks_from_page(starting_page);
     let mut count = 0;
-    let mut page = starting_page;
 
-    // Fetch tracks using pagination directly
+    // Use the iterator to fetch tracks
     while count < num_tracks {
-        match client.get_recent_scrobbles(page).await {
-            Ok(tracks) => {
-                if tracks.is_empty() {
-                    println!("No more tracks available.");
-                    break;
-                }
+        match recent_tracks.next().await? {
+            Some(track) => {
+                let timestamp_str = if let Some(ts) = track.timestamp {
+                    format!(
+                        " ({})",
+                        chrono::DateTime::from_timestamp(ts as i64, 0)
+                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                            .unwrap_or_else(|| format!("timestamp: {ts}"))
+                    )
+                } else {
+                    " (no timestamp)".to_string()
+                };
 
-                for track in tracks {
-                    if count >= num_tracks {
-                        break;
-                    }
+                let album_str = if let Some(album) = &track.album {
+                    format!(" [{album}]")
+                } else {
+                    "".to_string()
+                };
 
-                    let timestamp_str = if let Some(ts) = track.timestamp {
-                        format!(
-                            " ({})",
-                            chrono::DateTime::from_timestamp(ts as i64, 0)
-                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                .unwrap_or_else(|| format!("timestamp: {ts}"))
-                        )
-                    } else {
-                        " (no timestamp)".to_string()
-                    };
+                println!(
+                    "{}. {} - {}{}{}",
+                    count + 1,
+                    track.artist,
+                    track.name,
+                    album_str,
+                    timestamp_str
+                );
 
-                    let album_str = if let Some(album) = &track.album {
-                        format!(" [{album}]")
-                    } else {
-                        "".to_string()
-                    };
-
-                    println!(
-                        "{}. {} - {}{}{}",
-                        count + 1,
-                        track.artist,
-                        track.name,
-                        album_str,
-                        timestamp_str
-                    );
-
-                    count += 1;
-                }
-
-                page += 1;
+                count += 1;
             }
-            Err(e) => {
-                println!("❌ Error fetching tracks from page {page}: {e}");
+            None => {
+                println!("No more tracks available.");
                 break;
             }
         }
