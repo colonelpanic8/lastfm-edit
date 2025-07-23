@@ -53,6 +53,11 @@ path = "examples/rename_album.rs"
 name = "clean_artist_tracks"
 path = "examples/clean_artist_tracks.rs"
 
+[[bin]]
+name = "test_album_artist"
+path = "test_album_artist.rs"
+required-features = ["cli"]
+
 
 [[example]]
 name = "remove_remaster"

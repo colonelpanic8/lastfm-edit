@@ -678,7 +678,7 @@ impl LastFmEditClient {
     }
 
     /// Find a scrobble by its timestamp in recent scrobbles
-    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
+    pub async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
         log::debug!("Searching for scrobble with timestamp {timestamp}");
 
         // Search through recent scrobbles to find the one with matching timestamp
