@@ -127,6 +127,18 @@ pub trait LastFmEditClient {
 
     /// Restore session state from a previously saved session.
     fn restore_session(&self, session: LastFmEditSession);
+
+    /// Create an iterator for browsing an artist's tracks from the user's library.
+    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator;
+
+    /// Create an iterator for browsing an artist's albums from the user's library.
+    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator;
+
+    /// Create an iterator for browsing the user's recent tracks/scrobbles.
+    fn recent_tracks(&self) -> crate::RecentTracksIterator;
+
+    /// Create an iterator for browsing the user's recent tracks starting from a specific page.
+    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
 }
 
 /// Main implementation for interacting with Last.fm's web interface.
@@ -154,8 +166,9 @@ pub trait LastFmEditClient {
 ///     Ok(())
 /// }
 /// ```
+#[derive(Clone)]
 pub struct LastFmEditClientImpl {
-    client: Box<dyn HttpClient + Send + Sync>,
+    client: Arc<dyn HttpClient + Send + Sync>,
     session: Arc<Mutex<LastFmEditSession>>,
     rate_limit_patterns: Vec<String>,
     debug_save_responses: bool,
@@ -175,7 +188,7 @@ impl LastFmEditClientImpl {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, Result};
+    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
@@ -238,7 +251,7 @@ impl LastFmEditClientImpl {
         rate_limit_patterns: Vec<String>,
     ) -> Self {
         Self {
-            client,
+            client: Arc::from(client),
             session: Arc::new(Mutex::new(LastFmEditSession::new(
                 String::new(),
                 Vec::new(),
@@ -268,11 +281,11 @@ impl LastFmEditClientImpl {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, Result};
+    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///     let client = LastFmEditClient::login_with_credentials(
+    ///     let client = LastFmEditClientImpl::login_with_credentials(
     ///         Box::new(http_client::native::NativeClient::new()),
     ///         "username",
     ///         "password"
@@ -307,14 +320,14 @@ impl LastFmEditClientImpl {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, LastFmEditSession};
+    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession};
     ///
     /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     ///     // Assume we have a saved session
     ///     let session_json = std::fs::read_to_string("session.json")?;
     ///     let session = LastFmEditSession::from_json(&session_json)?;
     ///
-    ///     let client = LastFmEditClient::from_session(
+    ///     let client = LastFmEditClientImpl::from_session(
     ///         Box::new(http_client::native::NativeClient::new()),
     ///         session
     ///     );
@@ -327,7 +340,7 @@ impl LastFmEditClientImpl {
         session: LastFmEditSession,
     ) -> Self {
         Self {
-            client,
+            client: Arc::from(client),
             session: Arc::new(Mutex::new(session)),
             rate_limit_patterns: vec![
                 "you've tried to log in too many times".to_string(),
@@ -352,44 +365,6 @@ impl LastFmEditClientImpl {
         }
     }
 
-    /// Clone this client's configuration with a new HTTP client.
-    ///
-    /// Since `LastFmEditClientImpl` contains a trait object that cannot be cloned,
-    /// this method allows you to create a new client instance with the same
-    /// configuration (session, rate limit patterns, etc.) but with a different
-    /// HTTP client implementation.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - New HTTP client implementation to use
-    ///
-    /// # Returns
-    ///
-    /// A new `LastFmEditClientImpl` with the same configuration but different HTTP client.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use lastfm_edit::LastFmEditClientImpl;
-    ///
-    /// let original_client = LastFmEditClientImpl::new(
-    ///     Box::new(http_client::native::NativeClient::new())
-    /// );
-    ///
-    /// let cloned_client = original_client.clone_with_client(
-    ///     Box::new(http_client::native::NativeClient::new())
-    /// );
-    /// ```
-    pub fn clone_with_client(&self, client: Box<dyn HttpClient + Send + Sync>) -> Self {
-        Self {
-            client,
-            session: Arc::clone(&self.session),
-            rate_limit_patterns: self.rate_limit_patterns.clone(),
-            debug_save_responses: self.debug_save_responses,
-            parser: self.parser.clone(),
-        }
-    }
-
     /// Extract the current session state for persistence.
     ///
     /// This allows you to save the authentication state and restore it later
@@ -402,7 +377,7 @@ impl LastFmEditClientImpl {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, Result};
+    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
     ///
     /// #[tokio::main]
     /// async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -431,7 +406,7 @@ impl LastFmEditClientImpl {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, LastFmEditSession};
+    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession};
     ///
     /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     ///     let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
@@ -469,7 +444,7 @@ impl LastFmEditClientImpl {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, Result};
+    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
     /// # tokio_test::block_on(async {
     /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
     /// client.login("username", "password").await?;
@@ -2242,5 +2217,21 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn restore_session(&self, session: LastFmEditSession) {
         self.restore_session(session)
+    }
+
+    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator {
+        crate::ArtistTracksIterator::new(self.clone(), artist.to_string())
+    }
+
+    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator {
+        crate::ArtistAlbumsIterator::new(self.clone(), artist.to_string())
+    }
+
+    fn recent_tracks(&self) -> crate::RecentTracksIterator {
+        crate::RecentTracksIterator::new(self.clone())
+    }
+
+    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator {
+        crate::RecentTracksIterator::with_starting_page(self.clone(), starting_page)
     }
 }

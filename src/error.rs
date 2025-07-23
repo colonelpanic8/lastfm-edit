@@ -8,7 +8,7 @@ use thiserror::Error;
 /// # Error Handling Examples
 ///
 /// ```rust,no_run
-/// use lastfm_edit::{LastFmEditClient, LastFmError};
+/// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmError};
 ///
 /// #[tokio::main]
 /// async fn main() {
@@ -32,7 +32,7 @@ use thiserror::Error;
 /// automatically handle rate limiting errors by waiting and retrying:
 ///
 /// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, ScrobbleEdit};
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
 /// # tokio_test::block_on(async {
 /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
 /// // client.login(...).await?;

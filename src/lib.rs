@@ -17,7 +17,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use lastfm_edit::{LastFmEditClient, AsyncPaginatedIterator, Result};
+//! use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator, Result};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
@@ -229,22 +229,22 @@ pub use iterator::{
 impl LastFmEditClientImpl {
     /// Create an iterator for browsing an artist's tracks from the user's library.
     pub fn artist_tracks(&self, artist: &str) -> ArtistTracksIterator {
-        ArtistTracksIterator::new(self, artist.to_string())
+        ArtistTracksIterator::new(self.clone(), artist.to_string())
     }
 
     /// Create an iterator for browsing an artist's albums from the user's library.
     pub fn artist_albums(&self, artist: &str) -> ArtistAlbumsIterator {
-        ArtistAlbumsIterator::new(self, artist.to_string())
+        ArtistAlbumsIterator::new(self.clone(), artist.to_string())
     }
 
     /// Create an iterator for browsing the user's recent tracks/scrobbles.
     pub fn recent_tracks(&self) -> RecentTracksIterator {
-        RecentTracksIterator::new(self)
+        RecentTracksIterator::new(self.clone())
     }
 
     /// Create an iterator for browsing the user's recent tracks starting from a specific page.
     pub fn recent_tracks_from_page(&self, starting_page: u32) -> RecentTracksIterator {
-        RecentTracksIterator::with_starting_page(self, starting_page)
+        RecentTracksIterator::with_starting_page(self.clone(), starting_page)
     }
 }
 
