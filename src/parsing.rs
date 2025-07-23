@@ -11,7 +11,7 @@ use scraper::{Html, Selector};
 ///
 /// This struct holds the parsing logic that was previously embedded in the client.
 /// It's designed to be stateless and focused purely on HTML parsing.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LastFmParser;
 
 impl LastFmParser {

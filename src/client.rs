@@ -352,6 +352,44 @@ impl LastFmEditClientImpl {
         }
     }
 
+    /// Clone this client's configuration with a new HTTP client.
+    ///
+    /// Since `LastFmEditClientImpl` contains a trait object that cannot be cloned,
+    /// this method allows you to create a new client instance with the same
+    /// configuration (session, rate limit patterns, etc.) but with a different
+    /// HTTP client implementation.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - New HTTP client implementation to use
+    ///
+    /// # Returns
+    ///
+    /// A new `LastFmEditClientImpl` with the same configuration but different HTTP client.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::LastFmEditClientImpl;
+    ///
+    /// let original_client = LastFmEditClientImpl::new(
+    ///     Box::new(http_client::native::NativeClient::new())
+    /// );
+    ///
+    /// let cloned_client = original_client.clone_with_client(
+    ///     Box::new(http_client::native::NativeClient::new())
+    /// );
+    /// ```
+    pub fn clone_with_client(&self, client: Box<dyn HttpClient + Send + Sync>) -> Self {
+        Self {
+            client,
+            session: Arc::clone(&self.session),
+            rate_limit_patterns: self.rate_limit_patterns.clone(),
+            debug_save_responses: self.debug_save_responses,
+            parser: self.parser.clone(),
+        }
+    }
+
     /// Extract the current session state for persistence.
     ///
     /// This allows you to save the authentication state and restore it later
