@@ -1,6 +1,6 @@
 [package]
 name = "lastfm-edit"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
 license = "MIT"
@@ -21,16 +21,15 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 async-trait = "0.1"
 
-# Optional dependencies for CLI features
-tokio = { version = "1.0", features = ["full"], optional = true }
-env_logger = { version = "0.11", optional = true }
+# Optional dependencies for examples
+tokio = { version = "1.0", features = ["full"] }
+env_logger = { version = "0.11" }
 
 # Optional mocking support
 mockall = { version = "0.13", optional = true }
 
 [features]
-default = ["cli", "curl"]
-cli = ["tokio", "env_logger"]
+default = ["curl"]
 wasm = ["http-client/wasm_client"]
 curl = ["http-client/curl_client"]
 mock = ["mockall"]
@@ -59,11 +58,9 @@ path = "examples/rename_album.rs"
 name = "clean_artist_tracks"
 path = "examples/clean_artist_tracks.rs"
 
-[[bin]]
+[[example]]
 name = "test_album_artist"
-path = "test_album_artist.rs"
-required-features = ["cli"]
-
+path = "examples/test_album_artist.rs"
 
 [[example]]
 name = "remove_remaster"
