@@ -1041,9 +1041,9 @@ impl LastFmEditClient {
         let document = Html::parse_document(&html);
 
         // Use the shared track extraction function
-        let tracks = self
-            .parser
-            .extract_tracks_from_document(&document, artist_name)?;
+        let tracks =
+            self.parser
+                .extract_tracks_from_document(&document, artist_name, Some(album_name))?;
 
         log::debug!(
             "Successfully parsed {} tracks from album page",
@@ -1504,7 +1504,7 @@ impl LastFmEditClient {
         } else {
             log::debug!("Parsing HTML response from AJAX endpoint");
             let document = Html::parse_document(&content);
-            self.parser.parse_tracks_page(&document, page, artist)
+            self.parser.parse_tracks_page(&document, page, artist, None)
         }
     }
 
@@ -1530,8 +1530,10 @@ impl LastFmEditClient {
         &self,
         document: &Html,
         artist: &str,
+        album: Option<&str>,
     ) -> Result<Vec<Track>> {
-        self.parser.extract_tracks_from_document(document, artist)
+        self.parser
+            .extract_tracks_from_document(document, artist, album)
     }
 
     /// Parse tracks page (delegates to parser)
@@ -1540,8 +1542,10 @@ impl LastFmEditClient {
         document: &Html,
         page_number: u32,
         artist: &str,
+        album: Option<&str>,
     ) -> Result<TrackPage> {
-        self.parser.parse_tracks_page(document, page_number, artist)
+        self.parser
+            .parse_tracks_page(document, page_number, artist, album)
     }
 
     /// Parse recent scrobbles from HTML document (for testing)

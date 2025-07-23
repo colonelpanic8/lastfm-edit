@@ -16,7 +16,7 @@ fn test_neil_young_track_parsing() -> Result<()> {
     let parser = LastFmParser::new();
 
     // Test the parsing function
-    let track_page = parser.parse_tracks_page(&document, 1, "Neil Young")?;
+    let track_page = parser.parse_tracks_page(&document, 1, "Neil Young", None)?;
 
     // Basic sanity checks
     assert!(!track_page.tracks.is_empty(), "Should find some tracks");

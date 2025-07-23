@@ -159,8 +159,9 @@ impl LastFmParser {
         document: &Html,
         page_number: u32,
         artist: &str,
+        album: Option<&str>,
     ) -> Result<TrackPage> {
-        let tracks = self.extract_tracks_from_document(document, artist)?;
+        let tracks = self.extract_tracks_from_document(document, artist, album)?;
 
         // Check for pagination
         let (has_next_page, total_pages) = self.parse_pagination(document, page_number)?;
@@ -178,12 +179,13 @@ impl LastFmParser {
         &self,
         document: &Html,
         artist: &str,
+        album: Option<&str>,
     ) -> Result<Vec<Track>> {
         let mut tracks = Vec::new();
         let mut seen_tracks = std::collections::HashSet::new();
 
         // Try JSON-embedded data first
-        if let Ok(json_tracks) = self.parse_json_tracks_page(document, 1, artist) {
+        if let Ok(json_tracks) = self.parse_json_tracks_page(document, 1, artist, album) {
             return Ok(json_tracks.tracks);
         }
 
@@ -204,7 +206,7 @@ impl LastFmParser {
                             artist: artist.to_string(),
                             playcount,
                             timestamp,
-                            album: None, // JSON parsing doesn't have album info
+                            album: album.map(|a| a.to_string()),
                         };
                         tracks.push(track);
                     }
@@ -232,7 +234,7 @@ impl LastFmParser {
                             artist: artist.to_string(),
                             playcount,
                             timestamp,
-                            album: None, // Form parsing doesn't have album info
+                            album: album.map(|a| a.to_string()),
                         };
                         tracks.push(track);
                         if tracks.len() >= 50 {
@@ -245,7 +247,7 @@ impl LastFmParser {
 
         // Strategy 3: Fallback to table parsing method if we didn't find enough tracks
         if tracks.len() < 10 {
-            let table_tracks = self.parse_tracks_from_rows(document, artist)?;
+            let table_tracks = self.parse_tracks_from_rows(document, artist, album)?;
             for track in table_tracks {
                 if !seen_tracks.contains(&track.name) && tracks.len() < 50 {
                     seen_tracks.insert(track.name.clone());
@@ -259,7 +261,12 @@ impl LastFmParser {
     }
 
     /// Parse tracks from chartlist table rows
-    fn parse_tracks_from_rows(&self, document: &Html, artist: &str) -> Result<Vec<Track>> {
+    fn parse_tracks_from_rows(
+        &self,
+        document: &Html,
+        artist: &str,
+        album: Option<&str>,
+    ) -> Result<Vec<Track>> {
         let mut tracks = Vec::new();
         let table_selector = Selector::parse("table.chartlist").unwrap();
         let row_selector = Selector::parse("tbody tr").unwrap();
@@ -268,6 +275,7 @@ impl LastFmParser {
             for row in table.select(&row_selector) {
                 if let Ok(mut track) = self.parse_track_row(&row) {
                     track.artist = artist.to_string(); // Fill in artist name
+                    track.album = album.map(|a| a.to_string()); // Fill in album name
                     tracks.push(track);
                 }
             }
@@ -478,6 +486,7 @@ impl LastFmParser {
         _document: &Html,
         _page: u32,
         _artist: &str,
+        _album: Option<&str>,
     ) -> Result<TrackPage> {
         // JSON parsing not implemented - return error to trigger fallback
         Err(crate::LastFmError::Parse(
