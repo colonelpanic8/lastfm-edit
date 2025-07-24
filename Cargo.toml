@@ -4,6 +4,9 @@ version = "2.0.0"
 edition = "2021"
 description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
 license = "MIT"
+repository = "https://github.com/colonelpanic8/lastfm-edit"
+homepage = "https://github.com/colonelpanic8/lastfm-edit"
+documentation = "https://docs.rs/lastfm-edit"
 
 [dependencies]
 # Core dependencies
