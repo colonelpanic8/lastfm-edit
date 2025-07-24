@@ -1,3 +1,4 @@
+use crate::edit::ExactScrobbleEdit;
 use crate::parsing::LastFmParser;
 use crate::session::LastFmEditSession;
 use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
@@ -75,9 +76,12 @@ pub trait LastFmEditClient {
     /// Edit a scrobble with the given edit parameters.
     async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse>;
 
-    /// Load prepopulated form values for editing a specific track.
-    /// Returns all unique album variations found for the track.
-    async fn load_edit_form_values(
+    /// Discover all unique album variations for a track from the user's library.
+    ///
+    /// This method scrapes the user's library to find all unique album/album_artist
+    /// combinations for the given track and artist, returning fully populated
+    /// ScrobbleEdit objects for each variation found.
+    async fn discover_album_variations(
         &self,
         track_name: &str,
         artist_name: &str,
@@ -688,23 +692,27 @@ impl LastFmEditClientImpl {
         }
 
         // Otherwise, enrich the edit with complete metadata from library page
-        let enriched_edits = self.enrich_edit_metadata(edit).await.unwrap_or_else(|e| {
-            log::debug!("Could not enrich metadata ({e}), trying with original edit");
-            vec![edit.clone()]
-        });
-
-        // For now, just edit the first enriched edit (most common album)
-        // In the future, this could return multiple responses or let user choose
-        if let Some(first_edit) = enriched_edits.first() {
-            self.edit_scrobble_with_retry(first_edit, 3).await
-        } else {
-            self.edit_scrobble_with_retry(edit, 3).await
+        match self.enrich_edit_metadata(edit).await {
+            Ok(enriched_edits) => {
+                // For now, just edit the first enriched edit (most common album)
+                // In the future, this could return multiple responses or let user choose
+                if let Some(first_exact_edit) = enriched_edits.first() {
+                    let first_edit = first_exact_edit.to_scrobble_edit();
+                    self.edit_scrobble_with_retry(&first_edit, 3).await
+                } else {
+                    self.edit_scrobble_with_retry(edit, 3).await
+                }
+            }
+            Err(e) => {
+                log::debug!("Could not enrich metadata ({e}), trying with original edit");
+                self.edit_scrobble_with_retry(edit, 3).await
+            }
         }
     }
 
     /// Enrich a ScrobbleEdit with complete metadata by scraping the track library page
-    /// This now returns a collection of ScrobbleEdits, one for each unique album/album_artist combination
-    async fn enrich_edit_metadata(&self, edit: &ScrobbleEdit) -> Result<Vec<ScrobbleEdit>> {
+    /// This returns a collection of ExactScrobbleEdits, one for each unique album/album_artist combination
+    async fn enrich_edit_metadata(&self, edit: &ScrobbleEdit) -> Result<Vec<ExactScrobbleEdit>> {
         log::debug!(
             "Enriching metadata for track '{}' by '{}'",
             edit.track_name_original,
@@ -712,9 +720,7 @@ impl LastFmEditClientImpl {
         );
 
         // Scrape the track library page to get all album variations
-
-        // Just use the existing load_edit_form_values which now handles pagination properly
-        self.load_edit_form_values(&edit.track_name_original, &edit.artist_name_original)
+        self.load_edit_form_values_internal(&edit.track_name_original, &edit.artist_name_original)
             .await
     }
 
@@ -1021,11 +1027,11 @@ impl LastFmEditClientImpl {
 
     /// Load prepopulated form values for editing a specific track
     /// This extracts scrobble data directly from the track page forms
-    pub async fn load_edit_form_values(
+    async fn load_edit_form_values_internal(
         &self,
         track_name: &str,
         artist_name: &str,
-    ) -> Result<Vec<crate::ScrobbleEdit>> {
+    ) -> Result<Vec<ExactScrobbleEdit>> {
         log::debug!("Loading edit form values for '{track_name}' by '{artist_name}'");
 
         // Get the specific track page to find scrobble forms
@@ -1150,7 +1156,7 @@ impl LastFmEditClientImpl {
         expected_track: &str,
         expected_artist: &str,
         unique_albums: &mut std::collections::HashSet<(String, String)>,
-    ) -> Result<Vec<crate::ScrobbleEdit>> {
+    ) -> Result<Vec<ExactScrobbleEdit>> {
         let mut scrobble_edits = Vec::new();
         // Look for the chartlist table that contains scrobbles
         let table_selector =
@@ -1198,37 +1204,58 @@ impl LastFmEditClientImpl {
                     // Create a unique key for this album/album_artist combination
                     let album_key = (form_album.clone(), form_album_artist.clone());
                     if unique_albums.insert(album_key) {
-                        // Parse timestamp
+                        // Parse timestamp - skip entries without valid timestamps for ExactScrobbleEdit
                         let timestamp = if form_timestamp.is_empty() {
                             None
                         } else {
                             form_timestamp.parse::<u64>().ok()
                         };
 
-                        log::debug!(
-                            "✅ Found unique album variation: '{form_album}' by '{form_album_artist}' for '{expected_track}' by '{expected_artist}'"
-                        );
+                        if let Some(timestamp) = timestamp {
+                            log::debug!(
+                                "✅ Found unique album variation: '{form_album}' by '{form_album_artist}' for '{expected_track}' by '{expected_artist}'"
+                            );
 
-                        // Create ScrobbleEdit with the extracted values
-                        let scrobble_edit = crate::ScrobbleEdit::new(
-                            form_track.clone(),
-                            Some(form_album.clone()),
-                            form_artist.clone(),
-                            Some(form_album_artist.clone()),
-                            form_track,
-                            form_album,
-                            form_artist,
-                            form_album_artist,
-                            timestamp,
-                            true,
-                        );
-                        scrobble_edits.push(scrobble_edit);
+                            // Create ExactScrobbleEdit with all fields specified
+                            let scrobble_edit = ExactScrobbleEdit::new(
+                                form_track.clone(),
+                                form_album.clone(),
+                                form_artist.clone(),
+                                form_album_artist.clone(),
+                                form_track,
+                                form_album,
+                                form_artist,
+                                form_album_artist,
+                                timestamp,
+                                true,
+                            );
+                            scrobble_edits.push(scrobble_edit);
+                        } else {
+                            log::debug!(
+                                "⚠️ Skipping album variation without valid timestamp: '{form_album}' by '{form_album_artist}'"
+                            );
+                        }
                     }
                 }
             }
         }
 
         Ok(scrobble_edits)
+    }
+
+    /// Discover all unique album variations for a track from the user's library (public API)
+    pub async fn discover_album_variations(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+    ) -> Result<Vec<ScrobbleEdit>> {
+        let exact_edits = self
+            .load_edit_form_values_internal(track_name, artist_name)
+            .await?;
+        Ok(exact_edits
+            .iter()
+            .map(|edit| edit.to_scrobble_edit())
+            .collect())
     }
 
     /// Get tracks from a specific album page
@@ -1316,10 +1343,14 @@ impl LastFmEditClientImpl {
                 track.name
             );
 
-            match self.load_edit_form_values(&track.name, artist_name).await {
+            match self
+                .load_edit_form_values_internal(&track.name, artist_name)
+                .await
+            {
                 Ok(edit_data_list) => {
                     // Use the first (most common) album variation
-                    if let Some(mut edit_data) = edit_data_list.into_iter().next() {
+                    if let Some(edit_data) = edit_data_list.into_iter().next() {
+                        let mut edit_data = edit_data.to_scrobble_edit();
                         // Update the album name
                         edit_data.album_name = new_album_name.to_string();
 
@@ -1463,12 +1494,13 @@ impl LastFmEditClientImpl {
             );
 
             match self
-                .load_edit_form_values(&track.name, old_artist_name)
+                .load_edit_form_values_internal(&track.name, old_artist_name)
                 .await
             {
                 Ok(edit_data_list) => {
                     // Use the first (most common) album variation
-                    if let Some(mut edit_data) = edit_data_list.into_iter().next() {
+                    if let Some(edit_data) = edit_data_list.into_iter().next() {
+                        let mut edit_data = edit_data.to_scrobble_edit();
                         // Update the artist name and album artist name
                         edit_data.artist_name = new_artist_name.to_string();
                         edit_data.album_artist_name = new_artist_name.to_string();
@@ -1556,10 +1588,11 @@ impl LastFmEditClientImpl {
     ) -> Result<EditResponse> {
         log::debug!("Editing artist for track '{track_name}' from '{old_artist_name}' -> '{new_artist_name}'");
 
-        match self.load_edit_form_values(track_name, old_artist_name).await {
+        match self.load_edit_form_values_internal(track_name, old_artist_name).await {
             Ok(edit_data_list) => {
                 // Use the first (most common) album variation
-                if let Some(mut edit_data) = edit_data_list.into_iter().next() {
+                if let Some(edit_data) = edit_data_list.into_iter().next() {
+                    let mut edit_data = edit_data.to_scrobble_edit();
                     // Update the artist name and album artist name
                     edit_data.artist_name = new_artist_name.to_string();
                     edit_data.album_artist_name = new_artist_name.to_string();
@@ -1653,12 +1686,13 @@ impl LastFmEditClientImpl {
             );
 
             match self
-                .load_edit_form_values(&track.name, old_artist_name)
+                .load_edit_form_values_internal(&track.name, old_artist_name)
                 .await
             {
                 Ok(edit_data_list) => {
                     // Use the first (most common) album variation
-                    if let Some(mut edit_data) = edit_data_list.into_iter().next() {
+                    if let Some(edit_data) = edit_data_list.into_iter().next() {
+                        let mut edit_data = edit_data.to_scrobble_edit();
                         // Update the artist name and album artist name
                         edit_data.artist_name = new_artist_name.to_string();
                         edit_data.album_artist_name = new_artist_name.to_string();
@@ -2258,12 +2292,13 @@ impl LastFmEditClient for LastFmEditClientImpl {
         self.edit_scrobble(edit).await
     }
 
-    async fn load_edit_form_values(
+    async fn discover_album_variations(
         &self,
         track_name: &str,
         artist_name: &str,
     ) -> Result<Vec<ScrobbleEdit>> {
-        self.load_edit_form_values(track_name, artist_name).await
+        self.discover_album_variations(track_name, artist_name)
+            .await
     }
 
     async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>> {

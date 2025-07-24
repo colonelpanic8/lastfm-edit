@@ -88,6 +88,39 @@ pub struct EditResponse {
     pub message: Option<String>,
 }
 
+/// Internal representation of a scrobble edit with all fields fully specified.
+///
+/// This type is used internally by the client after enriching metadata from
+/// Last.fm. Unlike `ScrobbleEdit`, all fields are required and non-optional,
+/// ensuring we have complete information before performing edit operations.
+///
+/// This type is not part of the public API.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ExactScrobbleEdit {
+    /// Original track name as it appears in the scrobble
+    pub track_name_original: String,
+    /// Original album name as it appears in the scrobble
+    pub album_name_original: String,
+    /// Original artist name as it appears in the scrobble
+    pub artist_name_original: String,
+    /// Original album artist name as it appears in the scrobble
+    pub album_artist_name_original: String,
+
+    /// New track name to set
+    pub track_name: String,
+    /// New album name to set
+    pub album_name: String,
+    /// New artist name to set
+    pub artist_name: String,
+    /// New album artist name to set
+    pub album_artist_name: String,
+
+    /// Unix timestamp of the scrobble to edit
+    pub timestamp: u64,
+    /// Whether to edit all instances or just this specific scrobble
+    pub edit_all: bool,
+}
+
 impl ScrobbleEdit {
     /// Create a new [`ScrobbleEdit`] with all required fields.
     ///
@@ -320,6 +353,54 @@ impl ScrobbleEdit {
             artist_name.to_string(), // album_artist defaults to artist
             None,                    // Client will find representative timestamp
             false,
+        )
+    }
+}
+
+impl ExactScrobbleEdit {
+    /// Create a new [`ExactScrobbleEdit`] with all fields specified.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        track_name_original: String,
+        album_name_original: String,
+        artist_name_original: String,
+        album_artist_name_original: String,
+        track_name: String,
+        album_name: String,
+        artist_name: String,
+        album_artist_name: String,
+        timestamp: u64,
+        edit_all: bool,
+    ) -> Self {
+        Self {
+            track_name_original,
+            album_name_original,
+            artist_name_original,
+            album_artist_name_original,
+            track_name,
+            album_name,
+            artist_name,
+            album_artist_name,
+            timestamp,
+            edit_all,
+        }
+    }
+
+    /// Convert this exact edit back to a public ScrobbleEdit.
+    ///
+    /// This is useful when you need to expose the edit data through the public API.
+    pub fn to_scrobble_edit(&self) -> ScrobbleEdit {
+        ScrobbleEdit::new(
+            self.track_name_original.clone(),
+            Some(self.album_name_original.clone()),
+            self.artist_name_original.clone(),
+            Some(self.album_artist_name_original.clone()),
+            self.track_name.clone(),
+            self.album_name.clone(),
+            self.artist_name.clone(),
+            self.album_artist_name.clone(),
+            Some(self.timestamp),
+            self.edit_all,
         )
     }
 }

@@ -48,9 +48,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Album: {:?}", basic_edit.album_name_original);
     println!("  Timestamp: {:?}", basic_edit.timestamp);
 
-    // Use load_edit_form_values to discover all album variations
+    // Use discover_album_variations to discover all album variations
     println!("\n🔍 Discovering album variations from library...");
-    match client.load_edit_form_values(track_name, artist_name).await {
+    match client
+        .discover_album_variations(track_name, artist_name)
+        .await
+    {
         Ok(scrobble_edits) => {
             println!("✅ Found {} unique album variations:", scrobble_edits.len());
 

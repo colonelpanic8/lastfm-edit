@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
 
         // Load edit form - this makes an HTTP request
         match client
-            .load_edit_form_values(&track.name, &track.artist)
+            .discover_album_variations(&track.name, &track.artist)
             .await
         {
             Ok(edit_data_vec) => {

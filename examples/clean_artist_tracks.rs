@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
         }
 
         // Load real edit form values from the track page
-        match client.load_edit_form_values(&track.name, artist).await {
+        match client.discover_album_variations(&track.name, artist).await {
             Ok(edit_data_vec) => {
                 if let Some(mut edit_data) = edit_data_vec.into_iter().next() {
                     println!(
