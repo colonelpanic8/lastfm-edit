@@ -219,7 +219,7 @@ pub use client::{LastFmEditClient, LastFmEditClientImpl};
 // Re-export the mock when the mock feature is enabled
 #[cfg(feature = "mock")]
 pub use client::MockLastFmEditClient;
-pub use edit::{EditResponse, ScrobbleEdit};
+pub use edit::{EditResponse, ExactScrobbleEdit, ScrobbleEdit, SingleEditResponse};
 pub use error::LastFmError;
 pub use iterator::{
     ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, RecentTracksIterator,

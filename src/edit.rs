@@ -102,9 +102,9 @@ pub struct EditResponse {
 /// Last.fm. Unlike `ScrobbleEdit`, all fields are required and non-optional,
 /// ensuring we have complete information before performing edit operations.
 ///
-/// This type is not part of the public API.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ExactScrobbleEdit {
+/// This type represents a fully-specified scrobble edit where all fields are known.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ExactScrobbleEdit {
     /// Original track name as it appears in the scrobble
     pub track_name_original: String,
     /// Original album name as it appears in the scrobble

@@ -59,11 +59,8 @@ mod mock_tests {
             false,
         );
 
-        let expected_response = EditResponse::single(
-            true,
-            Some("Edit successful".to_string()),
-            None
-        );
+        let expected_response =
+            EditResponse::single(true, Some("Edit successful".to_string()), None);
 
         // Set up expectation for edit_scrobble
         mock_client

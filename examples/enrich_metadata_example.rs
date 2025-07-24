@@ -1,4 +1,4 @@
-use lastfm_edit::{LastFmEditClientImpl, ScrobbleEdit};
+use lastfm_edit::{ExactScrobbleEdit, LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
 use std::env;
 
 /// Example demonstrating the new ScrobbleEdit enrichment functionality.
@@ -93,6 +93,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             println!("\\n✨ This ensures consistency across all your scrobbles of this track!");
+
+            // Example 3: Show the new public ExactScrobbleEdit API
+            println!("\\n🔧 Advanced: Using ExactScrobbleEdit for precise control...");
+            if let Some(first_edit) = scrobble_edits.first() {
+                println!("You can also work directly with ExactScrobbleEdit for complete control:");
+
+                // Convert to ExactScrobbleEdit (this would normally come from discover_album_variations)
+                let exact_edit = ExactScrobbleEdit::new(
+                    first_edit.track_name_original.clone(),
+                    first_edit.album_name_original.clone().unwrap_or_default(),
+                    first_edit.artist_name_original.clone(),
+                    first_edit
+                        .album_artist_name_original
+                        .clone()
+                        .unwrap_or_default(),
+                    format!("{} (Precisely Edited)", first_edit.track_name_original),
+                    first_edit.album_name_original.clone().unwrap_or_default(),
+                    first_edit.artist_name_original.clone(),
+                    first_edit
+                        .album_artist_name_original
+                        .clone()
+                        .unwrap_or_default(),
+                    first_edit.timestamp.unwrap_or_default(),
+                    false,
+                );
+
+                println!("  • ExactScrobbleEdit has all fields specified (no Option types)");
+                println!("  • Use client.edit_scrobble_single() for single, precise edits");
+                println!("  • Album: '{}'", exact_edit.album_name_original);
+                println!("  • Timestamp: {}", exact_edit.timestamp);
+                println!("  • This bypasses enrichment and edits exactly one scrobble");
+            }
         }
         Err(e) => {
             println!("❌ Could not discover album variations: {e}");

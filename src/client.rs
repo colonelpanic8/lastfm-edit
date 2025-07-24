@@ -103,6 +103,16 @@ pub trait LastFmEditClient {
     /// Edit a scrobble with the given edit parameters.
     async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse>;
 
+    /// Edit a single scrobble with complete information.
+    ///
+    /// This method performs a single edit operation on a fully-specified scrobble.
+    /// Unlike `edit_scrobble`, it does not perform enrichment or multiple edits.
+    async fn edit_scrobble_single(
+        &self,
+        exact_edit: &ExactScrobbleEdit,
+        max_retries: u32,
+    ) -> Result<EditResponse>;
+
     /// Discover all unique album variations for a track from the user's library.
     ///
     /// This method scrapes the user's library to find all unique album/album_artist
@@ -771,7 +781,35 @@ impl LastFmEditClientImpl {
     }
 
     /// Edit a single scrobble with retry logic, returning a single-result EditResponse.
-    async fn edit_scrobble_single(
+    ///
+    /// This method takes a fully-specified `ExactScrobbleEdit` and performs a single
+    /// edit operation. Unlike `edit_scrobble`, this method does not perform enrichment
+    /// or multiple edits - it edits exactly one scrobble instance.
+    ///
+    /// # Arguments
+    /// * `exact_edit` - A fully-specified edit with all required fields populated
+    /// * `max_retries` - Maximum number of retry attempts for rate limiting
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use lastfm_edit::{LastFmEditClientImpl, ExactScrobbleEdit};
+    ///
+    /// let exact_edit = ExactScrobbleEdit::new(
+    ///     "Original Track".to_string(),
+    ///     "Original Album".to_string(),
+    ///     "Original Artist".to_string(),
+    ///     "Original Artist".to_string(),
+    ///     "New Track".to_string(),
+    ///     "New Album".to_string(),
+    ///     "New Artist".to_string(),
+    ///     "New Artist".to_string(),
+    ///     1640995200,
+    ///     false,
+    /// );
+    ///
+    /// let response = client.edit_scrobble_single(&exact_edit, 3).await?;
+    /// ```
+    pub async fn edit_scrobble_single(
         &self,
         exact_edit: &ExactScrobbleEdit,
         max_retries: u32,
@@ -2321,6 +2359,14 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
         self.edit_scrobble(edit).await
+    }
+
+    async fn edit_scrobble_single(
+        &self,
+        exact_edit: &ExactScrobbleEdit,
+        max_retries: u32,
+    ) -> Result<EditResponse> {
+        self.edit_scrobble_single(exact_edit, max_retries).await
     }
 
     async fn discover_album_variations(
