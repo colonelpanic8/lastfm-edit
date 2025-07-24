@@ -1,4 +1,4 @@
-use crate::edit::ExactScrobbleEdit;
+use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
 use crate::parsing::LastFmParser;
 use crate::session::LastFmEditSession;
 use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
@@ -63,7 +63,34 @@ pub trait LastFmEditClient {
     async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>>;
 
     /// Find a scrobble by its timestamp in recent scrobbles.
-    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track>;
+    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
+        log::debug!("Searching for scrobble with timestamp {timestamp}");
+
+        // Search through recent scrobbles to find the one with matching timestamp
+        for page in 1..=10 {
+            // Search up to 10 pages of recent scrobbles
+            let scrobbles = self.get_recent_scrobbles(page).await?;
+
+            for scrobble in scrobbles {
+                if let Some(scrobble_timestamp) = scrobble.timestamp {
+                    if scrobble_timestamp == timestamp {
+                        log::debug!(
+                            "Found scrobble: '{}' by '{}' with album: '{:?}', album_artist: '{:?}'",
+                            scrobble.name,
+                            scrobble.artist,
+                            scrobble.album,
+                            scrobble.album_artist
+                        );
+                        return Ok(scrobble);
+                    }
+                }
+            }
+        }
+
+        Err(LastFmError::Parse(format!(
+            "Could not find scrobble with timestamp {timestamp}"
+        )))
+    }
 
     /// Find the most recent scrobble for a specific track.
     async fn find_recent_scrobble_for_track(
@@ -675,8 +702,6 @@ impl LastFmEditClientImpl {
                     return Ok(Some(scrobble));
                 }
             }
-
-            // Small delay between pages to be polite
         }
 
         log::debug!(
@@ -686,28 +711,49 @@ impl LastFmEditClientImpl {
     }
 
     pub async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
-        // If we have complete information, edit directly
-        if edit.album_name_original.is_some() && edit.timestamp.is_some() {
-            return self.edit_scrobble_with_retry(edit, 3).await;
+        // First, try to enrich the edit with complete metadata from library page
+        let enriched_edits = self.enrich_edit_metadata(edit).await?;
+
+        if enriched_edits.is_empty() {
+            return Err(LastFmError::Parse(format!(
+                "No scrobbles found for track '{}' by '{}' in your library. Make sure the track and artist names are correct and that you have scrobbled this track recently.",
+                edit.track_name_original, edit.artist_name_original
+            )));
         }
 
-        // Otherwise, enrich the edit with complete metadata from library page
-        match self.enrich_edit_metadata(edit).await {
-            Ok(enriched_edits) => {
-                // For now, just edit the first enriched edit (most common album)
-                // In the future, this could return multiple responses or let user choose
-                if let Some(first_exact_edit) = enriched_edits.first() {
-                    let first_edit = first_exact_edit.to_scrobble_edit();
-                    self.edit_scrobble_with_retry(&first_edit, 3).await
-                } else {
-                    self.edit_scrobble_with_retry(edit, 3).await
-                }
-            }
-            Err(e) => {
-                log::debug!("Could not enrich metadata ({e}), trying with original edit");
-                self.edit_scrobble_with_retry(edit, 3).await
+        // Perform all enriched edits and collect results
+        let mut results = Vec::new();
+
+        for (i, exact_edit) in enriched_edits.iter().enumerate() {
+            let album_info = format!(
+                "{} by {}",
+                exact_edit.album_name_original, exact_edit.album_artist_name_original
+            );
+
+            log::debug!(
+                "Performing edit {}/{} for album '{}'",
+                i + 1,
+                enriched_edits.len(),
+                album_info
+            );
+
+            let single_response = self.edit_scrobble_single(exact_edit, 3).await?;
+            let success = single_response.success();
+            let message = single_response.message();
+
+            results.push(SingleEditResponse {
+                success,
+                message,
+                album_info: Some(album_info),
+            });
+
+            // Add a small delay between edits to be respectful
+            if i < enriched_edits.len() - 1 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             }
         }
+
+        Ok(EditResponse::from_results(results))
     }
 
     /// Enrich a ScrobbleEdit with complete metadata by scraping the track library page
@@ -724,50 +770,28 @@ impl LastFmEditClientImpl {
             .await
     }
 
-    /// Find a scrobble by its timestamp in recent scrobbles
-    pub async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
-        log::debug!("Searching for scrobble with timestamp {timestamp}");
-
-        // Search through recent scrobbles to find the one with matching timestamp
-        for page in 1..=10 {
-            // Search up to 10 pages of recent scrobbles
-            let scrobbles = self.get_recent_scrobbles(page).await?;
-
-            for scrobble in scrobbles {
-                if let Some(scrobble_timestamp) = scrobble.timestamp {
-                    if scrobble_timestamp == timestamp {
-                        log::debug!(
-                            "Found scrobble: '{}' by '{}' with album: '{:?}', album_artist: '{:?}'",
-                            scrobble.name,
-                            scrobble.artist,
-                            scrobble.album,
-                            scrobble.album_artist
-                        );
-                        return Ok(scrobble);
-                    }
-                }
-            }
-        }
-
-        Err(LastFmError::Parse(format!(
-            "Could not find scrobble with timestamp {timestamp}"
-        )))
-    }
-
-    pub async fn edit_scrobble_with_retry(
+    /// Edit a single scrobble with retry logic, returning a single-result EditResponse.
+    async fn edit_scrobble_single(
         &self,
-        edit: &ScrobbleEdit,
+        exact_edit: &ExactScrobbleEdit,
         max_retries: u32,
     ) -> Result<EditResponse> {
+        let edit = exact_edit.to_scrobble_edit();
         let mut retries = 0;
 
         loop {
-            match self.edit_scrobble_impl(edit).await {
-                Ok(result) => return Ok(result),
+            match self.edit_scrobble_impl(&edit).await {
+                Ok(success) => {
+                    return Ok(EditResponse::single(success, None, None));
+                }
                 Err(LastFmError::RateLimit { retry_after }) => {
                     if retries >= max_retries {
                         log::warn!("Max retries ({max_retries}) exceeded for edit operation");
-                        return Err(LastFmError::RateLimit { retry_after });
+                        return Ok(EditResponse::single(
+                            false,
+                            Some(format!("Rate limit exceeded after {max_retries} retries")),
+                            None,
+                        ));
                     }
 
                     let delay = std::cmp::min(retry_after, 2_u64.pow(retries + 1) * 5);
@@ -780,12 +804,18 @@ impl LastFmEditClientImpl {
                     // Rate limit delay would go here
                     retries += 1;
                 }
-                Err(other_error) => return Err(other_error),
+                Err(other_error) => {
+                    return Ok(EditResponse::single(
+                        false,
+                        Some(other_error.to_string()),
+                        None,
+                    ));
+                }
             }
         }
     }
 
-    async fn edit_scrobble_impl(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
+    async fn edit_scrobble_impl(&self, edit: &ScrobbleEdit) -> Result<bool> {
         if !self.is_logged_in() {
             return Err(LastFmError::Auth(
                 "Must be logged in to edit scrobbles".to_string(),
@@ -986,7 +1016,7 @@ impl LastFmEditClientImpl {
         let final_success = response.status().is_success() && has_success_alert && !has_error_alert;
 
         // Create detailed message
-        let message = if has_error_alert {
+        let _message = if has_error_alert {
             // Extract error message
             if let Some(error_element) = document.select(&error_selector).next() {
                 Some(format!(
@@ -1006,10 +1036,7 @@ impl LastFmEditClientImpl {
             Some(format!("Edit failed with status: {}", response.status()))
         };
 
-        Ok(EditResponse {
-            success: final_success,
-            message,
-        })
+        Ok(final_success)
     }
 
     /// Fetch raw HTML content for edit form page
@@ -1315,12 +1342,13 @@ impl LastFmEditClientImpl {
         let tracks = self.get_album_tracks(old_album_name, artist_name).await?;
 
         if tracks.is_empty() {
-            return Ok(EditResponse {
-                success: false,
-                message: Some(format!(
+            return Ok(EditResponse::single(
+                false,
+                Some(format!(
                     "No tracks found for album '{old_album_name}' by '{artist_name}'. Make sure the album name matches exactly."
                 )),
-            });
+                None
+            ));
         }
 
         log::info!(
@@ -1357,7 +1385,7 @@ impl LastFmEditClientImpl {
                         // Perform the edit
                         match self.edit_scrobble(&edit_data).await {
                             Ok(response) => {
-                                if response.success {
+                                if response.success() {
                                     successful_edits += 1;
                                     log::info!("✅ Successfully edited track '{}'", track.name);
                                 } else {
@@ -1366,7 +1394,7 @@ impl LastFmEditClientImpl {
                                         "Failed to edit track '{}': {}",
                                         track.name,
                                         response
-                                            .message
+                                            .message()
                                             .unwrap_or_else(|| "Unknown error".to_string())
                                     );
                                     error_messages.push(error_msg);
@@ -1424,7 +1452,7 @@ impl LastFmEditClientImpl {
             ))
         };
 
-        Ok(EditResponse { success, message })
+        Ok(EditResponse::single(success, message, None))
     }
 
     /// Edit artist metadata by updating scrobbles with new artist name
@@ -1465,12 +1493,13 @@ impl LastFmEditClientImpl {
         }
 
         if tracks.is_empty() {
-            return Ok(EditResponse {
-                success: false,
-                message: Some(format!(
+            return Ok(EditResponse::single(
+                false,
+                Some(format!(
                     "No tracks found for artist '{old_artist_name}'. Make sure the artist name matches exactly."
                 )),
-            });
+                None
+            ));
         }
 
         log::info!(
@@ -1508,7 +1537,7 @@ impl LastFmEditClientImpl {
                         // Perform the edit
                         match self.edit_scrobble(&edit_data).await {
                             Ok(response) => {
-                                if response.success {
+                                if response.success() {
                                     successful_edits += 1;
                                     log::info!("✅ Successfully edited track '{}'", track.name);
                                 } else {
@@ -1517,7 +1546,7 @@ impl LastFmEditClientImpl {
                                         "Failed to edit track '{}': {}",
                                         track.name,
                                         response
-                                            .message
+                                            .message()
                                             .unwrap_or_else(|| "Unknown error".to_string())
                                     );
                                     error_messages.push(error_msg);
@@ -1575,7 +1604,7 @@ impl LastFmEditClientImpl {
             ))
         };
 
-        Ok(EditResponse { success, message })
+        Ok(EditResponse::single(success, message, None))
     }
 
     /// Edit artist metadata for a specific track only
@@ -1602,43 +1631,48 @@ impl LastFmEditClientImpl {
                     // Perform the edit
                     match self.edit_scrobble(&edit_data).await {
                     Ok(response) => {
-                        if response.success {
-                            Ok(EditResponse {
-                                success: true,
-                                message: Some(format!(
+                        if response.success() {
+                            Ok(EditResponse::single(
+                                true,
+                                Some(format!(
                                     "Successfully renamed artist for track '{track_name}' from '{old_artist_name}' to '{new_artist_name}'"
                                 )),
-                            })
+                                None
+                            ))
                         } else {
-                            Ok(EditResponse {
-                                success: false,
-                                message: Some(format!(
+                            Ok(EditResponse::single(
+                                false,
+                                Some(format!(
                                     "Failed to rename artist for track '{track_name}': {}",
-                                    response.message.unwrap_or_else(|| "Unknown error".to_string())
+                                    response.message().unwrap_or_else(|| "Unknown error".to_string())
                                 )),
-                            })
+                                None
+                            ))
                         }
                     }
-                    Err(e) => Ok(EditResponse {
-                        success: false,
-                        message: Some(format!("Error editing track '{track_name}': {e}")),
-                    }),
+                    Err(e) => Ok(EditResponse::single(
+                        false,
+                        Some(format!("Error editing track '{track_name}': {e}")),
+                        None
+                    )),
                     }
                 } else {
-                    Ok(EditResponse {
-                        success: false,
-                        message: Some(format!(
+                    Ok(EditResponse::single(
+                        false,
+                        Some(format!(
                             "No edit data found for track '{track_name}' by '{old_artist_name}'. The track may not be in your recent scrobbles."
                         )),
-                    })
+                        None
+                    ))
                 }
             }
-            Err(e) => Ok(EditResponse {
-                success: false,
-                message: Some(format!(
+            Err(e) => Ok(EditResponse::single(
+                false,
+                Some(format!(
                     "Could not load edit form for track '{track_name}' by '{old_artist_name}': {e}. The track may not be in your recent scrobbles."
                 )),
-            }),
+                None
+            )),
         }
     }
 
@@ -1656,12 +1690,13 @@ impl LastFmEditClientImpl {
         let tracks = self.get_album_tracks(album_name, old_artist_name).await?;
 
         if tracks.is_empty() {
-            return Ok(EditResponse {
-                success: false,
-                message: Some(format!(
+            return Ok(EditResponse::single(
+                false,
+                Some(format!(
                     "No tracks found for album '{album_name}' by '{old_artist_name}'. Make sure the album name matches exactly."
                 )),
-            });
+                None
+            ));
         }
 
         log::info!(
@@ -1700,7 +1735,7 @@ impl LastFmEditClientImpl {
                         // Perform the edit
                         match self.edit_scrobble(&edit_data).await {
                             Ok(response) => {
-                                if response.success {
+                                if response.success() {
                                     successful_edits += 1;
                                     log::info!("✅ Successfully edited track '{}'", track.name);
                                 } else {
@@ -1709,7 +1744,7 @@ impl LastFmEditClientImpl {
                                         "Failed to edit track '{}': {}",
                                         track.name,
                                         response
-                                            .message
+                                            .message()
                                             .unwrap_or_else(|| "Unknown error".to_string())
                                     );
                                     error_messages.push(error_msg);
@@ -1767,7 +1802,7 @@ impl LastFmEditClientImpl {
             ))
         };
 
-        Ok(EditResponse { success, message })
+        Ok(EditResponse::single(success, message, None))
     }
 
     pub async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
@@ -2272,10 +2307,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>> {
         self.get_recent_scrobbles(page).await
-    }
-
-    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
-        self.find_scrobble_by_timestamp(timestamp).await
     }
 
     async fn find_recent_scrobble_for_track(

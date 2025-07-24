@@ -174,14 +174,14 @@ fn confirm_operation() -> Result<bool> {
 }
 
 fn print_result(response: lastfm_edit::EditResponse) {
-    if response.success {
+    if response.success() {
         println!("✅ Success!");
-        if let Some(message) = response.message {
+        if let Some(message) = response.message() {
             println!("📋 {message}");
         }
     } else {
         println!("❌ Operation failed");
-        if let Some(message) = response.message {
+        if let Some(message) = response.message() {
             println!("📋 {message}");
         }
     }

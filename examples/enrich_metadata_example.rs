@@ -68,6 +68,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     edit.timestamp
                 );
             }
+
+            // Example 2: Show how edit_scrobble would work with multiple edits
+            println!("\\n🎭 Testing how edit_scrobble handles multiple album variations...");
+            println!("When you call edit_scrobble with minimal info (just track/artist),");
+            println!("it now performs edits on ALL album variations automatically!");
+
+            // Show what would happen if we made an edit
+            let minimal_edit = ScrobbleEdit::from_track_and_artist(track_name, artist_name)
+                .with_track_name(&format!("{track_name} (Updated)"));
+
+            println!(
+                "\\nIf we called edit_scrobble to rename '{}' to '{}':",
+                track_name, minimal_edit.track_name
+            );
+            println!("The system would:");
+            for (i, edit) in scrobble_edits.iter().enumerate() {
+                println!(
+                    "  {}. Edit '{}' on album '{}' (timestamp: {:?})",
+                    i + 1,
+                    track_name,
+                    edit.album_name_original.as_deref().unwrap_or("Unknown"),
+                    edit.timestamp
+                );
+            }
+            println!("\\n✨ This ensures consistency across all your scrobbles of this track!");
         }
         Err(e) => {
             println!("❌ Could not discover album variations: {e}");

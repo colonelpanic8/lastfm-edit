@@ -59,33 +59,41 @@ pub struct ScrobbleEdit {
     pub edit_all: bool,
 }
 
-/// Response from a scrobble edit operation.
+/// Response from a single scrobble edit operation.
 ///
-/// This structure contains the result of attempting to edit a scrobble,
+/// This structure contains the result of attempting to edit a specific scrobble instance,
 /// including success status and any error messages.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SingleEditResponse {
+    /// Whether this individual edit operation was successful
+    pub success: bool,
+    /// Optional message describing the result or any errors
+    pub message: Option<String>,
+    /// Information about which album variation was edited
+    pub album_info: Option<String>,
+}
+
+/// Response from a scrobble edit operation that may affect multiple album variations.
+///
+/// When editing a track that appears on multiple albums, this response contains
+/// the results of all individual edit operations performed.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use lastfm_edit::EditResponse;
 ///
-/// let response = EditResponse {
-///     success: true,
-///     message: Some("Track name updated successfully".to_string()),
-/// };
-///
-/// if response.success {
-///     println!("Edit succeeded: {}", response.message.unwrap_or_default());
+/// // Check if all edits succeeded
+/// if response.all_successful() {
+///     println!("All {} edits succeeded!", response.total_edits());
 /// } else {
-///     eprintln!("Edit failed: {}", response.message.unwrap_or_default());
+///     println!("Some edits failed: {}", response.summary_message());
 /// }
 /// ```
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EditResponse {
-    /// Whether the edit operation was successful
-    pub success: bool,
-    /// Optional message describing the result or any errors
-    pub message: Option<String>,
+    /// Results of individual edit operations
+    pub individual_results: Vec<SingleEditResponse>,
 }
 
 /// Internal representation of a scrobble edit with all fields fully specified.
@@ -402,5 +410,122 @@ impl ExactScrobbleEdit {
             Some(self.timestamp),
             self.edit_all,
         )
+    }
+}
+
+impl EditResponse {
+    /// Create a new EditResponse from a single result.
+    pub fn single(success: bool, message: Option<String>, album_info: Option<String>) -> Self {
+        Self {
+            individual_results: vec![SingleEditResponse {
+                success,
+                message,
+                album_info,
+            }],
+        }
+    }
+
+    /// Create a new EditResponse from multiple results.
+    pub fn from_results(results: Vec<SingleEditResponse>) -> Self {
+        Self {
+            individual_results: results,
+        }
+    }
+
+    /// Check if all individual edit operations were successful.
+    pub fn all_successful(&self) -> bool {
+        !self.individual_results.is_empty() && self.individual_results.iter().all(|r| r.success)
+    }
+
+    /// Check if any individual edit operations were successful.
+    pub fn any_successful(&self) -> bool {
+        self.individual_results.iter().any(|r| r.success)
+    }
+
+    /// Get the total number of edit operations performed.
+    pub fn total_edits(&self) -> usize {
+        self.individual_results.len()
+    }
+
+    /// Get the number of successful edit operations.
+    pub fn successful_edits(&self) -> usize {
+        self.individual_results.iter().filter(|r| r.success).count()
+    }
+
+    /// Get the number of failed edit operations.
+    pub fn failed_edits(&self) -> usize {
+        self.individual_results
+            .iter()
+            .filter(|r| !r.success)
+            .count()
+    }
+
+    /// Generate a summary message describing the overall result.
+    pub fn summary_message(&self) -> String {
+        let total = self.total_edits();
+        let successful = self.successful_edits();
+        let failed = self.failed_edits();
+
+        if total == 0 {
+            return "No edit operations performed".to_string();
+        }
+
+        if successful == total {
+            if total == 1 {
+                "Edit completed successfully".to_string()
+            } else {
+                format!("All {total} edits completed successfully")
+            }
+        } else if successful == 0 {
+            if total == 1 {
+                "Edit failed".to_string()
+            } else {
+                format!("All {total} edits failed")
+            }
+        } else {
+            format!("{successful} of {total} edits succeeded, {failed} failed")
+        }
+    }
+
+    /// Get detailed messages from all edit operations.
+    pub fn detailed_messages(&self) -> Vec<String> {
+        self.individual_results
+            .iter()
+            .enumerate()
+            .map(|(i, result)| {
+                let album_info = result
+                    .album_info
+                    .as_deref()
+                    .map(|info| format!(" ({info})"))
+                    .unwrap_or_default();
+
+                match &result.message {
+                    Some(msg) => format!("{}: {}{}", i + 1, msg, album_info),
+                    None => {
+                        if result.success {
+                            format!("{}: Success{}", i + 1, album_info)
+                        } else {
+                            format!("{}: Failed{}", i + 1, album_info)
+                        }
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// Check if this response represents a single edit (for backward compatibility).
+    pub fn is_single_edit(&self) -> bool {
+        self.individual_results.len() == 1
+    }
+
+    /// Check if all edits succeeded (for backward compatibility).
+    pub fn success(&self) -> bool {
+        self.all_successful()
+    }
+
+    /// Get a single message for backward compatibility.
+    /// Returns the summary message.
+    pub fn message(&self) -> Option<String> {
+        Some(self.summary_message())
     }
 }

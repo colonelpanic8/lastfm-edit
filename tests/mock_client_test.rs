@@ -59,10 +59,11 @@ mod mock_tests {
             false,
         );
 
-        let expected_response = EditResponse {
-            success: true,
-            message: Some("Edit successful".to_string()),
-        };
+        let expected_response = EditResponse::single(
+            true,
+            Some("Edit successful".to_string()),
+            None
+        );
 
         // Set up expectation for edit_scrobble
         mock_client
@@ -75,8 +76,8 @@ mod mock_tests {
         let client: &dyn LastFmEditClient = &mock_client;
         let response = client.edit_scrobble(&edit).await?;
 
-        assert!(response.success);
-        assert_eq!(response.message, Some("Edit successful".to_string()));
+        assert!(response.success());
+        assert_eq!(response.message(), Some("Edit successful".to_string()));
 
         Ok(())
     }
