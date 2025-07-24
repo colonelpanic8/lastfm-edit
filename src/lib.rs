@@ -208,6 +208,7 @@ pub mod album;
 pub mod client;
 pub mod edit;
 pub mod error;
+pub mod events;
 pub mod iterator;
 pub mod parsing;
 pub mod session;
@@ -221,6 +222,7 @@ pub use client::{LastFmEditClient, LastFmEditClientImpl};
 pub use client::MockLastFmEditClient;
 pub use edit::{EditResponse, ScrobbleEdit};
 pub use error::LastFmError;
+pub use events::{RateLimitEvent, RateLimitEventReceiver, RateLimitEventSender};
 pub use iterator::{
     ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, RecentTracksIterator,
 };

@@ -1,3 +1,4 @@
+use crate::events::{RateLimitEventEmitter, RateLimitEventReceiver, RateLimitEventSender};
 use crate::parsing::LastFmParser;
 use crate::session::LastFmEditSession;
 use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
@@ -9,6 +10,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 /// Trait for Last.fm client operations that can be mocked for testing.
 ///
@@ -139,6 +141,47 @@ pub trait LastFmEditClient {
 
     /// Create an iterator for browsing the user's recent tracks starting from a specific page.
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
+
+    /// Get a receiver for rate limiting events emitted by the client.
+    ///
+    /// This allows consumers to listen for and react to rate limiting events
+    /// such as when rate limits are detected, retries are starting, etc.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`RateLimitEventReceiver`] that can be used to receive events.
+    /// Multiple receivers can be created from the same client.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, RateLimitEvent};
+    /// use tokio::sync::broadcast::error::RecvError;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let client = LastFmEditClientImpl::new(Box::new(http_client));
+    ///
+    /// // Get a receiver for rate limit events
+    /// let mut rate_limit_receiver = client.rate_limit_events();
+    ///
+    /// // Listen for events in a separate task
+    /// tokio::spawn(async move {
+    ///     while let Ok(event) = rate_limit_receiver.recv().await {
+    ///         match event {
+    ///             RateLimitEvent::Detected { retry_after, .. } => {
+    ///                 println!("Rate limit detected! Retry after {} seconds", retry_after);
+    ///             }
+    ///             _ => {}
+    ///         }
+    ///     }
+    /// });
+    ///
+    /// Ok(())
+    /// }
+    /// ```
+    fn rate_limit_events(&self) -> RateLimitEventReceiver;
 }
 
 /// Main implementation for interacting with Last.fm's web interface.
@@ -173,6 +216,7 @@ pub struct LastFmEditClientImpl {
     rate_limit_patterns: Vec<String>,
     debug_save_responses: bool,
     parser: LastFmParser,
+    rate_limit_sender: Option<RateLimitEventSender>,
 }
 
 impl LastFmEditClientImpl {
@@ -250,6 +294,7 @@ impl LastFmEditClientImpl {
         base_url: String,
         rate_limit_patterns: Vec<String>,
     ) -> Self {
+        let (rate_limit_sender, _receiver) = crate::events::create_rate_limit_channel();
         Self {
             client: Arc::from(client),
             session: Arc::new(Mutex::new(LastFmEditSession::new(
@@ -261,6 +306,7 @@ impl LastFmEditClientImpl {
             rate_limit_patterns,
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
+            rate_limit_sender: Some(rate_limit_sender),
         }
     }
 
@@ -339,6 +385,7 @@ impl LastFmEditClientImpl {
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
     ) -> Self {
+        let (rate_limit_sender, _receiver) = crate::events::create_rate_limit_channel();
         Self {
             client: Arc::from(client),
             session: Arc::new(Mutex::new(session)),
@@ -362,6 +409,7 @@ impl LastFmEditClientImpl {
             ],
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
+            rate_limit_sender: Some(rate_limit_sender),
         }
     }
 
@@ -553,6 +601,12 @@ impl LastFmEditClientImpl {
             // Look for rate limit indicators in the response
             if self.is_rate_limit_response(&response_html) {
                 log::debug!("403 response appears to be rate limiting");
+                self.rate_limit_sender.emit_rate_limit_detected(
+                    60,
+                    Some(login_url.clone()),
+                    Some(403),
+                    None, // We detected via status code + content analysis
+                );
                 return Err(LastFmError::RateLimit { retry_after: 60 });
             }
             log::debug!("403 response appears to be authentication failure");
@@ -617,6 +671,55 @@ impl LastFmEditClientImpl {
     /// Returns `true` if [`login`](Self::login) was successful and session is active.
     pub fn is_logged_in(&self) -> bool {
         self.session.lock().unwrap().is_valid()
+    }
+
+    /// Get a receiver for rate limiting events emitted by the client.
+    ///
+    /// This allows consumers to listen for and react to rate limiting events
+    /// such as when rate limits are detected, retries are starting, etc.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`RateLimitEventReceiver`] that can be used to receive events.
+    /// Each call creates a new receiver, so multiple receivers can listen to the same events.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, RateLimitEvent};
+    /// use tokio::sync::broadcast::error::RecvError;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let http_client = http_client::native::NativeClient::new();
+    ///     let client = LastFmEditClientImpl::new(Box::new(http_client));
+    ///     
+    ///     // Get a receiver for rate limit events
+    ///     let mut rate_limit_receiver = client.rate_limit_events();
+    ///     
+    ///     // Listen for events in a separate task
+    ///     tokio::spawn(async move {
+    ///         while let Ok(event) = rate_limit_receiver.recv().await {
+    ///             match event {
+    ///                 RateLimitEvent::Detected { retry_after, .. } => {
+    ///                     println!("Rate limit detected! Retry after {} seconds", retry_after);
+    ///                 }
+    ///                 _ => {}
+    ///             }
+    ///         }
+    ///     });
+    ///     
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn rate_limit_events(&self) -> RateLimitEventReceiver {
+        if let Some(sender) = &self.rate_limit_sender {
+            sender.subscribe()
+        } else {
+            // This should never happen since we always create a sender, but provide a fallback
+            let (_, receiver) = crate::events::create_rate_limit_channel();
+            receiver
+        }
     }
 
     /// Fetch recent scrobbles from the user's listening history
@@ -774,25 +877,39 @@ impl LastFmEditClientImpl {
         max_retries: u32,
     ) -> Result<EditResponse> {
         let mut retries = 0;
+        let start_time = Instant::now();
 
         loop {
             match self.edit_scrobble_impl(edit).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    if retries > 0 {
+                        let total_delay = start_time.elapsed().as_secs();
+                        self.rate_limit_sender
+                            .emit_retry_succeeded(retries, total_delay);
+                    }
+                    return Ok(result);
+                }
                 Err(LastFmError::RateLimit { retry_after }) => {
                     if retries >= max_retries {
+                        let total_delay = start_time.elapsed().as_secs();
+                        self.rate_limit_sender
+                            .emit_retries_exhausted(retries, total_delay);
                         log::warn!("Max retries ({max_retries}) exceeded for edit operation");
                         return Err(LastFmError::RateLimit { retry_after });
                     }
 
                     let delay = std::cmp::min(retry_after, 2_u64.pow(retries + 1) * 5);
-                    log::info!(
-                        "Edit rate limited. Waiting {} seconds before retry {} of {}",
-                        delay,
-                        retries + 1,
-                        max_retries
-                    );
-                    // Rate limit delay would go here
+
                     retries += 1;
+                    self.rate_limit_sender
+                        .emit_retry_starting(delay, retries, max_retries);
+
+                    log::info!(
+                        "Edit rate limited. Waiting {delay} seconds before retry {retries} of {max_retries}"
+                    );
+
+                    // Rate limit delay would go here
+                    tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                 }
                 Err(other_error) => return Err(other_error),
             }
@@ -1778,6 +1895,7 @@ impl LastFmEditClientImpl {
     /// Make an HTTP GET request with retry logic for rate limits
     async fn get_with_retry(&self, url: &str, max_retries: u32) -> Result<Response> {
         let mut retries = 0;
+        let start_time = Instant::now();
 
         loop {
             match self.get_with_redirects(url, 0).await {
@@ -1788,14 +1906,47 @@ impl LastFmEditClientImpl {
                     // Check for rate limit patterns in successful responses
                     if response.status().is_success() && self.is_rate_limit_response(&body) {
                         log::debug!("Response body contains rate limit patterns");
+
+                        // Find which pattern matched for event emission
+                        let matched_pattern = self
+                            .rate_limit_patterns
+                            .iter()
+                            .find(|pattern| body.to_lowercase().contains(&pattern.to_lowercase()))
+                            .cloned();
+
                         if retries < max_retries {
                             let delay = 60 + (retries as u64 * 30); // Exponential backoff
-                            log::info!("Rate limit detected in response body, retrying in {delay}s (attempt {}/{max_retries})", retries + 1);
-                            // Rate limit delay would go here
+
+                            if retries == 0 {
+                                self.rate_limit_sender.emit_rate_limit_detected(
+                                    60,
+                                    Some(url.to_string()),
+                                    Some(response.status().into()),
+                                    matched_pattern,
+                                );
+                            }
+
                             retries += 1;
+                            self.rate_limit_sender
+                                .emit_retry_starting(delay, retries, max_retries);
+
+                            log::info!("Rate limit detected in response body, retrying in {delay}s (attempt {retries}/{max_retries})");
+                            tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                             continue;
                         }
+
+                        let total_delay = start_time.elapsed().as_secs();
+                        self.rate_limit_sender
+                            .emit_retries_exhausted(retries, total_delay);
+
                         return Err(crate::LastFmError::RateLimit { retry_after: 60 });
+                    }
+
+                    // Success case - emit success event if we had retries
+                    if retries > 0 {
+                        let total_delay = start_time.elapsed().as_secs();
+                        self.rate_limit_sender
+                            .emit_retry_succeeded(retries, total_delay);
                     }
 
                     // Recreate response with the body we extracted
@@ -1810,15 +1961,30 @@ impl LastFmEditClientImpl {
                     return Ok(new_response);
                 }
                 Err(crate::LastFmError::RateLimit { retry_after }) => {
+                    if retries == 0 {
+                        self.rate_limit_sender.emit_rate_limit_detected(
+                            retry_after,
+                            Some(url.to_string()),
+                            None, // Status code not available in this path
+                            None, // Pattern not available in this path
+                        );
+                    }
+
                     if retries < max_retries {
                         let delay = retry_after + (retries as u64 * 30); // Exponential backoff
-                        log::info!(
-                            "Rate limit detected, retrying in {delay}s (attempt {}/{max_retries})",
-                            retries + 1
-                        );
-                        // Rate limit delay would go here
+
                         retries += 1;
+                        self.rate_limit_sender
+                            .emit_retry_starting(delay, retries, max_retries);
+
+                        log::info!(
+                            "Rate limit detected, retrying in {delay}s (attempt {retries}/{max_retries})"
+                        );
+                        tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                     } else {
+                        let total_delay = start_time.elapsed().as_secs();
+                        self.rate_limit_sender
+                            .emit_retries_exhausted(retries, total_delay);
                         return Err(crate::LastFmError::RateLimit { retry_after });
                     }
                 }
@@ -1928,6 +2094,14 @@ impl LastFmEditClientImpl {
                 .and_then(|h| h.get(0))
                 .and_then(|v| v.as_str().parse::<u64>().ok())
                 .unwrap_or(60);
+
+            self.rate_limit_sender.emit_rate_limit_detected(
+                retry_after,
+                Some(url.to_string()),
+                Some(429),
+                None, // No content pattern for 429
+            );
+
             return Err(LastFmError::RateLimit { retry_after });
         }
 
@@ -1939,6 +2113,14 @@ impl LastFmEditClientImpl {
                 let session = self.session.lock().unwrap();
                 if !session.cookies.is_empty() {
                     log::debug!("403 on authenticated request - likely rate limit");
+
+                    self.rate_limit_sender.emit_rate_limit_detected(
+                        60,
+                        Some(url.to_string()),
+                        Some(403),
+                        None, // No content pattern analysis here
+                    );
+
                     return Err(LastFmError::RateLimit { retry_after: 60 });
                 }
             }
@@ -2233,5 +2415,9 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator {
         crate::RecentTracksIterator::with_starting_page(self.clone(), starting_page)
+    }
+
+    fn rate_limit_events(&self) -> RateLimitEventReceiver {
+        self.rate_limit_events()
     }
 }
