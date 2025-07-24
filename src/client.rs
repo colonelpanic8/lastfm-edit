@@ -22,31 +22,6 @@ use std::sync::{Arc, Mutex};
 /// When the `mock` feature is enabled, this crate provides `MockLastFmEditClient`
 /// that implements this trait using the `mockall` library.
 ///
-/// # Examples
-///
-/// ```rust,ignore
-/// use lastfm_edit::{LastFmEditClient, MockLastFmEditClient, Result};
-///
-/// #[cfg(feature = "mock")]
-/// async fn test_example() -> Result<()> {
-///     let mut mock_client = MockLastFmEditClient::new();
-///
-///     mock_client
-///         .expect_login()
-///         .with(eq("user"), eq("pass"))
-///         .returning(|_, _| Ok(()));
-///
-///     mock_client
-///         .expect_is_logged_in()
-///         .returning(|| true);
-///
-///     // Use mock_client as &dyn LastFmEditClient
-///     let client: &dyn LastFmEditClient = &mock_client;
-///     client.login("user", "pass").await?;
-///     assert!(client.is_logged_in());
-///     Ok(())
-/// }
-/// ```
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait(?Send)]
 pub trait LastFmEditClient {
@@ -188,26 +163,6 @@ pub trait LastFmEditClient {
 /// This implementation handles authentication, session management, and provides methods for
 /// browsing user libraries and editing scrobble data through web scraping.
 ///
-/// # Examples
-///
-/// ```rust,no_run
-/// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
-///
-/// #[tokio::main]
-/// async fn main() -> Result<()> {
-///     // Create client with any HTTP implementation
-///     let http_client = http_client::native::NativeClient::new();
-///     let mut client = LastFmEditClientImpl::new(Box::new(http_client));
-///
-///     // Login to Last.fm
-///     client.login("username", "password").await?;
-///
-///     // Check if authenticated
-///     assert!(client.is_logged_in());
-///
-///     Ok(())
-/// }
-/// ```
 #[derive(Clone)]
 pub struct LastFmEditClientImpl {
     client: Arc<dyn HttpClient + Send + Sync>,
@@ -227,19 +182,6 @@ impl LastFmEditClientImpl {
     ///
     /// * `client` - Any HTTP client implementation that implements [`HttpClient`]
     ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<()> {
-    ///     let http_client = http_client::native::NativeClient::new();
-    ///     let mut client = LastFmEditClientImpl::new(Box::new(http_client));
-    ///     client.login("username", "password").await?;
-    ///     Ok(())
-    /// }
-    /// ```
     pub fn new(client: Box<dyn HttpClient + Send + Sync>) -> Self {
         Self::with_base_url(client, "https://www.last.fm".to_string())
     }
@@ -320,22 +262,6 @@ impl LastFmEditClientImpl {
     ///
     /// Returns an authenticated client on success, or [`LastFmError::Auth`] on failure.
     ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<()> {
-    ///     let client = LastFmEditClientImpl::login_with_credentials(
-    ///         Box::new(http_client::native::NativeClient::new()),
-    ///         "username",
-    ///         "password"
-    ///     ).await?;
-    ///     assert!(client.is_logged_in());
-    ///     Ok(())
-    /// }
-    /// ```
     pub async fn login_with_credentials(
         client: Box<dyn HttpClient + Send + Sync>,
         username: &str,
@@ -359,24 +285,6 @@ impl LastFmEditClientImpl {
     ///
     /// Returns a client with the restored session.
     ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession};
-    ///
-    /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    ///     // Assume we have a saved session
-    ///     let session_json = std::fs::read_to_string("session.json")?;
-    ///     let session = LastFmEditSession::from_json(&session_json)?;
-    ///
-    ///     let client = LastFmEditClientImpl::from_session(
-    ///         Box::new(http_client::native::NativeClient::new()),
-    ///         session
-    ///     );
-    ///     assert!(client.is_logged_in());
-    ///     Ok(())
-    /// }
-    /// ```
     pub fn from_session(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -416,23 +324,6 @@ impl LastFmEditClientImpl {
     ///
     /// Returns a [`LastFmEditSession`] that can be serialized and saved.
     ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    ///     let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-    ///     client.login("username", "password").await?;
-    ///
-    ///     // Save session for later use
-    ///     let session = client.get_session();
-    ///     let session_json = session.to_json()?;
-    ///     std::fs::write("session.json", session_json)?;
-    ///     Ok(())
-    /// }
-    /// ```
     pub fn get_session(&self) -> LastFmEditSession {
         self.session.lock().unwrap().clone()
     }
@@ -445,23 +336,6 @@ impl LastFmEditClientImpl {
     ///
     /// * `session` - Previously saved session state
     ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession};
-    ///
-    /// fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    ///     let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-    ///
-    ///     // Restore from saved session
-    ///     let session_json = std::fs::read_to_string("session.json")?;
-    ///     let session = LastFmEditSession::from_json(&session_json)?;
-    ///     client.restore_session(session);
-    ///
-    ///     assert!(client.is_logged_in());
-    ///     Ok(())
-    /// }
-    /// ```
     pub fn restore_session(&self, session: LastFmEditSession) {
         *self.session.lock().unwrap() = session;
     }
@@ -483,17 +357,6 @@ impl LastFmEditClientImpl {
     ///
     /// Returns [`Ok(())`] on successful authentication, or [`LastFmError::Auth`] on failure.
     ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, Result};
-    /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-    /// client.login("username", "password").await?;
-    /// assert!(client.is_logged_in());
-    /// # Ok::<(), lastfm_edit::LastFmError>(())
-    /// # });
-    /// ```
     pub async fn login(&self, username: &str, password: &str) -> Result<()> {
         // Get login page to extract CSRF token
         let login_url = {
@@ -790,25 +653,6 @@ impl LastFmEditClientImpl {
     /// * `exact_edit` - A fully-specified edit with all required fields populated
     /// * `max_retries` - Maximum number of retry attempts for rate limiting
     ///
-    /// # Examples
-    /// ```rust,ignore
-    /// use lastfm_edit::{LastFmEditClientImpl, ExactScrobbleEdit};
-    ///
-    /// let exact_edit = ExactScrobbleEdit::new(
-    ///     "Original Track".to_string(),
-    ///     "Original Album".to_string(),
-    ///     "Original Artist".to_string(),
-    ///     "Original Artist".to_string(),
-    ///     "New Track".to_string(),
-    ///     "New Album".to_string(),
-    ///     "New Artist".to_string(),
-    ///     "New Artist".to_string(),
-    ///     1640995200,
-    ///     false,
-    /// );
-    ///
-    /// let response = client.edit_scrobble_single(&exact_edit, 3).await?;
-    /// ```
     pub async fn edit_scrobble_single(
         &self,
         exact_edit: &ExactScrobbleEdit,
