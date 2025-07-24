@@ -71,6 +71,8 @@ pub struct SingleEditResponse {
     pub message: Option<String>,
     /// Information about which album variation was edited
     pub album_info: Option<String>,
+    /// The exact scrobble edit that was performed
+    pub exact_scrobble_edit: ExactScrobbleEdit,
 }
 
 /// Response from a scrobble edit operation that may affect multiple album variations.
@@ -490,12 +492,18 @@ impl ExactScrobbleEdit {
 
 impl EditResponse {
     /// Create a new EditResponse from a single result.
-    pub fn single(success: bool, message: Option<String>, album_info: Option<String>) -> Self {
+    pub fn single(
+        success: bool,
+        message: Option<String>,
+        album_info: Option<String>,
+        exact_scrobble_edit: ExactScrobbleEdit,
+    ) -> Self {
         Self {
             individual_results: vec![SingleEditResponse {
                 success,
                 message,
                 album_info,
+                exact_scrobble_edit,
             }],
         }
     }

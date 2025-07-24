@@ -520,6 +520,7 @@ impl LastFmEditClientImpl {
                 success,
                 message,
                 album_info: Some(album_info),
+                exact_scrobble_edit: modified_exact_edit.clone(),
             });
 
             // Add delay between edits to be respectful to the server
@@ -551,7 +552,12 @@ impl LastFmEditClientImpl {
         loop {
             match self.edit_scrobble_impl(exact_edit).await {
                 Ok(success) => {
-                    return Ok(EditResponse::single(success, None, None));
+                    return Ok(EditResponse::single(
+                        success,
+                        None,
+                        None,
+                        exact_edit.clone(),
+                    ));
                 }
                 Err(LastFmError::RateLimit { retry_after }) => {
                     if retries >= max_retries {
@@ -560,6 +566,7 @@ impl LastFmEditClientImpl {
                             false,
                             Some(format!("Rate limit exceeded after {max_retries} retries")),
                             None,
+                            exact_edit.clone(),
                         ));
                     }
 
@@ -578,6 +585,7 @@ impl LastFmEditClientImpl {
                         false,
                         Some(other_error.to_string()),
                         None,
+                        exact_edit.clone(),
                     ));
                 }
             }

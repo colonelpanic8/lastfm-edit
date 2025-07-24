@@ -1,8 +1,8 @@
 #[cfg(feature = "mock")]
 mod mock_tests {
     use lastfm_edit::{
-        Album, AlbumPage, EditResponse, LastFmEditClient, MockLastFmEditClient, Result,
-        ScrobbleEdit, Track, TrackPage,
+        Album, AlbumPage, EditResponse, ExactScrobbleEdit, LastFmEditClient, MockLastFmEditClient,
+        Result, ScrobbleEdit, Track, TrackPage,
     };
     use mockall::predicate::*; // for eq(), any(), etc.
 
@@ -59,8 +59,25 @@ mod mock_tests {
             false,
         );
 
-        let expected_response =
-            EditResponse::single(true, Some("Edit successful".to_string()), None);
+        let expected_exact_edit = ExactScrobbleEdit::new(
+            "Old Track".to_string(),
+            "Old Album".to_string(),
+            "Old Artist".to_string(),
+            "Old Artist".to_string(),
+            "New Track".to_string(),
+            "New Album".to_string(),
+            "New Artist".to_string(),
+            "New Artist".to_string(),
+            1640995200,
+            false,
+        );
+
+        let expected_response = EditResponse::single(
+            true,
+            Some("Edit successful".to_string()),
+            None,
+            expected_exact_edit,
+        );
 
         // Set up expectation for edit_scrobble
         mock_client
