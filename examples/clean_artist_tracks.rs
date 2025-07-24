@@ -142,7 +142,7 @@ async fn main() -> Result<()> {
                     );
 
                     // Update the track name to the cleaned version
-                    edit_data.track_name = clean_name.clone();
+                    edit_data.track_name = Some(clean_name.clone());
 
                     println!("   🔧 Submitting edit...");
 

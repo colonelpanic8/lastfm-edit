@@ -82,7 +82,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "  album_artist_name_original: {:?}",
             minimal_edit.album_artist_name_original
         );
-        println!("  New track name: '{}'", minimal_edit.track_name);
+        println!(
+            "  New track name: '{}'",
+            minimal_edit.track_name.as_deref().unwrap_or("(no change)")
+        );
 
         // Test the enrichment functionality (DRY RUN)
         println!("\n🔧 Test 3: Testing enrichment logic (simulated)...");

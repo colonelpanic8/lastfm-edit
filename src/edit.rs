@@ -29,8 +29,8 @@
 /// ```
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ScrobbleEdit {
-    /// Original track name as it appears in the scrobble (required)
-    pub track_name_original: String,
+    /// Original track name as it appears in the scrobble (optional - if None, edits all tracks)
+    pub track_name_original: Option<String>,
     /// Original album name as it appears in the scrobble (optional)
     pub album_name_original: Option<String>,
     /// Original artist name as it appears in the scrobble (required)
@@ -38,8 +38,8 @@ pub struct ScrobbleEdit {
     /// Original album artist name as it appears in the scrobble (optional)
     pub album_artist_name_original: Option<String>,
 
-    /// New track name to set
-    pub track_name: String,
+    /// New track name to set (optional - if None, keeps original track names)
+    pub track_name: Option<String>,
     /// New album name to set
     pub album_name: String,
     /// New artist name to set
@@ -157,11 +157,11 @@ impl ScrobbleEdit {
     /// * `edit_all` - Whether to edit all matching scrobbles or just this one
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        track_name_original: String,
+        track_name_original: Option<String>,
         album_name_original: Option<String>,
         artist_name_original: String,
         album_artist_name_original: Option<String>,
-        track_name: String,
+        track_name: Option<String>,
         album_name: String,
         artist_name: String,
         album_artist_name: String,
@@ -215,11 +215,11 @@ impl ScrobbleEdit {
         timestamp: u64,
     ) -> Self {
         Self::new(
-            original_track.to_string(),
+            Some(original_track.to_string()),
             Some(original_album.to_string()),
             original_artist.to_string(),
             Some(original_artist.to_string()), // album_artist defaults to artist
-            original_track.to_string(),
+            Some(original_track.to_string()),
             original_album.to_string(),
             original_artist.to_string(),
             original_artist.to_string(), // album_artist defaults to artist
@@ -238,7 +238,7 @@ impl ScrobbleEdit {
     ///     .with_track_name("Correct Name");
     /// ```
     pub fn with_track_name(mut self, track_name: &str) -> Self {
-        self.track_name = track_name.to_string();
+        self.track_name = Some(track_name.to_string());
         self
     }
 
@@ -323,11 +323,11 @@ impl ScrobbleEdit {
         timestamp: u64,
     ) -> Self {
         Self::new(
-            track_name.to_string(),
+            Some(track_name.to_string()),
             Some(album_name.to_string()),
             artist_name.to_string(),
             Some(artist_name.to_string()),
-            track_name.to_string(),
+            Some(track_name.to_string()),
             album_name.to_string(),
             artist_name.to_string(),
             artist_name.to_string(),
@@ -359,16 +359,83 @@ impl ScrobbleEdit {
     /// ```
     pub fn from_track_and_artist(track_name: &str, artist_name: &str) -> Self {
         Self::new(
-            track_name.to_string(),
+            Some(track_name.to_string()),
             None, // Client will look up original album name
             artist_name.to_string(),
             None, // Client will look up original album artist name
-            track_name.to_string(),
+            Some(track_name.to_string()),
             String::new(), // Will be filled by client
             artist_name.to_string(),
             artist_name.to_string(), // album_artist defaults to artist
             None,                    // Client will find representative timestamp
             false,
+        )
+    }
+
+    /// Create an edit request for all tracks by an artist.
+    ///
+    /// This constructor creates a [`ScrobbleEdit`] that will edit all tracks
+    /// by the specified artist, changing the artist name to the new value.
+    ///
+    /// # Arguments
+    ///
+    /// * `old_artist_name` - The current artist name to change from
+    /// * `new_artist_name` - The new artist name to change to
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use lastfm_edit::ScrobbleEdit;
+    ///
+    /// // Edit all tracks by "Radio Head" to "Radiohead"
+    /// let edit = ScrobbleEdit::for_artist("Radio Head", "Radiohead");
+    /// ```
+    pub fn for_artist(old_artist_name: &str, new_artist_name: &str) -> Self {
+        Self::new(
+            None, // No specific track - edit all tracks
+            None, // No specific album - edit all albums
+            old_artist_name.to_string(),
+            None,          // Client will look up original album artist name
+            None,          // No track name change - keep original track names
+            String::new(), // Will be filled by client based on context
+            new_artist_name.to_string(),
+            new_artist_name.to_string(), // album_artist also changes
+            None,                        // Client will find representative timestamp
+            true,                        // Edit all instances by default for artist changes
+        )
+    }
+
+    /// Create an edit request for all tracks in a specific album.
+    ///
+    /// This constructor creates a [`ScrobbleEdit`] that will edit all tracks
+    /// in the specified album by the specified artist.
+    ///
+    /// # Arguments
+    ///
+    /// * `album_name` - The album name containing tracks to edit
+    /// * `artist_name` - The artist name for the album
+    /// * `new_artist_name` - The new artist name to change to
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use lastfm_edit::ScrobbleEdit;
+    ///
+    /// // Edit all tracks in "OK Computer" by "Radio Head" to "Radiohead"
+    /// let edit = ScrobbleEdit::for_album("OK Computer", "Radio Head", "Radiohead");
+    /// ```
+    pub fn for_album(album_name: &str, old_artist_name: &str, new_artist_name: &str) -> Self {
+        Self::new(
+            None, // No specific track - edit all tracks in album
+            Some(album_name.to_string()),
+            old_artist_name.to_string(),
+            Some(old_artist_name.to_string()),
+            None,                   // No track name change - keep original track names
+            album_name.to_string(), // Keep same album name
+            new_artist_name.to_string(),
+            new_artist_name.to_string(), // album_artist also changes
+            None,                        // Client will find representative timestamp
+            true,                        // Edit all instances by default for album changes
         )
     }
 }
@@ -407,11 +474,11 @@ impl ExactScrobbleEdit {
     /// This is useful when you need to expose the edit data through the public API.
     pub fn to_scrobble_edit(&self) -> ScrobbleEdit {
         ScrobbleEdit::new(
-            self.track_name_original.clone(),
+            Some(self.track_name_original.clone()),
             Some(self.album_name_original.clone()),
             self.artist_name_original.clone(),
             Some(self.album_artist_name_original.clone()),
-            self.track_name.clone(),
+            Some(self.track_name.clone()),
             self.album_name.clone(),
             self.artist_name.clone(),
             self.album_artist_name.clone(),

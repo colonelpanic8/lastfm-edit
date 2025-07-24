@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
             Ok(edit_data_vec) => {
                 if let Some(mut edit_data) = edit_data_vec.into_iter().next() {
                     // Update track name
-                    edit_data.track_name = cleaned_name.clone();
+                    edit_data.track_name = Some(cleaned_name.clone());
 
                     // Submit edit - another HTTP request
                     match client.edit_scrobble(&edit_data).await {

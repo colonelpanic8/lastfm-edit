@@ -47,11 +47,11 @@ mod mock_tests {
         let mut mock_client = MockLastFmEditClient::new();
 
         let edit = ScrobbleEdit::new(
-            "Old Track".to_string(),
+            Some("Old Track".to_string()),
             Some("Old Album".to_string()),
             "Old Artist".to_string(),
             Some("Old Artist".to_string()),
-            "New Track".to_string(),
+            Some("New Track".to_string()),
             "New Album".to_string(),
             "New Artist".to_string(),
             "New Artist".to_string(),

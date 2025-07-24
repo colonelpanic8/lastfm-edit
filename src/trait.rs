@@ -80,6 +80,21 @@ pub trait LastFmEditClient {
         max_retries: u32,
     ) -> Result<EditResponse>;
 
+    /// Discover all scrobble edit variations based on the provided ScrobbleEdit template.
+    ///
+    /// This method analyzes what fields are specified in the input ScrobbleEdit and discovers
+    /// all relevant scrobble instances that match the criteria:
+    /// - If track_name_original is specified: discovers all album variations of that track
+    /// - If only album_name_original is specified: discovers all tracks in that album  
+    /// - If neither is specified: discovers all tracks by that artist
+    ///
+    /// Returns fully-specified ExactScrobbleEdit instances with all metadata populated
+    /// from the user's library, ready for editing operations.
+    async fn discover_scrobble_edit_variations(
+        &self,
+        edit: &ScrobbleEdit,
+    ) -> Result<Vec<ExactScrobbleEdit>>;
+
     /// Discover all unique album variations for a track from the user's library.
     ///
     /// This method scrapes the user's library to find all unique album/album_artist

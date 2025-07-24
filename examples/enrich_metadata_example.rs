@@ -1,27 +1,122 @@
-use lastfm_edit::{ExactScrobbleEdit, LastFmEditClientImpl, ScrobbleEdit};
+use clap::{Args, Parser, Subcommand};
+use lastfm_edit::{LastFmEditClientImpl, ScrobbleEdit};
 use std::env;
 
-/// Example demonstrating the new ScrobbleEdit enrichment functionality.
+/// Example demonstrating the new discover_scrobble_edit_variations functionality.
 ///
-/// This example shows how you can create a ScrobbleEdit with just track and artist names,
-/// and the client will automatically discover all the unique album variations for that track
-/// from your library, handling pagination as needed.
+/// This example shows how you can create a ScrobbleEdit with different levels of specificity
+/// and the client will automatically discover all relevant scrobble instances based on what you specify:
+/// - Track-specific: discovers all album variations of that track
+/// - Album-specific: discovers all tracks in that album  
+/// - Artist-specific: discovers all tracks by that artist
 ///
-/// Run with: direnv exec . cargo run --example enrich_metadata_example -- "Artist Name" "Track Name"
-/// Example: direnv exec . cargo run --example enrich_metadata_example -- "Jimi Hendrix" "Lover Man"
+/// Usage examples:
+/// # Edit specific track
+/// direnv exec . cargo run --example enrich_metadata_example track --artist "Jimi Hendrix" --track "Lover Man"
+///
+/// # Edit all tracks in an album
+/// direnv exec . cargo run --example enrich_metadata_example album --artist "Radiohead" --album "OK Computer"
+///
+/// # Edit all tracks by an artist
+/// direnv exec . cargo run --example enrich_metadata_example artist --artist "The Beatles"
+///
+/// # Show what edits would be performed (dry run)
+/// direnv exec . cargo run --example enrich_metadata_example track --artist "Jimi Hendrix" --track "Lover Man" --dry-run
+#[derive(Parser)]
+#[command(
+    name = "enrich_metadata_example",
+    about = "Demonstrate scrobble edit discovery functionality",
+    long_about = None
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+
+    /// Perform a dry run without actually submitting edits
+    #[arg(long, global = true)]
+    dry_run: bool,
+
+    /// Show detailed debug information
+    #[arg(long, global = true)]
+    verbose: bool,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Edit a specific track (discovers all album variations)
+    Track(TrackEditArgs),
+    /// Edit all tracks in an album
+    Album(AlbumEditArgs),
+    /// Edit all tracks by an artist
+    Artist(ArtistEditArgs),
+}
+
+#[derive(Args)]
+struct TrackEditArgs {
+    /// Artist name (required)
+    #[arg(long)]
+    artist: String,
+
+    /// Track name (required)
+    #[arg(long)]
+    track: String,
+
+    /// New track name (optional - if not provided, shows discovery only)
+    #[arg(long)]
+    new_track: Option<String>,
+
+    /// New artist name (optional)
+    #[arg(long)]
+    new_artist: Option<String>,
+
+    /// New album name (optional)
+    #[arg(long)]
+    new_album: Option<String>,
+}
+
+#[derive(Args)]
+struct AlbumEditArgs {
+    /// Artist name (required)
+    #[arg(long)]
+    artist: String,
+
+    /// Album name (required)
+    #[arg(long)]
+    album: String,
+
+    /// New artist name (optional)
+    #[arg(long)]
+    new_artist: Option<String>,
+
+    /// New album name (optional)
+    #[arg(long)]
+    new_album: Option<String>,
+}
+
+#[derive(Args)]
+struct ArtistEditArgs {
+    /// Artist name (required)
+    #[arg(long)]
+    artist: String,
+
+    /// New artist name (optional - if not provided, shows discovery only)
+    #[arg(long)]
+    new_artist: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+    let cli = Cli::parse();
 
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        eprintln!("Usage: {} <artist_name> <track_name>", args[0]);
-        eprintln!("Example: {} \"Jimi Hendrix\" \"Lover Man\"", args[0]);
-        std::process::exit(1);
+    if cli.verbose {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Debug)
+            .init();
+    } else {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Info)
+            .init();
     }
-
-    let artist_name = &args[1];
-    let track_name = &args[2];
 
     let username = env::var("LASTFM_EDIT_USERNAME")
         .expect("LASTFM_EDIT_USERNAME environment variable not set");
@@ -36,101 +131,207 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     client.login(&username, &password).await?;
     println!("✅ Successfully authenticated as {}", client.username());
 
-    // Example 1: Create a ScrobbleEdit with just track and artist names
-    // The system will automatically find all album variations
-    println!("\n📀 Testing metadata enrichment for '{artist_name}' - '{track_name}'");
+    match cli.command {
+        Commands::Track(args) => handle_track_edit(&client, args, cli.dry_run).await?,
+        Commands::Album(args) => handle_album_edit(&client, args, cli.dry_run).await?,
+        Commands::Artist(args) => handle_artist_edit(&client, args, cli.dry_run).await?,
+    }
 
-    let basic_edit = ScrobbleEdit::from_track_and_artist(track_name, artist_name);
+    Ok(())
+}
 
-    println!("Created basic ScrobbleEdit:");
-    println!("  Track: {}", basic_edit.track_name_original);
-    println!("  Artist: {}", basic_edit.artist_name_original);
-    println!("  Album: {:?}", basic_edit.album_name_original);
-    println!("  Timestamp: {:?}", basic_edit.timestamp);
+async fn handle_track_edit(
+    client: &LastFmEditClientImpl,
+    args: TrackEditArgs,
+    dry_run: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\\n🎵 Track Edit Mode");
+    println!("Target: '{}' by '{}'", args.track, args.artist);
 
-    // Use discover_album_variations to discover all album variations
-    println!("\n🔍 Discovering album variations from library...");
-    match client
-        .discover_album_variations(track_name, artist_name)
-        .await
-    {
-        Ok(scrobble_edits) => {
-            println!("✅ Found {} unique album variations:", scrobble_edits.len());
+    // Create a ScrobbleEdit for track-specific discovery
+    let mut edit = ScrobbleEdit::from_track_and_artist(&args.track, &args.artist);
 
-            for (i, edit) in scrobble_edits.iter().enumerate() {
-                println!(
-                    "  {}. Album: '{}', Album Artist: '{}', Timestamp: {:?}",
-                    i + 1,
-                    edit.album_name_original.as_deref().unwrap_or("Unknown"),
-                    edit.album_artist_name_original
-                        .as_deref()
-                        .unwrap_or("Unknown"),
-                    edit.timestamp
-                );
-            }
+    // Apply any new values specified
+    if let Some(new_track) = &args.new_track {
+        edit = edit.with_track_name(new_track);
+        println!("Will rename track to: '{new_track}'");
+    }
+    if let Some(new_artist) = &args.new_artist {
+        edit = edit.with_artist_name(new_artist);
+        println!("Will change artist to: '{new_artist}'");
+    }
+    if let Some(new_album) = &args.new_album {
+        edit = edit.with_album_name(new_album);
+        println!("Will change album to: '{new_album}'");
+    }
 
-            // Example 2: Show how edit_scrobble would work with multiple edits
-            println!("\\n🎭 Testing how edit_scrobble handles multiple album variations...");
-            println!("When you call edit_scrobble with minimal info (just track/artist),");
-            println!("it now performs edits on ALL album variations automatically!");
+    discover_and_show_edits(client, &edit, "track", dry_run).await
+}
 
-            // Show what would happen if we made an edit
-            let minimal_edit = ScrobbleEdit::from_track_and_artist(track_name, artist_name)
-                .with_track_name(&format!("{track_name} (Updated)"));
+async fn handle_album_edit(
+    client: &LastFmEditClientImpl,
+    args: AlbumEditArgs,
+    dry_run: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\\n💿 Album Edit Mode");
+    println!("Target: '{}' by '{}'", args.album, args.artist);
 
+    // Create a ScrobbleEdit for album-specific discovery
+    let mut edit = ScrobbleEdit::for_album(&args.album, &args.artist, &args.artist);
+
+    // Apply any new values specified
+    if let Some(new_artist) = &args.new_artist {
+        edit = edit.with_artist_name(new_artist);
+        println!("Will change artist to: '{new_artist}'");
+    }
+    if let Some(new_album) = &args.new_album {
+        edit = edit.with_album_name(new_album);
+        println!("Will change album name to: '{new_album}'");
+    }
+
+    discover_and_show_edits(client, &edit, "album", dry_run).await
+}
+
+async fn handle_artist_edit(
+    client: &LastFmEditClientImpl,
+    args: ArtistEditArgs,
+    dry_run: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\\n🎤 Artist Edit Mode");
+    println!("Target: '{}'", args.artist);
+
+    // Create a ScrobbleEdit for artist-specific discovery
+    let mut edit = ScrobbleEdit::for_artist(&args.artist, &args.artist);
+
+    // Apply any new values specified
+    if let Some(new_artist) = &args.new_artist {
+        edit = edit.with_artist_name(new_artist);
+        println!("Will change artist to: '{new_artist}'");
+    }
+
+    discover_and_show_edits(client, &edit, "artist", dry_run).await
+}
+
+async fn discover_and_show_edits(
+    client: &LastFmEditClientImpl,
+    edit: &ScrobbleEdit,
+    edit_type: &str,
+    dry_run: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\\n🔍 Discovering scrobble edit variations...");
+
+    match client.discover_scrobble_edit_variations(edit).await {
+        Ok(discovered_edits) => {
             println!(
-                "\\nIf we called edit_scrobble to rename '{}' to '{}':",
-                track_name, minimal_edit.track_name
+                "✅ Found {} scrobble instances to edit:",
+                discovered_edits.len()
             );
-            println!("The system would:");
-            for (i, edit) in scrobble_edits.iter().enumerate() {
+
+            if discovered_edits.is_empty() {
+                println!("No matching scrobbles found. This might mean:");
+                println!("  - The {edit_type} is not in your recent scrobbles");
+                println!("  - The names don't match exactly");
+                println!("  - There's a network or parsing issue");
+                return Ok(());
+            }
+
+            // Show what will be edited
+            for (i, discovered_edit) in discovered_edits.iter().enumerate() {
                 println!(
-                    "  {}. Edit '{}' on album '{}' (timestamp: {:?})",
+                    "  {}. Track: '{}' | Album: '{}' by '{}' | Timestamp: {}",
                     i + 1,
-                    track_name,
-                    edit.album_name_original.as_deref().unwrap_or("Unknown"),
-                    edit.timestamp
+                    discovered_edit.track_name_original,
+                    discovered_edit.album_name_original,
+                    discovered_edit.album_artist_name_original,
+                    discovered_edit.timestamp
                 );
             }
-            println!("\\n✨ This ensures consistency across all your scrobbles of this track!");
 
-            // Example 3: Show the new public ExactScrobbleEdit API
-            println!("\\n🔧 Advanced: Using ExactScrobbleEdit for precise control...");
-            if let Some(first_edit) = scrobble_edits.first() {
-                println!("You can also work directly with ExactScrobbleEdit for complete control:");
+            // Show what changes would be made
+            println!("\\n📝 Proposed changes:");
+            let first_edit = &discovered_edits[0];
 
-                // Convert to ExactScrobbleEdit (this would normally come from discover_album_variations)
-                let exact_edit = ExactScrobbleEdit::new(
-                    first_edit.track_name_original.clone(),
-                    first_edit.album_name_original.clone().unwrap_or_default(),
-                    first_edit.artist_name_original.clone(),
-                    first_edit
-                        .album_artist_name_original
-                        .clone()
-                        .unwrap_or_default(),
-                    format!("{} (Precisely Edited)", first_edit.track_name_original),
-                    first_edit.album_name_original.clone().unwrap_or_default(),
-                    first_edit.artist_name_original.clone(),
-                    first_edit
-                        .album_artist_name_original
-                        .clone()
-                        .unwrap_or_default(),
-                    first_edit.timestamp.unwrap_or_default(),
-                    false,
+            if let Some(track_name) = &edit.track_name {
+                if track_name != &first_edit.track_name_original {
+                    println!("  Track name: '{}' → '{track_name}'", first_edit.track_name_original);
+                }
+            }
+
+            if edit.artist_name != first_edit.artist_name_original {
+                println!(
+                    "  Artist: '{}' → '{}'",
+                    first_edit.artist_name_original, edit.artist_name
                 );
+            }
 
-                println!("  • ExactScrobbleEdit has all fields specified (no Option types)");
-                println!("  • Use client.edit_scrobble_single() for single, precise edits");
-                println!("  • Album: '{}'", exact_edit.album_name_original);
-                println!("  • Timestamp: {}", exact_edit.timestamp);
-                println!("  • This bypasses enrichment and edits exactly one scrobble");
+            if edit.album_name != first_edit.album_name_original {
+                println!(
+                    "  Album: '{}' → '{}'",
+                    first_edit.album_name_original,
+                    edit.album_name
+                );
+            }
+
+            if dry_run {
+                println!("\\n🔍 DRY RUN - No actual edits performed");
+                println!("Remove --dry-run to execute these edits");
+            } else {
+                println!("\\n🚀 Executing edits...");
+                match client.edit_scrobble(edit).await {
+                    Ok(response) => {
+                        if response.all_successful() {
+                            println!(
+                                "✅ All {} edits completed successfully!",
+                                response.total_edits()
+                            );
+                        } else {
+                            println!("⚠️  Some edits had issues:");
+                            println!(
+                                "  {} successful, {} failed",
+                                response.successful_edits(),
+                                response.failed_edits()
+                            );
+                            for (i, msg) in response.detailed_messages().iter().enumerate() {
+                                println!("    {}: {}", i + 1, msg);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("❌ Error executing edits: {e}");
+                    }
+                }
+            }
+
+            // Show advanced usage example
+            println!("\\n🔧 Advanced: ExactScrobbleEdit API");
+            if let Some(first_discovered) = discovered_edits.first() {
+                println!("For precise control, you can use ExactScrobbleEdit:");
+                println!("  let exact_edit = ExactScrobbleEdit::new(");
+                println!("      \\\"{}\\\".to_string(),", first_discovered.track_name_original);
+                println!("      \\\"{}\\\".to_string(),", first_discovered.album_name_original);
+                println!(
+                    "      \\\"{}\\\".to_string(),",
+                    first_discovered.artist_name_original
+                );
+                println!(
+                    "      \\\"{}\\\".to_string(),",
+                    first_discovered.album_artist_name_original
+                );
+                println!("      \\\"New Track Name\\\".to_string(),");
+                println!("      \\\"New Album Name\\\".to_string(),");
+                println!("      \\\"New Artist Name\\\".to_string(),");
+                println!("      \\\"New Album Artist\\\".to_string(),");
+                println!("      {},", first_discovered.timestamp);
+                println!("      false");
+                println!("  );");
+                println!("  client.edit_scrobble_single(&exact_edit, 3).await?;");
             }
         }
         Err(e) => {
-            println!("❌ Could not discover album variations: {e}");
+            println!("❌ Could not discover scrobble variations: {e}");
             println!("This might mean:");
-            println!("  - The track is not in your recent scrobbles");
-            println!("  - The track/artist names don't match exactly");
+            println!("  - The {edit_type} is not in your recent scrobbles");
+            println!("  - The names don't match exactly");
             println!("  - There's a network or parsing issue");
         }
     }
