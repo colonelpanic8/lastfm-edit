@@ -1,4 +1,4 @@
-use lastfm_edit::{ExactScrobbleEdit, LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
+use lastfm_edit::{ExactScrobbleEdit, LastFmEditClientImpl, ScrobbleEdit};
 use std::env;
 
 /// Example demonstrating the new ScrobbleEdit enrichment functionality.

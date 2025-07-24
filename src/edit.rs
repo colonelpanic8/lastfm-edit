@@ -81,7 +81,15 @@ pub struct SingleEditResponse {
 /// # Examples
 ///
 /// ```rust
-/// use lastfm_edit::EditResponse;
+/// use lastfm_edit::{EditResponse, SingleEditResponse};
+///
+/// let response = EditResponse::from_results(vec![
+///     SingleEditResponse {
+///         success: true,
+///         message: Some("Edit successful".to_string()),
+///         album_info: Some("Album 1".to_string()),
+///     }
+/// ]);
 ///
 /// // Check if all edits succeeded
 /// if response.all_successful() {

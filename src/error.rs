@@ -39,10 +39,10 @@ use thiserror::Error;
 ///
 /// let edit = ScrobbleEdit::from_track_info("Track", "Album", "Artist", 1640995200);
 ///
-/// // This will automatically retry on rate limits up to 3 times
-/// match client.edit_scrobble_with_retry(&edit, 3).await {
+/// // Standard edit operation
+/// match client.edit_scrobble(&edit).await {
 ///     Ok(response) => println!("Edit completed: {:?}", response),
-///     Err(e) => eprintln!("Edit failed after retries: {}", e),
+///     Err(e) => eprintln!("Edit failed: {}", e),
 /// }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });

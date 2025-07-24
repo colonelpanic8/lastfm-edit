@@ -109,7 +109,7 @@
 //!             .with_edit_all(true);
 //!
 //!             let response = client.edit_scrobble(&edit).await?;
-//!             if response.success {
+//!             if response.success() {
 //!                 println!("Successfully edited: {} -> {}", track.name, new_name);
 //!             }
 //!         }
