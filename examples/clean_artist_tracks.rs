@@ -131,31 +131,36 @@ async fn main() -> Result<()> {
 
         // Load real edit form values from the track page
         match client.load_edit_form_values(&track.name, artist).await {
-            Ok(mut edit_data) => {
-                println!(
-                    "   📋 Loaded edit form data - Album: '{}'",
-                    edit_data
-                        .album_name_original
-                        .as_deref()
-                        .unwrap_or("unknown")
-                );
+            Ok(edit_data_vec) => {
+                if let Some(mut edit_data) = edit_data_vec.into_iter().next() {
+                    println!(
+                        "   📋 Loaded edit form data - Album: '{}'",
+                        edit_data
+                            .album_name_original
+                            .as_deref()
+                            .unwrap_or("unknown")
+                    );
 
-                // Update the track name to the cleaned version
-                edit_data.track_name = clean_name.clone();
+                    // Update the track name to the cleaned version
+                    edit_data.track_name = clean_name.clone();
 
-                println!("   🔧 Submitting edit...");
+                    println!("   🔧 Submitting edit...");
 
-                // Perform the edit
-                match client.edit_scrobble(&edit_data).await {
-                    Ok(_response) => {
-                        println!("   ✅ Successfully cleaned: '{clean_name}'");
-                        tracks_successfully_cleaned += 1;
-                        already_cleaned_tracks.insert(clean_name);
+                    // Perform the edit
+                    match client.edit_scrobble(&edit_data).await {
+                        Ok(_response) => {
+                            println!("   ✅ Successfully cleaned: '{clean_name}'");
+                            tracks_successfully_cleaned += 1;
+                            already_cleaned_tracks.insert(clean_name);
+                        }
+                        Err(e) => {
+                            println!("   ❌ Error editing '{}': {}", track.name, e);
+                            tracks_failed_to_clean += 1;
+                        }
                     }
-                    Err(e) => {
-                        println!("   ❌ Error editing '{}': {}", track.name, e);
-                        tracks_failed_to_clean += 1;
-                    }
+                } else {
+                    println!("   ⚠️  No edit data found for track");
+                    tracks_failed_to_clean += 1;
                 }
             }
             Err(e) => {

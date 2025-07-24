@@ -29,17 +29,13 @@
 /// ```
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ScrobbleEdit {
-    /// Original track name as it appears in the scrobble
-    /// If None, the client will attempt to look up the complete original metadata
-    pub track_name_original: Option<String>,
-    /// Original album name as it appears in the scrobble  
-    /// If None, the client will attempt to look up the complete original metadata
+    /// Original track name as it appears in the scrobble (required)
+    pub track_name_original: String,
+    /// Original album name as it appears in the scrobble (optional)
     pub album_name_original: Option<String>,
-    /// Original artist name as it appears in the scrobble
-    /// If None, the client will attempt to look up the complete original metadata
-    pub artist_name_original: Option<String>,
-    /// Original album artist name as it appears in the scrobble
-    /// If None, the client will attempt to look up the complete original metadata
+    /// Original artist name as it appears in the scrobble (required)
+    pub artist_name_original: String,
+    /// Original album artist name as it appears in the scrobble (optional)
     pub album_artist_name_original: Option<String>,
 
     /// New track name to set
@@ -51,10 +47,11 @@ pub struct ScrobbleEdit {
     /// New album artist name to set
     pub album_artist_name: String,
 
-    /// Unix timestamp of the scrobble to edit
+    /// Unix timestamp of the scrobble to edit (optional)
     ///
     /// This identifies the specific scrobble instance to modify.
-    pub timestamp: u64,
+    /// If None, the client will attempt to find a representative timestamp.
+    pub timestamp: Option<u64>,
     /// Whether to edit all instances or just this specific scrobble
     ///
     /// When `true`, Last.fm will update all scrobbles with matching metadata.
@@ -111,15 +108,15 @@ impl ScrobbleEdit {
     /// * `edit_all` - Whether to edit all matching scrobbles or just this one
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        track_name_original: Option<String>,
+        track_name_original: String,
         album_name_original: Option<String>,
-        artist_name_original: Option<String>,
+        artist_name_original: String,
         album_artist_name_original: Option<String>,
         track_name: String,
         album_name: String,
         artist_name: String,
         album_artist_name: String,
-        timestamp: u64,
+        timestamp: Option<u64>,
         edit_all: bool,
     ) -> Self {
         Self {
@@ -169,15 +166,15 @@ impl ScrobbleEdit {
         timestamp: u64,
     ) -> Self {
         Self::new(
-            Some(original_track.to_string()),
+            original_track.to_string(),
             Some(original_album.to_string()),
-            Some(original_artist.to_string()),
+            original_artist.to_string(),
             Some(original_artist.to_string()), // album_artist defaults to artist
             original_track.to_string(),
             original_album.to_string(),
             original_artist.to_string(),
             original_artist.to_string(), // album_artist defaults to artist
-            timestamp,
+            Some(timestamp),
             false, // edit_all defaults to false
         )
     }
@@ -277,15 +274,51 @@ impl ScrobbleEdit {
         timestamp: u64,
     ) -> Self {
         Self::new(
-            None, // Client will look up original track name
-            None, // Client will look up original album name
-            None, // Client will look up original artist name
-            None, // Client will look up original album artist name
+            track_name.to_string(),
+            Some(album_name.to_string()),
+            artist_name.to_string(),
+            Some(artist_name.to_string()),
             track_name.to_string(),
             album_name.to_string(),
             artist_name.to_string(),
+            artist_name.to_string(),
+            Some(timestamp),
+            false,
+        )
+    }
+    /// Create an edit request with just track and artist information.
+    ///
+    /// This constructor is useful when you only know the track and artist names.
+    /// The client will use these as both original and new values, and will
+    /// attempt to find a representative timestamp and album information.
+    ///
+    /// # Arguments
+    ///
+    /// * `track_name` - The track name (used as both original and new)
+    /// * `artist_name` - The artist name (used as both original and new)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use lastfm_edit::ScrobbleEdit;
+    ///
+    /// // Create an edit where the client will look up album and timestamp info
+    /// let edit = ScrobbleEdit::from_track_and_artist(
+    ///     "Lover Man",
+    ///     "Jimi Hendrix"
+    /// );
+    /// ```
+    pub fn from_track_and_artist(track_name: &str, artist_name: &str) -> Self {
+        Self::new(
+            track_name.to_string(),
+            None, // Client will look up original album name
+            artist_name.to_string(),
+            None, // Client will look up original album artist name
+            track_name.to_string(),
+            String::new(), // Will be filled by client
+            artist_name.to_string(),
             artist_name.to_string(), // album_artist defaults to artist
-            timestamp,
+            None,                    // Client will find representative timestamp
             false,
         )
     }

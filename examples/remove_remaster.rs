@@ -120,25 +120,29 @@ async fn main() -> Result<()> {
             .load_edit_form_values(&track.name, &track.artist)
             .await
         {
-            Ok(mut edit_data) => {
-                // Update track name
-                edit_data.track_name = cleaned_name.clone();
+            Ok(edit_data_vec) => {
+                if let Some(mut edit_data) = edit_data_vec.into_iter().next() {
+                    // Update track name
+                    edit_data.track_name = cleaned_name.clone();
 
-                // Submit edit - another HTTP request
-                match client.edit_scrobble(&edit_data).await {
-                    Ok(_) => {
-                        edits_made += 1;
-                        println!("   ✅ Successfully cleaned track");
-                    }
-                    Err(e) => {
-                        println!("   ❌ Error editing track: {e}");
-                        if e.to_string().contains("RateLimit") {
-                            rate_limit_hits += 1;
-                            log::info!("Rate limit encountered during edit operation for track '{}' by '{}'", track.name, track.artist);
-                            println!("   🚨 RATE LIMIT DETECTED during edit operation!");
-                            break;
+                    // Submit edit - another HTTP request
+                    match client.edit_scrobble(&edit_data).await {
+                        Ok(_) => {
+                            edits_made += 1;
+                            println!("   ✅ Successfully cleaned track");
+                        }
+                        Err(e) => {
+                            println!("   ❌ Error editing track: {e}");
+                            if e.to_string().contains("RateLimit") {
+                                rate_limit_hits += 1;
+                                log::info!("Rate limit encountered during edit operation for track '{}' by '{}'", track.name, track.artist);
+                                println!("   🚨 RATE LIMIT DETECTED during edit operation!");
+                                break;
+                            }
                         }
                     }
+                } else {
+                    println!("   ⚠️  No edit data found for track");
                 }
             }
             Err(e) => {
