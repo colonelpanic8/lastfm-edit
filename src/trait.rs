@@ -95,17 +95,6 @@ pub trait LastFmEditClient {
         edit: &ScrobbleEdit,
     ) -> Result<Vec<ExactScrobbleEdit>>;
 
-    /// Discover all unique album variations for a track from the user's library.
-    ///
-    /// This method scrapes the user's library to find all unique album/album_artist
-    /// combinations for the given track and artist, returning fully populated
-    /// ScrobbleEdit objects for each variation found.
-    async fn discover_album_variations(
-        &self,
-        track_name: &str,
-        artist_name: &str,
-    ) -> Result<Vec<ScrobbleEdit>>;
-
     /// Get tracks from a specific album page.
     async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>>;
 

@@ -130,9 +130,14 @@ async fn main() -> Result<()> {
         }
 
         // Load real edit form values from the track page
-        match client.discover_album_variations(&track.name, artist).await {
-            Ok(edit_data_vec) => {
-                if let Some(mut edit_data) = edit_data_vec.into_iter().next() {
+        let edit_template = lastfm_edit::ScrobbleEdit::from_track_and_artist(&track.name, artist);
+        match client
+            .discover_scrobble_edit_variations(&edit_template)
+            .await
+        {
+            Ok(exact_edit_vec) => {
+                if let Some(exact_edit) = exact_edit_vec.into_iter().next() {
+                    let mut edit_data = exact_edit.to_scrobble_edit();
                     println!(
                         "   📋 Loaded edit form data - Album: '{}'",
                         edit_data

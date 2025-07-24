@@ -367,7 +367,7 @@ impl ScrobbleEdit {
             None, // Will be filled by client or kept as original
             artist_name.to_string(),
             Some(artist_name.to_string()), // album_artist defaults to artist
-            None,                    // Client will find representative timestamp
+            None,                          // Client will find representative timestamp
             false,
         )
     }
@@ -395,13 +395,13 @@ impl ScrobbleEdit {
             None, // No specific track - edit all tracks
             None, // No specific album - edit all albums
             old_artist_name.to_string(),
-            None,          // Client will look up original album artist name
-            None,          // No track name change - keep original track names
-            None,          // Keep original album names (they can vary)
+            None, // Client will look up original album artist name
+            None, // No track name change - keep original track names
+            None, // Keep original album names (they can vary)
             new_artist_name.to_string(),
             Some(new_artist_name.to_string()), // album_artist also changes for global renames
-            None,                        // Client will find representative timestamp
-            true,                        // Edit all instances by default for artist changes
+            None,                              // Client will find representative timestamp
+            true,                              // Edit all instances by default for artist changes
         )
     }
 
@@ -430,12 +430,12 @@ impl ScrobbleEdit {
             Some(album_name.to_string()),
             old_artist_name.to_string(),
             Some(old_artist_name.to_string()),
-            None,                   // No track name change - keep original track names
+            None,                         // No track name change - keep original track names
             Some(album_name.to_string()), // Keep same album name
             new_artist_name.to_string(),
-            None,                   // Keep original album_artist names (they can vary)
-            None,                        // Client will find representative timestamp
-            true,                        // Edit all instances by default for album changes
+            None, // Keep original album_artist names (they can vary)
+            None, // Client will find representative timestamp
+            true, // Edit all instances by default for album changes
         )
     }
 }

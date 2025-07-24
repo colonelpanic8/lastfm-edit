@@ -253,7 +253,10 @@ async fn discover_and_show_edits(
 
             if let Some(track_name) = &edit.track_name {
                 if track_name != &first_edit.track_name_original {
-                    println!("  Track name: '{}' → '{track_name}'", first_edit.track_name_original);
+                    println!(
+                        "  Track name: '{}' → '{track_name}'",
+                        first_edit.track_name_original
+                    );
                 }
             }
 
@@ -307,8 +310,14 @@ async fn discover_and_show_edits(
             if let Some(first_discovered) = discovered_edits.first() {
                 println!("For precise control, you can use ExactScrobbleEdit:");
                 println!("  let exact_edit = ExactScrobbleEdit::new(");
-                println!("      \\\"{}\\\".to_string(),", first_discovered.track_name_original);
-                println!("      \\\"{}\\\".to_string(),", first_discovered.album_name_original);
+                println!(
+                    "      \\\"{}\\\".to_string(),",
+                    first_discovered.track_name_original
+                );
+                println!(
+                    "      \\\"{}\\\".to_string(),",
+                    first_discovered.album_name_original
+                );
                 println!(
                     "      \\\"{}\\\".to_string(),",
                     first_discovered.artist_name_original

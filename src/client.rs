@@ -1061,9 +1061,6 @@ impl LastFmEditClientImpl {
             &edit.album_artist_name_original,
             edit.timestamp,
         ) {
-            log::debug!(
-                "Converting fully-specified ScrobbleEdit to ExactScrobbleEdit: '{track_name}' from '{album_name}' (timestamp: {timestamp})"
-            );
             let exact_edit = ExactScrobbleEdit::new(
                 track_name.clone(),
                 album_name.clone(),
@@ -1214,22 +1211,6 @@ impl LastFmEditClientImpl {
         }
     }
 
-    /// Discover all album variations for a specific track (backwards compatibility).
-    ///
-    /// This is a convenience wrapper around discover_scrobble_edit_variations.
-    pub async fn discover_album_variations(
-        &self,
-        track_name: &str,
-        artist_name: &str,
-    ) -> Result<Vec<ScrobbleEdit>> {
-        let edit = ScrobbleEdit::from_track_and_artist(track_name, artist_name);
-        let exact_edits = self.discover_scrobble_edit_variations(&edit).await?;
-        Ok(exact_edits
-            .iter()
-            .map(|exact_edit| exact_edit.to_scrobble_edit())
-            .collect())
-    }
-
     /// Get tracks from a specific album page
     /// This makes a single request to the album page and extracts track data
     pub async fn get_album_tracks(
@@ -1283,72 +1264,10 @@ impl LastFmEditClientImpl {
     ) -> Result<EditResponse> {
         log::debug!("Editing album '{old_album_name}' -> '{new_album_name}' by '{artist_name}'");
 
-        // Get all tracks from the album page
-        let tracks = self.get_album_tracks(old_album_name, artist_name).await?;
+        let edit = ScrobbleEdit::for_album(old_album_name, artist_name, artist_name)
+            .with_album_name(new_album_name);
 
-        if tracks.is_empty() {
-            return Ok(EditResponse::single(
-                false,
-                Some(format!(
-                    "No tracks found for album '{old_album_name}' by '{artist_name}'. Make sure the album name matches exactly."
-                )),
-                None
-            ));
-        }
-
-        log::info!(
-            "Found {} tracks in album '{}'",
-            tracks.len(),
-            old_album_name
-        );
-
-        let mut all_results = Vec::new();
-
-        // For each track, create a simple edit and let edit_scrobble handle the complexity
-        for (index, track) in tracks.iter().enumerate() {
-            log::debug!(
-                "Processing track {}/{}: '{}'",
-                index + 1,
-                tracks.len(),
-                track.name
-            );
-
-            // Create a simple ScrobbleEdit for this track with the new album name
-            let edit = ScrobbleEdit::from_track_and_artist(&track.name, artist_name)
-                .with_album_name(new_album_name);
-
-            // Let edit_scrobble handle all the enrichment and multiple album variations
-            match self.edit_scrobble(&edit).await {
-                Ok(response) => {
-                    let total_edits = response.total_edits();
-                    let successful_edits = response.successful_edits();
-
-                    // Add all individual results to our collection
-                    all_results.extend(response.individual_results);
-
-                    log::info!(
-                        "Processed track '{}': {} edits ({} successful)",
-                        track.name,
-                        total_edits,
-                        successful_edits
-                    );
-                }
-                Err(e) => {
-                    // If we can't edit this track, add a failure result
-                    all_results.push(SingleEditResponse {
-                        success: false,
-                        message: Some(format!("Error editing track '{}': {}", track.name, e)),
-                        album_info: Some(format!("track from album '{old_album_name}'")),
-                    });
-                    log::debug!("❌ Error editing track '{}': {}", track.name, e);
-                }
-            }
-
-            // Add delay between track edits to be respectful to the server
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-
-        Ok(EditResponse::from_results(all_results))
+        self.edit_scrobble(&edit).await
     }
 
     /// Edit artist metadata by updating scrobbles with new artist name
@@ -1360,147 +1279,9 @@ impl LastFmEditClientImpl {
     ) -> Result<EditResponse> {
         log::debug!("Editing artist '{old_artist_name}' -> '{new_artist_name}'");
 
-        // Get all tracks from the artist using pagination
-        let mut tracks = Vec::new();
-        let mut page = 1;
-        let max_pages = 10; // Limit to reasonable number to avoid infinite processing
+        let edit = ScrobbleEdit::for_artist(old_artist_name, new_artist_name);
 
-        loop {
-            if page > max_pages || tracks.len() >= 200 {
-                break;
-            }
-
-            match self.get_artist_tracks_page(old_artist_name, page).await {
-                Ok(track_page) => {
-                    if track_page.tracks.is_empty() {
-                        break;
-                    }
-                    tracks.extend(track_page.tracks);
-                    if !track_page.has_next_page {
-                        break;
-                    }
-                    page += 1;
-                }
-                Err(e) => {
-                    log::warn!("Error fetching artist tracks page {page}: {e}");
-                    break;
-                }
-            }
-        }
-
-        if tracks.is_empty() {
-            return Ok(EditResponse::single(
-                false,
-                Some(format!(
-                    "No tracks found for artist '{old_artist_name}'. Make sure the artist name matches exactly."
-                )),
-                None
-            ));
-        }
-
-        log::info!(
-            "Found {} tracks for artist '{}'",
-            tracks.len(),
-            old_artist_name
-        );
-
-        let mut successful_edits = 0;
-        let mut failed_edits = 0;
-        let mut error_messages = Vec::new();
-        let mut skipped_tracks = 0;
-
-        // For each track, try to load and edit it
-        for (index, track) in tracks.iter().enumerate() {
-            log::debug!(
-                "Processing track {}/{}: '{}'",
-                index + 1,
-                tracks.len(),
-                track.name
-            );
-
-            match self
-                .load_edit_form_values_internal(&track.name, old_artist_name)
-                .await
-            {
-                Ok(edit_data_list) => {
-                    // Use the first (most common) album variation
-                    if let Some(edit_data) = edit_data_list.into_iter().next() {
-                        let mut edit_data = edit_data.to_scrobble_edit();
-                        // Update the artist name and album artist name
-                        edit_data.artist_name = new_artist_name.to_string();
-                        edit_data.album_artist_name = Some(new_artist_name.to_string());
-
-                        // Perform the edit
-                        match self.edit_scrobble(&edit_data).await {
-                            Ok(response) => {
-                                if response.success() {
-                                    successful_edits += 1;
-                                    log::info!("✅ Successfully edited track '{}'", track.name);
-                                } else {
-                                    failed_edits += 1;
-                                    let error_msg = format!(
-                                        "Failed to edit track '{}': {}",
-                                        track.name,
-                                        response
-                                            .message()
-                                            .unwrap_or_else(|| "Unknown error".to_string())
-                                    );
-                                    error_messages.push(error_msg);
-                                    log::debug!("❌ {}", error_messages.last().unwrap());
-                                }
-                            }
-                            Err(e) => {
-                                failed_edits += 1;
-                                let error_msg =
-                                    format!("Error editing track '{}': {}", track.name, e);
-                                error_messages.push(error_msg);
-                                log::info!("❌ {}", error_messages.last().unwrap());
-                            }
-                        }
-                    } else {
-                        skipped_tracks += 1;
-                        log::debug!("No edit data found for track '{}'", track.name);
-                    }
-                }
-                Err(e) => {
-                    skipped_tracks += 1;
-                    log::debug!("Could not load edit form for track '{}': {e}", track.name);
-                    // Continue to next track - some tracks might not be in recent scrobbles
-                }
-            }
-
-            // Add delay between edits to be respectful to the server
-        }
-
-        let total_processed = successful_edits + failed_edits;
-        let success = successful_edits > 0 && failed_edits == 0;
-
-        let message = if success {
-            Some(format!(
-                "Successfully renamed artist '{old_artist_name}' to '{new_artist_name}' for all {successful_edits} editable tracks ({skipped_tracks} tracks were not in recent scrobbles)"
-            ))
-        } else if successful_edits > 0 {
-            Some(format!(
-                "Partially successful: {} of {} editable tracks renamed ({} skipped, {} failed). Errors: {}",
-                successful_edits,
-                total_processed,
-                skipped_tracks,
-                failed_edits,
-                error_messages.join("; ")
-            ))
-        } else if total_processed == 0 {
-            Some(format!(
-                "No editable tracks found for artist '{}'. All {} tracks were skipped because they're not in recent scrobbles.",
-                old_artist_name, tracks.len()
-            ))
-        } else {
-            Some(format!(
-                "Failed to rename any tracks. Errors: {}",
-                error_messages.join("; ")
-            ))
-        };
-
-        Ok(EditResponse::single(success, message, None))
+        self.edit_scrobble(&edit).await
     }
 
     /// Edit artist metadata for a specific track only
@@ -1513,63 +1294,10 @@ impl LastFmEditClientImpl {
     ) -> Result<EditResponse> {
         log::debug!("Editing artist for track '{track_name}' from '{old_artist_name}' -> '{new_artist_name}'");
 
-        match self.load_edit_form_values_internal(track_name, old_artist_name).await {
-            Ok(edit_data_list) => {
-                // Use the first (most common) album variation
-                if let Some(edit_data) = edit_data_list.into_iter().next() {
-                    let mut edit_data = edit_data.to_scrobble_edit();
-                    // Update the artist name and album artist name
-                    edit_data.artist_name = new_artist_name.to_string();
-                    edit_data.album_artist_name = Some(new_artist_name.to_string());
+        let edit = ScrobbleEdit::from_track_and_artist(track_name, old_artist_name)
+            .with_artist_name(new_artist_name);
 
-                    log::info!("Updating artist for track '{track_name}' from '{old_artist_name}' to '{new_artist_name}'");
-
-                    // Perform the edit
-                    match self.edit_scrobble(&edit_data).await {
-                    Ok(response) => {
-                        if response.success() {
-                            Ok(EditResponse::single(
-                                true,
-                                Some(format!(
-                                    "Successfully renamed artist for track '{track_name}' from '{old_artist_name}' to '{new_artist_name}'"
-                                )),
-                                None
-                            ))
-                        } else {
-                            Ok(EditResponse::single(
-                                false,
-                                Some(format!(
-                                    "Failed to rename artist for track '{track_name}': {}",
-                                    response.message().unwrap_or_else(|| "Unknown error".to_string())
-                                )),
-                                None
-                            ))
-                        }
-                    }
-                    Err(e) => Ok(EditResponse::single(
-                        false,
-                        Some(format!("Error editing track '{track_name}': {e}")),
-                        None
-                    )),
-                    }
-                } else {
-                    Ok(EditResponse::single(
-                        false,
-                        Some(format!(
-                            "No edit data found for track '{track_name}' by '{old_artist_name}'. The track may not be in your recent scrobbles."
-                        )),
-                        None
-                    ))
-                }
-            }
-            Err(e) => Ok(EditResponse::single(
-                false,
-                Some(format!(
-                    "Could not load edit form for track '{track_name}' by '{old_artist_name}': {e}. The track may not be in your recent scrobbles."
-                )),
-                None
-            )),
-        }
+        self.edit_scrobble(&edit).await
     }
 
     /// Edit artist metadata for all tracks in a specific album
@@ -1582,123 +1310,10 @@ impl LastFmEditClientImpl {
     ) -> Result<EditResponse> {
         log::debug!("Editing artist for album '{album_name}' from '{old_artist_name}' -> '{new_artist_name}'");
 
-        // Get all tracks from the album page
-        let tracks = self.get_album_tracks(album_name, old_artist_name).await?;
+        let edit = ScrobbleEdit::for_album(album_name, old_artist_name, old_artist_name)
+            .with_artist_name(new_artist_name);
 
-        if tracks.is_empty() {
-            return Ok(EditResponse::single(
-                false,
-                Some(format!(
-                    "No tracks found for album '{album_name}' by '{old_artist_name}'. Make sure the album name matches exactly."
-                )),
-                None
-            ));
-        }
-
-        log::info!(
-            "Found {} tracks in album '{}' by '{}'",
-            tracks.len(),
-            album_name,
-            old_artist_name
-        );
-
-        let mut successful_edits = 0;
-        let mut failed_edits = 0;
-        let mut error_messages = Vec::new();
-        let mut skipped_tracks = 0;
-
-        // For each track, try to load and edit it
-        for (index, track) in tracks.iter().enumerate() {
-            log::debug!(
-                "Processing track {}/{}: '{}'",
-                index + 1,
-                tracks.len(),
-                track.name
-            );
-
-            match self
-                .load_edit_form_values_internal(&track.name, old_artist_name)
-                .await
-            {
-                Ok(edit_data_list) => {
-                    // Use the first (most common) album variation
-                    if let Some(edit_data) = edit_data_list.into_iter().next() {
-                        let mut edit_data = edit_data.to_scrobble_edit();
-                        // Update the artist name and album artist name
-                        edit_data.artist_name = new_artist_name.to_string();
-                        edit_data.album_artist_name = Some(new_artist_name.to_string());
-
-                        // Perform the edit
-                        match self.edit_scrobble(&edit_data).await {
-                            Ok(response) => {
-                                if response.success() {
-                                    successful_edits += 1;
-                                    log::info!("✅ Successfully edited track '{}'", track.name);
-                                } else {
-                                    failed_edits += 1;
-                                    let error_msg = format!(
-                                        "Failed to edit track '{}': {}",
-                                        track.name,
-                                        response
-                                            .message()
-                                            .unwrap_or_else(|| "Unknown error".to_string())
-                                    );
-                                    error_messages.push(error_msg);
-                                    log::debug!("❌ {}", error_messages.last().unwrap());
-                                }
-                            }
-                            Err(e) => {
-                                failed_edits += 1;
-                                let error_msg =
-                                    format!("Error editing track '{}': {}", track.name, e);
-                                error_messages.push(error_msg);
-                                log::info!("❌ {}", error_messages.last().unwrap());
-                            }
-                        }
-                    } else {
-                        skipped_tracks += 1;
-                        log::debug!("No edit data found for track '{}'", track.name);
-                    }
-                }
-                Err(e) => {
-                    skipped_tracks += 1;
-                    log::debug!("Could not load edit form for track '{}': {e}", track.name);
-                    // Continue to next track - some tracks might not be in recent scrobbles
-                }
-            }
-
-            // Add delay between edits to be respectful to the server
-        }
-
-        let total_processed = successful_edits + failed_edits;
-        let success = successful_edits > 0 && failed_edits == 0;
-
-        let message = if success {
-            Some(format!(
-                "Successfully renamed artist for album '{album_name}' from '{old_artist_name}' to '{new_artist_name}' for all {successful_edits} editable tracks ({skipped_tracks} tracks were not in recent scrobbles)"
-            ))
-        } else if successful_edits > 0 {
-            Some(format!(
-                "Partially successful: {} of {} editable tracks renamed ({} skipped, {} failed). Errors: {}",
-                successful_edits,
-                total_processed,
-                skipped_tracks,
-                failed_edits,
-                error_messages.join("; ")
-            ))
-        } else if total_processed == 0 {
-            Some(format!(
-                "No editable tracks found for album '{album_name}' by '{old_artist_name}'. All {} tracks were skipped because they're not in recent scrobbles.",
-                tracks.len()
-            ))
-        } else {
-            Some(format!(
-                "Failed to rename any tracks. Errors: {}",
-                error_messages.join("; ")
-            ))
-        };
-
-        Ok(EditResponse::single(success, message, None))
+        self.edit_scrobble(&edit).await
     }
 
     pub async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
@@ -2232,15 +1847,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
         edit: &ScrobbleEdit,
     ) -> Result<Vec<ExactScrobbleEdit>> {
         self.discover_scrobble_edit_variations(edit).await
-    }
-
-    async fn discover_album_variations(
-        &self,
-        track_name: &str,
-        artist_name: &str,
-    ) -> Result<Vec<ScrobbleEdit>> {
-        self.discover_album_variations(track_name, artist_name)
-            .await
     }
 
     async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>> {

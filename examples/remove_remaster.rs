@@ -116,12 +116,15 @@ async fn main() -> Result<()> {
         println!("   🔄 Applying change...");
 
         // Load edit form - this makes an HTTP request
+        let edit_template =
+            lastfm_edit::ScrobbleEdit::from_track_and_artist(&track.name, &track.artist);
         match client
-            .discover_album_variations(&track.name, &track.artist)
+            .discover_scrobble_edit_variations(&edit_template)
             .await
         {
-            Ok(edit_data_vec) => {
-                if let Some(mut edit_data) = edit_data_vec.into_iter().next() {
+            Ok(exact_edit_vec) => {
+                if let Some(exact_edit) = exact_edit_vec.into_iter().next() {
+                    let mut edit_data = exact_edit.to_scrobble_edit();
                     // Update track name
                     edit_data.track_name = Some(cleaned_name.clone());
 
