@@ -52,9 +52,9 @@ mod mock_tests {
             "Old Artist".to_string(),
             Some("Old Artist".to_string()),
             Some("New Track".to_string()),
-            "New Album".to_string(),
+            Some("New Album".to_string()),
             "New Artist".to_string(),
-            "New Artist".to_string(),
+            Some("New Artist".to_string()),
             Some(1640995200),
             false,
         );

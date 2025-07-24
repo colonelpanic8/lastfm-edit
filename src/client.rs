@@ -497,9 +497,13 @@ impl LastFmEditClientImpl {
             if let Some(new_track_name) = &edit.track_name {
                 modified_exact_edit.track_name = new_track_name.clone();
             }
-            modified_exact_edit.album_name = edit.album_name.clone();
+            if let Some(new_album_name) = &edit.album_name {
+                modified_exact_edit.album_name = new_album_name.clone();
+            }
             modified_exact_edit.artist_name = edit.artist_name.clone();
-            modified_exact_edit.album_artist_name = edit.album_artist_name.clone();
+            if let Some(new_album_artist_name) = &edit.album_artist_name {
+                modified_exact_edit.album_artist_name = new_album_artist_name.clone();
+            }
             modified_exact_edit.edit_all = edit.edit_all;
 
             let album_info = format!(
@@ -1068,9 +1072,13 @@ impl LastFmEditClientImpl {
                 edit.track_name
                     .clone()
                     .unwrap_or_else(|| track_name.clone()),
-                edit.album_name.clone(),
+                edit.album_name
+                    .clone()
+                    .unwrap_or_else(|| album_name.clone()),
                 edit.artist_name.clone(),
-                edit.album_artist_name.clone(),
+                edit.album_artist_name
+                    .clone()
+                    .unwrap_or_else(|| album_artist.clone()),
                 timestamp,
                 edit.edit_all,
             );
@@ -1100,9 +1108,13 @@ impl LastFmEditClientImpl {
                     if let Some(new_track_name) = &edit.track_name {
                         modified_edit.track_name = new_track_name.clone();
                     }
-                    modified_edit.album_name = edit.album_name.clone();
+                    if let Some(new_album_name) = &edit.album_name {
+                        modified_edit.album_name = new_album_name.clone();
+                    }
                     modified_edit.artist_name = edit.artist_name.clone();
-                    modified_edit.album_artist_name = edit.album_artist_name.clone();
+                    if let Some(new_album_artist_name) = &edit.album_artist_name {
+                        modified_edit.album_artist_name = new_album_artist_name.clone();
+                    }
                     modified_edit.edit_all = edit.edit_all;
 
                     Ok(vec![modified_edit])
@@ -1416,7 +1428,7 @@ impl LastFmEditClientImpl {
                         let mut edit_data = edit_data.to_scrobble_edit();
                         // Update the artist name and album artist name
                         edit_data.artist_name = new_artist_name.to_string();
-                        edit_data.album_artist_name = new_artist_name.to_string();
+                        edit_data.album_artist_name = Some(new_artist_name.to_string());
 
                         // Perform the edit
                         match self.edit_scrobble(&edit_data).await {
@@ -1508,7 +1520,7 @@ impl LastFmEditClientImpl {
                     let mut edit_data = edit_data.to_scrobble_edit();
                     // Update the artist name and album artist name
                     edit_data.artist_name = new_artist_name.to_string();
-                    edit_data.album_artist_name = new_artist_name.to_string();
+                    edit_data.album_artist_name = Some(new_artist_name.to_string());
 
                     log::info!("Updating artist for track '{track_name}' from '{old_artist_name}' to '{new_artist_name}'");
 
@@ -1614,7 +1626,7 @@ impl LastFmEditClientImpl {
                         let mut edit_data = edit_data.to_scrobble_edit();
                         // Update the artist name and album artist name
                         edit_data.artist_name = new_artist_name.to_string();
-                        edit_data.album_artist_name = new_artist_name.to_string();
+                        edit_data.album_artist_name = Some(new_artist_name.to_string());
 
                         // Perform the edit
                         match self.edit_scrobble(&edit_data).await {

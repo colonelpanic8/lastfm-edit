@@ -40,12 +40,12 @@ pub struct ScrobbleEdit {
 
     /// New track name to set (optional - if None, keeps original track names)
     pub track_name: Option<String>,
-    /// New album name to set
-    pub album_name: String,
+    /// New album name to set (optional - if None, keeps original album names)
+    pub album_name: Option<String>,
     /// New artist name to set
     pub artist_name: String,
-    /// New album artist name to set
-    pub album_artist_name: String,
+    /// New album artist name to set (optional - if None, keeps original album artist names)
+    pub album_artist_name: Option<String>,
 
     /// Unix timestamp of the scrobble to edit (optional)
     ///
@@ -162,9 +162,9 @@ impl ScrobbleEdit {
         artist_name_original: String,
         album_artist_name_original: Option<String>,
         track_name: Option<String>,
-        album_name: String,
+        album_name: Option<String>,
         artist_name: String,
-        album_artist_name: String,
+        album_artist_name: Option<String>,
         timestamp: Option<u64>,
         edit_all: bool,
     ) -> Self {
@@ -220,9 +220,9 @@ impl ScrobbleEdit {
             original_artist.to_string(),
             Some(original_artist.to_string()), // album_artist defaults to artist
             Some(original_track.to_string()),
-            original_album.to_string(),
+            Some(original_album.to_string()),
             original_artist.to_string(),
-            original_artist.to_string(), // album_artist defaults to artist
+            Some(original_artist.to_string()), // album_artist defaults to artist
             Some(timestamp),
             false, // edit_all defaults to false
         )
@@ -252,7 +252,7 @@ impl ScrobbleEdit {
     ///     .with_album_name("Correct Album");
     /// ```
     pub fn with_album_name(mut self, album_name: &str) -> Self {
-        self.album_name = album_name.to_string();
+        self.album_name = Some(album_name.to_string());
         self
     }
 
@@ -269,7 +269,7 @@ impl ScrobbleEdit {
     /// ```
     pub fn with_artist_name(mut self, artist_name: &str) -> Self {
         self.artist_name = artist_name.to_string();
-        self.album_artist_name = artist_name.to_string();
+        self.album_artist_name = Some(artist_name.to_string());
         self
     }
 
@@ -328,9 +328,9 @@ impl ScrobbleEdit {
             artist_name.to_string(),
             Some(artist_name.to_string()),
             Some(track_name.to_string()),
-            album_name.to_string(),
+            Some(album_name.to_string()),
             artist_name.to_string(),
-            artist_name.to_string(),
+            Some(artist_name.to_string()),
             Some(timestamp),
             false,
         )
@@ -364,9 +364,9 @@ impl ScrobbleEdit {
             artist_name.to_string(),
             None, // Client will look up original album artist name
             Some(track_name.to_string()),
-            String::new(), // Will be filled by client
+            None, // Will be filled by client or kept as original
             artist_name.to_string(),
-            artist_name.to_string(), // album_artist defaults to artist
+            Some(artist_name.to_string()), // album_artist defaults to artist
             None,                    // Client will find representative timestamp
             false,
         )
@@ -397,9 +397,9 @@ impl ScrobbleEdit {
             old_artist_name.to_string(),
             None,          // Client will look up original album artist name
             None,          // No track name change - keep original track names
-            String::new(), // Will be filled by client based on context
+            None,          // Keep original album names (they can vary)
             new_artist_name.to_string(),
-            new_artist_name.to_string(), // album_artist also changes
+            Some(new_artist_name.to_string()), // album_artist also changes for global renames
             None,                        // Client will find representative timestamp
             true,                        // Edit all instances by default for artist changes
         )
@@ -431,9 +431,9 @@ impl ScrobbleEdit {
             old_artist_name.to_string(),
             Some(old_artist_name.to_string()),
             None,                   // No track name change - keep original track names
-            album_name.to_string(), // Keep same album name
+            Some(album_name.to_string()), // Keep same album name
             new_artist_name.to_string(),
-            new_artist_name.to_string(), // album_artist also changes
+            None,                   // Keep original album_artist names (they can vary)
             None,                        // Client will find representative timestamp
             true,                        // Edit all instances by default for album changes
         )
@@ -479,9 +479,9 @@ impl ExactScrobbleEdit {
             self.artist_name_original.clone(),
             Some(self.album_artist_name_original.clone()),
             Some(self.track_name.clone()),
-            self.album_name.clone(),
+            Some(self.album_name.clone()),
             self.artist_name.clone(),
-            self.album_artist_name.clone(),
+            Some(self.album_artist_name.clone()),
             Some(self.timestamp),
             self.edit_all,
         )

@@ -264,11 +264,11 @@ async fn discover_and_show_edits(
                 );
             }
 
-            if edit.album_name != first_edit.album_name_original {
+            if edit.album_name != Some(first_edit.album_name_original.clone()) {
                 println!(
                     "  Album: '{}' → '{}'",
                     first_edit.album_name_original,
-                    edit.album_name
+                    edit.album_name.as_deref().unwrap_or("(keep original)")
                 );
             }
 
