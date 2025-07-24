@@ -212,18 +212,20 @@ pub mod iterator;
 pub mod parsing;
 pub mod session;
 pub mod track;
+pub mod r#trait;
 
 pub use album::{Album, AlbumPage};
-pub use client::{LastFmEditClient, LastFmEditClientImpl};
+pub use client::LastFmEditClientImpl;
+pub use r#trait::LastFmEditClient;
 
 // Re-export the mock when the mock feature is enabled
-#[cfg(feature = "mock")]
-pub use client::MockLastFmEditClient;
 pub use edit::{EditResponse, ExactScrobbleEdit, ScrobbleEdit, SingleEditResponse};
 pub use error::LastFmError;
 pub use iterator::{
     ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator, RecentTracksIterator,
 };
+#[cfg(feature = "mock")]
+pub use r#trait::MockLastFmEditClient;
 
 // Iterator-based convenience methods for the client
 impl LastFmEditClientImpl {
