@@ -79,4 +79,8 @@ path = "examples/rate_limit_monitoring.rs"
 name = "session_event_sharing"
 path = "examples/session_event_sharing.rs"
 
+[[example]]
+name = "custom_session_manager"
+path = "examples/custom_session_manager.rs"
+
 

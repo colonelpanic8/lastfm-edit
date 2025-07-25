@@ -257,7 +257,7 @@ pub use r#trait::MockLastFmEditClient;
 #[cfg(feature = "mock")]
 pub use iterator::MockAsyncPaginatedIterator;
 pub use session::LastFmEditSession;
-pub use session_persistence::SessionPersistence;
+pub use session_persistence::{SessionManager, SessionPersistence};
 pub use track::{Track, TrackPage};
 
 // Re-export scraper types for testing
