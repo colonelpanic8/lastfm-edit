@@ -944,32 +944,9 @@ impl LastFmEditClientImpl {
             content.len()
         );
 
-        // Check if we got JSON or HTML
-        if content.trim_start().starts_with("{") || content.trim_start().starts_with("[") {
-            log::debug!("Parsing JSON response from AJAX endpoint");
-            self.parse_json_tracks_page(&content, page, artist)
-        } else {
-            log::debug!("Parsing HTML response from AJAX endpoint");
-            let document = Html::parse_document(&content);
-            self.parser.parse_tracks_page(&document, page, artist, None)
-        }
-    }
-
-    /// Parse JSON tracks page (delegates to parser)
-    fn parse_json_tracks_page(
-        &self,
-        _json_content: &str,
-        page_number: u32,
-        _artist: &str,
-    ) -> Result<TrackPage> {
-        // JSON parsing not yet implemented - fallback to empty page
-        log::debug!("JSON parsing not implemented, returning empty page");
-        Ok(TrackPage {
-            tracks: Vec::new(),
-            page_number,
-            has_next_page: false,
-            total_pages: Some(1),
-        })
+        log::debug!("Parsing HTML response from AJAX endpoint");
+        let document = Html::parse_document(&content);
+        self.parser.parse_tracks_page(&document, page, artist, None)
     }
 
     /// Extract tracks from HTML document (delegates to parser)
