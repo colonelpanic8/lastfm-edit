@@ -53,7 +53,8 @@
       "Bash(git fetch:*)",
       "Bash(git rebase:*)",
       "Bash(if grep -q \"use lastfm_edit::\" \"$file\")",
-      "Bash(! grep -q \"LastFmEditClient\" \"$file\")"
+      "Bash(! grep -q \"LastFmEditClient\" \"$file\")",
+      "Bash(git pull:*)"
     ],
     "deny": []
   }
