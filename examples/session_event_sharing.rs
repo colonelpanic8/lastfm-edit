@@ -35,8 +35,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("🔍 Client1 monitor started");
         while let Ok(event) = events1.recv().await {
             match event {
-                ClientEvent::RateLimited(delay) => {
-                    println!("⏳ Client1 monitor: Rate limited for {delay} seconds");
+                ClientEvent::RequestStarted { request } => {
+                    println!(
+                        "🚀 Client1 monitor: Started request {}",
+                        request.short_description()
+                    );
+                }
+                ClientEvent::RequestCompleted {
+                    request,
+                    status_code,
+                    duration_ms,
+                } => {
+                    println!(
+                        "✅ Client1 monitor: Completed {} - {} ({} ms)",
+                        request.short_description(),
+                        status_code,
+                        duration_ms
+                    );
+                }
+                ClientEvent::RateLimited {
+                    delay_seconds,
+                    request,
+                    rate_limit_type,
+                } => {
+                    let req_desc = request
+                        .as_ref()
+                        .map(|r| r.short_description())
+                        .unwrap_or_else(|| "unknown request".to_string());
+                    println!(
+                        "⏳ Client1 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
+                    );
                 }
             }
         }
@@ -46,8 +74,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("🔍 Client2 monitor started");
         while let Ok(event) = events2.recv().await {
             match event {
-                ClientEvent::RateLimited(delay) => {
-                    println!("⏳ Client2 monitor: Rate limited for {delay} seconds");
+                ClientEvent::RequestStarted { request } => {
+                    println!(
+                        "🚀 Client2 monitor: Started request {}",
+                        request.short_description()
+                    );
+                }
+                ClientEvent::RequestCompleted {
+                    request,
+                    status_code,
+                    duration_ms,
+                } => {
+                    println!(
+                        "✅ Client2 monitor: Completed {} - {} ({} ms)",
+                        request.short_description(),
+                        status_code,
+                        duration_ms
+                    );
+                }
+                ClientEvent::RateLimited {
+                    delay_seconds,
+                    request,
+                    rate_limit_type,
+                } => {
+                    let req_desc = request
+                        .as_ref()
+                        .map(|r| r.short_description())
+                        .unwrap_or_else(|| "unknown request".to_string());
+                    println!(
+                        "⏳ Client2 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
+                    );
                 }
             }
         }
@@ -69,7 +125,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event2 = client2.latest_event();
 
     match (event1, event2) {
-        (Some(ClientEvent::RateLimited(delay1)), Some(ClientEvent::RateLimited(delay2))) => {
+        (
+            Some(ClientEvent::RateLimited {
+                delay_seconds: delay1,
+                ..
+            }),
+            Some(ClientEvent::RateLimited {
+                delay_seconds: delay2,
+                ..
+            }),
+        ) => {
             println!("🎯 Both clients show rate limiting: {delay1}s and {delay2}s");
             if delay1 == delay2 {
                 println!(
@@ -79,12 +144,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("❌ UNEXPECTED: Different delays reported");
             }
         }
+        (
+            Some(ClientEvent::RequestCompleted { .. }),
+            Some(ClientEvent::RequestCompleted { .. }),
+        ) => {
+            println!("✅ Both clients show completed requests (shared broadcaster working!)");
+        }
         (None, None) => {
-            println!("📊 No rate limiting occurred - this is normal for light usage");
-            println!("    In real usage, both clients would see rate limit events when they occur");
+            println!("📊 No events occurred yet - this is normal");
+            println!("    In real usage, both clients would see the same events when they occur");
         }
         _ => {
-            println!("📊 Different event states between clients (unexpected)");
+            println!("📊 Different event states between clients (could be due to timing)");
         }
     }
 

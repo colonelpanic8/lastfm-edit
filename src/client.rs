@@ -1,5 +1,6 @@
 use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
 use crate::edit_analysis;
+use crate::events::{ClientEvent, RequestInfo, RateLimitType, SharedEventBroadcaster, ClientEventReceiver};
 use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
@@ -14,53 +15,7 @@ use scraper::{Html, Selector};
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tokio::sync::{broadcast, watch};
 
-/// Event type to describe internal HTTP client activity
-#[derive(Clone, Debug)]
-pub enum ClientEvent {
-    /// Rate limiting detected with backoff duration in seconds
-    RateLimited(u64),
-}
-
-/// Type alias for the broadcast receiver
-pub type ClientEventReceiver = broadcast::Receiver<ClientEvent>;
-
-/// Type alias for the watch receiver
-pub type ClientEventWatcher = watch::Receiver<Option<ClientEvent>>;
-
-/// Shared event broadcasting state that persists across client clones
-#[derive(Clone)]
-struct SharedEventBroadcaster {
-    event_tx: broadcast::Sender<ClientEvent>,
-    last_event_tx: watch::Sender<Option<ClientEvent>>,
-}
-
-impl SharedEventBroadcaster {
-    fn new() -> Self {
-        let (event_tx, _) = broadcast::channel(100);
-        let (last_event_tx, _) = watch::channel(None);
-        Self {
-            event_tx,
-            last_event_tx,
-        }
-    }
-
-    fn broadcast_event(&self, event: ClientEvent) {
-        // Broadcast to all subscribers (ignore if no one is listening)
-        let _ = self.event_tx.send(event.clone());
-        // Update the latest event
-        let _ = self.last_event_tx.send(Some(event));
-    }
-
-    fn subscribe(&self) -> ClientEventReceiver {
-        self.event_tx.subscribe()
-    }
-
-    fn latest_event(&self) -> Option<ClientEvent> {
-        self.last_event_tx.borrow().clone()
-    }
-}
 
 /// Main implementation for interacting with Last.fm's web interface.
 ///
@@ -448,7 +403,11 @@ impl LastFmEditClientImpl {
             "Edit scrobble",
             || client.edit_scrobble_impl(&edit_clone),
             |delay, operation_name| {
-                self.broadcast_event(ClientEvent::RateLimited(delay));
+                self.broadcast_event(ClientEvent::RateLimited {
+                    delay_seconds: delay,
+                    request: None, // No specific request context in retry callback
+                    rate_limit_type: RateLimitType::ResponsePattern,
+                });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
             },
         )
@@ -527,11 +486,27 @@ impl LastFmEditClientImpl {
 
         request.set_body(form_string);
 
+        // Create request info for event broadcasting
+        let request_info = RequestInfo::from_url_and_method(&edit_url, "POST");
+        let request_start = std::time::Instant::now();
+
+        // Broadcast request started event
+        self.broadcast_event(ClientEvent::RequestStarted {
+            request: request_info.clone(),
+        });
+
         let mut response = self
             .client
             .send(request)
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        // Broadcast request completed event
+        self.broadcast_event(ClientEvent::RequestCompleted {
+            request: request_info.clone(),
+            status_code: response.status().into(),
+            duration_ms: request_start.elapsed().as_millis() as u64,
+        });
 
         log::debug!("Edit response status: {}", response.status());
 
@@ -892,7 +867,11 @@ impl LastFmEditClientImpl {
                 Ok(new_response)
             },
             |delay, operation_name| {
-                self.broadcast_event(ClientEvent::RateLimited(delay));
+                self.broadcast_event(ClientEvent::RateLimited {
+                    delay_seconds: delay,
+                    request: None, // No specific request context in retry callback
+                    rate_limit_type: RateLimitType::ResponsePattern,
+                });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
             },
         )
@@ -927,11 +906,27 @@ impl LastFmEditClientImpl {
 
         headers::add_get_headers(&mut request, is_ajax, referer_url);
 
+        // Create request info for event broadcasting
+        let request_info = RequestInfo::from_url_and_method(url, "GET");
+        let request_start = std::time::Instant::now();
+
+        // Broadcast request started event
+        self.broadcast_event(ClientEvent::RequestStarted {
+            request: request_info.clone(),
+        });
+
         let response = self
             .client
             .send(request)
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        // Broadcast request completed event
+        self.broadcast_event(ClientEvent::RequestCompleted {
+            request: request_info.clone(),
+            status_code: response.status().into(),
+            duration_ms: request_start.elapsed().as_millis() as u64,
+        });
 
         // Extract any new cookies from the response
         self.extract_cookies(&response);
@@ -988,7 +983,11 @@ impl LastFmEditClientImpl {
                 .and_then(|h| h.get(0))
                 .and_then(|v| v.as_str().parse::<u64>().ok())
                 .unwrap_or(60);
-            self.broadcast_event(ClientEvent::RateLimited(retry_after));
+            self.broadcast_event(ClientEvent::RateLimited {
+                delay_seconds: retry_after,
+                request: Some(request_info.clone()),
+                rate_limit_type: RateLimitType::Http429,
+            });
             return Err(LastFmError::RateLimit { retry_after });
         }
 
@@ -1000,7 +999,11 @@ impl LastFmEditClientImpl {
                 let session = self.session.lock().unwrap();
                 if !session.cookies.is_empty() {
                     log::debug!("403 on authenticated request - likely rate limit");
-                    self.broadcast_event(ClientEvent::RateLimited(60));
+                    self.broadcast_event(ClientEvent::RateLimited {
+                        delay_seconds: 60,
+                        request: Some(request_info.clone()),
+                        rate_limit_type: RateLimitType::Http403,
+                    });
                     return Err(LastFmError::RateLimit { retry_after: 60 });
                 }
             }

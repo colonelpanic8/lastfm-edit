@@ -1,4 +1,4 @@
-use crate::client::{ClientEvent, ClientEventReceiver};
+use crate::events::{ClientEvent, ClientEventReceiver};
 use crate::edit::ExactScrobbleEdit;
 use crate::iterator::AsyncPaginatedIterator;
 use crate::session::LastFmEditSession;

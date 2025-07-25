@@ -25,8 +25,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("🔍 Monitoring client events...");
         while let Ok(event) = events.recv().await {
             match event {
-                ClientEvent::RateLimited(delay) => {
-                    println!("⏳ Rate limited! Waiting {delay} seconds");
+                ClientEvent::RequestStarted { request } => {
+                    println!("🚀 Starting request: {}", request.short_description());
+                }
+                ClientEvent::RequestCompleted {
+                    request,
+                    status_code,
+                    duration_ms,
+                } => {
+                    println!(
+                        "✅ Completed request: {} - {} ({} ms)",
+                        request.short_description(),
+                        status_code,
+                        duration_ms
+                    );
+                }
+                ClientEvent::RateLimited {
+                    delay_seconds,
+                    request,
+                    rate_limit_type,
+                } => {
+                    let req_desc = request
+                        .as_ref()
+                        .map(|r| r.short_description())
+                        .unwrap_or_else(|| "unknown request".to_string());
+                    println!(
+                        "⏳ Rate limited ({rate_limit_type:?})! {req_desc} - Waiting {delay_seconds} seconds"
+                    );
                 }
             }
         }
@@ -37,8 +62,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Check latest event after login
     if let Some(event) = client.latest_event() {
         match event {
-            ClientEvent::RateLimited(delay) => {
-                println!("📊 Latest event: Rate limited for {delay} seconds");
+            ClientEvent::RequestStarted { request } => {
+                println!(
+                    "📊 Latest event: Started request {}",
+                    request.short_description()
+                );
+            }
+            ClientEvent::RequestCompleted {
+                request,
+                status_code,
+                duration_ms,
+            } => {
+                println!(
+                    "📊 Latest event: Completed request {} - {} ({} ms)",
+                    request.short_description(),
+                    status_code,
+                    duration_ms
+                );
+            }
+            ClientEvent::RateLimited {
+                delay_seconds,
+                request,
+                rate_limit_type,
+            } => {
+                let req_desc = request
+                    .as_ref()
+                    .map(|r| r.short_description())
+                    .unwrap_or_else(|| "unknown request".to_string());
+                println!(
+                    "📊 Latest event: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
+                );
             }
         }
     } else {
@@ -60,8 +113,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Check if we're currently rate limited
-        if let Some(ClientEvent::RateLimited(_)) = client.latest_event() {
-            println!("🛑 Currently rate limited according to latest event");
+        if let Some(ClientEvent::RateLimited { delay_seconds, .. }) = client.latest_event() {
+            println!(
+                "🛑 Currently rate limited for {delay_seconds} seconds according to latest event"
+            );
         }
 
         // Small delay between requests
