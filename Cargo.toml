@@ -86,4 +86,12 @@ path = "examples/list_recent_tracks.rs"
 name = "session_management"
 path = "examples/session_management.rs"
 
+[[example]]
+name = "rate_limit_monitoring"
+path = "examples/rate_limit_monitoring.rs"
+
+[[example]]
+name = "session_event_sharing"
+path = "examples/session_event_sharing.rs"
+
 

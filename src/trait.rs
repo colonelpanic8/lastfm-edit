@@ -1,3 +1,4 @@
+use crate::client::{ClientEvent, ClientEventReceiver};
 use crate::edit::ExactScrobbleEdit;
 use crate::session::LastFmEditSession;
 use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
@@ -158,4 +159,16 @@ pub trait LastFmEditClient {
 
     /// Create an iterator for browsing the user's recent tracks starting from a specific page.
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
+
+    /// Subscribe to internal client events.
+    ///
+    /// Returns a broadcast receiver that can be used to listen to events like rate limiting.
+    /// Multiple subscribers can listen simultaneously.
+    fn subscribe(&self) -> ClientEventReceiver;
+
+    /// Get the latest client event without subscribing to future events.
+    ///
+    /// This returns the most recent event that occurred, or `None` if no events have occurred yet.
+    /// Unlike `subscribe()`, this provides instant access to the current state without waiting.
+    fn latest_event(&self) -> Option<ClientEvent>;
 }

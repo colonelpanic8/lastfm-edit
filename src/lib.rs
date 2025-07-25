@@ -217,7 +217,7 @@ pub mod track;
 pub mod r#trait;
 
 pub use album::{Album, AlbumPage};
-pub use client::LastFmEditClientImpl;
+pub use client::{ClientEvent, ClientEventReceiver, ClientEventWatcher, LastFmEditClientImpl};
 pub use discovery::{
     AlbumTracksDiscovery, ArtistTracksDiscovery, ExactMatchDiscovery, TrackVariationsDiscovery,
 };

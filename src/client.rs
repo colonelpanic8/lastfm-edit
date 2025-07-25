@@ -11,6 +11,53 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tokio::sync::{broadcast, watch};
+
+/// Event type to describe internal HTTP client activity
+#[derive(Clone, Debug)]
+pub enum ClientEvent {
+    /// Rate limiting detected with backoff duration in seconds
+    RateLimited(u64),
+}
+
+/// Type alias for the broadcast receiver
+pub type ClientEventReceiver = broadcast::Receiver<ClientEvent>;
+
+/// Type alias for the watch receiver
+pub type ClientEventWatcher = watch::Receiver<Option<ClientEvent>>;
+
+/// Shared event broadcasting state that persists across client clones
+#[derive(Clone)]
+struct SharedEventBroadcaster {
+    event_tx: broadcast::Sender<ClientEvent>,
+    last_event_tx: watch::Sender<Option<ClientEvent>>,
+}
+
+impl SharedEventBroadcaster {
+    fn new() -> Self {
+        let (event_tx, _) = broadcast::channel(100);
+        let (last_event_tx, _) = watch::channel(None);
+        Self {
+            event_tx,
+            last_event_tx,
+        }
+    }
+
+    fn broadcast_event(&self, event: ClientEvent) {
+        // Broadcast to all subscribers (ignore if no one is listening)
+        let _ = self.event_tx.send(event.clone());
+        // Update the latest event
+        let _ = self.last_event_tx.send(Some(event));
+    }
+
+    fn subscribe(&self) -> ClientEventReceiver {
+        self.event_tx.subscribe()
+    }
+
+    fn latest_event(&self) -> Option<ClientEvent> {
+        self.last_event_tx.borrow().clone()
+    }
+}
 
 /// Main implementation for interacting with Last.fm's web interface.
 ///
@@ -24,6 +71,7 @@ pub struct LastFmEditClientImpl {
     rate_limit_patterns: Vec<String>,
     debug_save_responses: bool,
     parser: LastFmParser,
+    broadcaster: Arc<SharedEventBroadcaster>,
 }
 
 impl LastFmEditClientImpl {
@@ -99,6 +147,7 @@ impl LastFmEditClientImpl {
             rate_limit_patterns,
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
+            broadcaster: Arc::new(SharedEventBroadcaster::new()),
         }
     }
 
@@ -129,6 +178,7 @@ impl LastFmEditClientImpl {
     /// Create a new [`LastFmEditClient`] by restoring a previously saved session.
     ///
     /// This allows you to resume a Last.fm session without requiring the user to log in again.
+    /// Creates a new broadcaster, so events won't be shared with other clients.
     ///
     /// # Arguments
     ///
@@ -142,6 +192,33 @@ impl LastFmEditClientImpl {
     pub fn from_session(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
+    ) -> Self {
+        Self::from_session_with_broadcaster(
+            client,
+            session,
+            Arc::new(SharedEventBroadcaster::new()),
+        )
+    }
+
+    /// Create a new [`LastFmEditClient`] by restoring a session with a shared broadcaster.
+    ///
+    /// This allows you to create multiple clients that share the same event broadcasting system.
+    /// When any client encounters rate limiting, all clients sharing the broadcaster will see the event.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `session` - Previously saved [`LastFmEditSession`]
+    /// * `broadcaster` - Shared broadcaster from another client
+    ///
+    /// # Returns
+    ///
+    /// Returns a client with the restored session and shared broadcaster.
+    ///
+    fn from_session_with_broadcaster(
+        client: Box<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+        broadcaster: Arc<SharedEventBroadcaster>,
     ) -> Self {
         Self {
             client: Arc::from(client),
@@ -166,6 +243,7 @@ impl LastFmEditClientImpl {
             ],
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
+            broadcaster,
         }
     }
 
@@ -192,6 +270,24 @@ impl LastFmEditClientImpl {
     ///
     pub fn restore_session(&self, session: LastFmEditSession) {
         *self.session.lock().unwrap() = session;
+    }
+
+    /// Create a new client that shares the same session and event broadcaster.
+    ///
+    /// This is useful when you want multiple HTTP client instances but want them to
+    /// share the same authentication state and event broadcasting system.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - A new HTTP client implementation
+    ///
+    /// # Returns
+    ///
+    /// Returns a new client that shares the session and broadcaster with this client.
+    ///
+    pub fn with_shared_broadcaster(&self, client: Box<dyn HttpClient + Send + Sync>) -> Self {
+        let session = self.get_session();
+        Self::from_session_with_broadcaster(client, session, self.broadcaster.clone())
     }
 
     /// Authenticate with Last.fm using username and password.
@@ -312,6 +408,7 @@ impl LastFmEditClientImpl {
             // Look for rate limit indicators in the response
             if self.is_rate_limit_response(&response_html) {
                 log::debug!("403 response appears to be rate limiting");
+                self.broadcast_event(ClientEvent::RateLimited(60));
                 return Err(LastFmError::RateLimit { retry_after: 60 });
             }
             log::debug!("403 response appears to be authentication failure");
@@ -376,6 +473,61 @@ impl LastFmEditClientImpl {
     /// Returns `true` if [`login`](Self::login) was successful and session is active.
     pub fn is_logged_in(&self) -> bool {
         self.session.lock().unwrap().is_valid()
+    }
+
+    /// Subscribe to internal client events.
+    ///
+    /// Returns a broadcast receiver that can be used to listen to events like rate limiting.
+    /// Multiple subscribers can listen simultaneously.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, ClientEvent};
+    ///
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let client = LastFmEditClientImpl::new(Box::new(http_client));
+    /// let mut events = client.subscribe();
+    ///
+    /// // Listen for events in a background task
+    /// tokio::spawn(async move {
+    ///     while let Ok(event) = events.recv().await {
+    ///         match event {
+    ///             ClientEvent::RateLimited(delay) => {
+    ///                 println!("Rate limited! Waiting {} seconds", delay);
+    ///             }
+    ///         }
+    ///     }
+    /// });
+    /// ```
+    pub fn subscribe(&self) -> ClientEventReceiver {
+        self.broadcaster.subscribe()
+    }
+
+    /// Get the latest client event without subscribing to future events.
+    ///
+    /// This returns the most recent event that occurred, or `None` if no events have occurred yet.
+    /// Unlike `subscribe()`, this provides instant access to the current state without waiting.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, ClientEvent};
+    ///
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let client = LastFmEditClientImpl::new(Box::new(http_client));
+    ///
+    /// if let Some(ClientEvent::RateLimited(delay)) = client.latest_event() {
+    ///     println!("Currently rate limited for {} seconds", delay);
+    /// }
+    /// ```
+    pub fn latest_event(&self) -> Option<ClientEvent> {
+        self.broadcaster.latest_event()
+    }
+
+    /// Broadcast an internal event to all subscribers.
+    ///
+    /// This is used internally by the client to notify observers of important events.
+    fn broadcast_event(&self, event: ClientEvent) {
+        self.broadcaster.broadcast_event(event);
     }
 
     /// Fetch recent scrobbles from the user's listening history
@@ -576,6 +728,7 @@ impl LastFmEditClientImpl {
                         retries + 1,
                         max_retries
                     );
+                    self.broadcast_event(ClientEvent::RateLimited(delay));
                     tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
                     retries += 1;
                 }
@@ -1330,10 +1483,12 @@ impl LastFmEditClientImpl {
                         if retries < max_retries {
                             let delay = 60 + (retries as u64 * 30); // Exponential backoff
                             log::info!("Rate limit detected in response body, retrying in {delay}s (attempt {}/{max_retries})", retries + 1);
+                            self.broadcast_event(ClientEvent::RateLimited(delay));
                             tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
                             retries += 1;
                             continue;
                         }
+                        self.broadcast_event(ClientEvent::RateLimited(60));
                         return Err(crate::LastFmError::RateLimit { retry_after: 60 });
                     }
 
@@ -1355,9 +1510,11 @@ impl LastFmEditClientImpl {
                             "Rate limit detected, retrying in {delay}s (attempt {}/{max_retries})",
                             retries + 1
                         );
+                        self.broadcast_event(ClientEvent::RateLimited(delay));
                         tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
                         retries += 1;
                     } else {
+                        self.broadcast_event(ClientEvent::RateLimited(retry_after));
                         return Err(crate::LastFmError::RateLimit { retry_after });
                     }
                 }
@@ -1467,6 +1624,7 @@ impl LastFmEditClientImpl {
                 .and_then(|h| h.get(0))
                 .and_then(|v| v.as_str().parse::<u64>().ok())
                 .unwrap_or(60);
+            self.broadcast_event(ClientEvent::RateLimited(retry_after));
             return Err(LastFmError::RateLimit { retry_after });
         }
 
@@ -1478,6 +1636,7 @@ impl LastFmEditClientImpl {
                 let session = self.session.lock().unwrap();
                 if !session.cookies.is_empty() {
                     log::debug!("403 on authenticated request - likely rate limit");
+                    self.broadcast_event(ClientEvent::RateLimited(60));
                     return Err(LastFmError::RateLimit { retry_after: 60 });
                 }
             }
@@ -1787,5 +1946,13 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator {
         crate::RecentTracksIterator::with_starting_page(self.clone(), starting_page)
+    }
+
+    fn subscribe(&self) -> ClientEventReceiver {
+        self.subscribe()
+    }
+
+    fn latest_event(&self) -> Option<ClientEvent> {
+        self.latest_event()
     }
 }
