@@ -1,5 +1,4 @@
 use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
-use crate::iterator::AsyncPaginatedIterator;
 use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
 use crate::session::LastFmEditSession;
@@ -828,7 +827,7 @@ impl LastFmEditClientImpl {
 
     /// Load prepopulated form values for editing a specific track
     /// This extracts scrobble data directly from the track page forms
-    async fn load_edit_form_values_internal(
+    pub async fn load_edit_form_values_internal(
         &self,
         track_name: &str,
         artist_name: &str,
@@ -1079,7 +1078,7 @@ impl LastFmEditClientImpl {
     }
 
     /// Case 1: Track+Album specified but missing album_artist/timestamp - look up exact match
-    async fn discover_track_album_exact_match(
+    pub async fn discover_track_album_exact_match(
         &self,
         edit: &ScrobbleEdit,
         track_name: &str,
@@ -1134,7 +1133,7 @@ impl LastFmEditClientImpl {
     }
 
     /// Case 2: Track-specific discovery (discover all album variations of a specific track)
-    async fn discover_track_variations(
+    pub async fn discover_track_variations(
         &self,
         edit: &ScrobbleEdit,
         track_name: &str,
@@ -1154,7 +1153,7 @@ impl LastFmEditClientImpl {
     }
 
     /// Case 3: Album-specific discovery (discover all tracks in a specific album)
-    async fn discover_album_tracks(
+    pub async fn discover_album_tracks(
         &self,
         edit: &ScrobbleEdit,
         album_name: &str,
@@ -1198,71 +1197,6 @@ impl LastFmEditClientImpl {
         ))
     }
 
-    /// Case 4: Artist-specific discovery (discover all tracks by an artist)
-    async fn discover_artist_tracks(&self, edit: &ScrobbleEdit) -> Result<Vec<ExactScrobbleEdit>> {
-        log::debug!(
-            "Discovering all tracks by artist '{}'",
-            edit.artist_name_original
-        );
-
-        let mut tracks_iterator =
-            crate::ArtistTracksIterator::new(self.clone(), edit.artist_name_original.clone());
-        let mut discovered_edits = Vec::new();
-
-        while let Some(track) = tracks_iterator.next().await? {
-            log::debug!(
-                "Getting scrobble data for track '{}' by '{}'",
-                track.name,
-                edit.artist_name_original
-            );
-
-            // Use load_edit_form_values_internal to get actual scrobble data with timestamps
-            match self
-                .load_edit_form_values_internal(&track.name, &edit.artist_name_original)
-                .await
-            {
-                Ok(track_scrobbles) => {
-                    // Apply the user's desired changes to each scrobble of this track
-                    for scrobble in track_scrobbles {
-                        let mut modified_edit = scrobble.clone();
-                        if let Some(new_track_name) = &edit.track_name {
-                            modified_edit.track_name = new_track_name.clone();
-                        }
-                        if let Some(new_album_name) = &edit.album_name {
-                            modified_edit.album_name = new_album_name.clone();
-                        }
-                        modified_edit.artist_name = edit.artist_name.clone();
-                        if let Some(new_album_artist_name) = &edit.album_artist_name {
-                            modified_edit.album_artist_name = new_album_artist_name.clone();
-                        }
-                        modified_edit.edit_all = edit.edit_all;
-
-                        discovered_edits.push(modified_edit);
-                    }
-                }
-                Err(e) => {
-                    log::debug!(
-                        "Failed to get scrobble data for track '{}': {}",
-                        track.name,
-                        e
-                    );
-                    // Continue with other tracks even if one fails
-                }
-            }
-        }
-
-        log::debug!(
-            "Found {} scrobbles from '{}' across all tracks",
-            discovered_edits.len(),
-            edit.artist_name_original
-        );
-
-        Ok(Self::filter_by_original_album_artist(
-            discovered_edits,
-            edit,
-        ))
-    }
-
     /// Discover all scrobble edit variations based on the provided ScrobbleEdit template.
     ///
     /// This method analyzes what fields are specified in the input ScrobbleEdit and discovers
@@ -1280,50 +1214,9 @@ impl LastFmEditClientImpl {
         &self,
         edit: &ScrobbleEdit,
     ) -> Result<Vec<ExactScrobbleEdit>> {
-        // If everything is already fully specified, just convert directly to ExactScrobbleEdit
-        if let (Some(track_name), Some(album_name), Some(album_artist), Some(timestamp)) = (
-            &edit.track_name_original,
-            &edit.album_name_original,
-            &edit.album_artist_name_original,
-            edit.timestamp,
-        ) {
-            let exact_edit = ExactScrobbleEdit::new(
-                track_name.clone(),
-                album_name.clone(),
-                edit.artist_name_original.clone(),
-                album_artist.clone(),
-                edit.track_name
-                    .clone()
-                    .unwrap_or_else(|| track_name.clone()),
-                edit.album_name
-                    .clone()
-                    .unwrap_or_else(|| album_name.clone()),
-                edit.artist_name.clone(),
-                edit.album_artist_name
-                    .clone()
-                    .unwrap_or_else(|| album_artist.clone()),
-                timestamp,
-                edit.edit_all,
-            );
-            return Ok(vec![exact_edit]);
-        }
-
-        match (&edit.track_name_original, &edit.album_name_original) {
-            // Case 1: Track+Album specified but missing album_artist/timestamp - look up exact match
-            (Some(track_name), Some(album_name)) => {
-                self.discover_track_album_exact_match(edit, track_name, album_name)
-                    .await
-            }
-
-            // Case 2: Track-specific discovery (discover all album variations of a specific track)
-            (Some(track_name), None) => self.discover_track_variations(edit, track_name).await,
-
-            // Case 3: Album-specific discovery (discover all tracks in a specific album)
-            (None, Some(album_name)) => self.discover_album_tracks(edit, album_name).await,
-
-            // Case 4: Artist-specific discovery (discover all tracks by an artist)
-            (None, None) => self.discover_artist_tracks(edit).await,
-        }
+        // Use the incremental iterator and collect all results
+        let mut discovery_iterator = self.discover_scrobbles(edit.clone());
+        discovery_iterator.collect_all().await
     }
 
     /// Get tracks from a specific album page

@@ -83,13 +83,27 @@ pub struct SingleEditResponse {
 /// # Examples
 ///
 /// ```rust
-/// use lastfm_edit::{EditResponse, SingleEditResponse};
+/// use lastfm_edit::{EditResponse, SingleEditResponse, ExactScrobbleEdit};
+///
+/// let exact_edit = ExactScrobbleEdit::new(
+///     "Track Name".to_string(),
+///     "Album Name".to_string(),
+///     "Artist Name".to_string(),
+///     "Artist Name".to_string(),
+///     "New Track".to_string(),
+///     "New Album".to_string(),
+///     "New Artist".to_string(),
+///     "New Artist".to_string(),
+///     1640995200,
+///     false,
+/// );
 ///
 /// let response = EditResponse::from_results(vec![
 ///     SingleEditResponse {
 ///         success: true,
 ///         message: Some("Edit successful".to_string()),
 ///         album_info: Some("Album 1".to_string()),
+///         exact_scrobble_edit: exact_edit,
 ///     }
 /// ]);
 ///

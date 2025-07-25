@@ -448,3 +448,81 @@ impl RecentTracksIterator {
         self
     }
 }
+
+/// Iterator for browsing tracks in a specific album from a user's library.
+///
+/// This iterator provides access to all tracks in a specific album by an artist
+/// in the authenticated user's Last.fm library. Unlike paginated iterators,
+/// this loads tracks once and iterates through them.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+/// # tokio_test::block_on(async {
+/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
+/// // client.login(...).await?;
+///
+/// let mut tracks = client.album_tracks("The Dark Side of the Moon", "Pink Floyd");
+///
+/// // Get all tracks in the album
+/// while let Some(track) = tracks.next().await? {
+///     println!("{} - {}", track.name, track.artist);
+/// }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # });
+/// ```
+pub struct AlbumTracksIterator {
+    client: LastFmEditClientImpl,
+    album_name: String,
+    artist_name: String,
+    tracks: Option<Vec<Track>>,
+    index: usize,
+}
+
+#[async_trait(?Send)]
+impl AsyncPaginatedIterator<Track> for AlbumTracksIterator {
+    async fn next(&mut self) -> Result<Option<Track>> {
+        // Load tracks if not already loaded
+        if self.tracks.is_none() {
+            let tracks = self
+                .client
+                .get_album_tracks(&self.album_name, &self.artist_name)
+                .await?;
+            self.tracks = Some(tracks);
+        }
+
+        // Return next track
+        if let Some(tracks) = &self.tracks {
+            if self.index < tracks.len() {
+                let track = tracks[self.index].clone();
+                self.index += 1;
+                Ok(Some(track))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn current_page(&self) -> u32 {
+        // Album tracks don't have pages, so return 0
+        0
+    }
+}
+
+impl AlbumTracksIterator {
+    /// Create a new album tracks iterator.
+    ///
+    /// This is typically called via [`LastFmEditClient::album_tracks`](crate::LastFmEditClient::album_tracks).
+    pub fn new(client: LastFmEditClientImpl, album_name: String, artist_name: String) -> Self {
+        Self {
+            client,
+            album_name,
+            artist_name,
+            tracks: None,
+            index: 0,
+        }
+    }
+}
