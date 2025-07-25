@@ -47,28 +47,12 @@ name = "lastfm-edit"
 path = "src/bin/lastfm-edit.rs"
 
 [[example]]
-name = "login_test"
-path = "examples/login_test.rs"
-
-[[example]]
-name = "list_tracks"
-path = "examples/list_tracks.rs"
-
-[[example]]
-name = "list_album_tracks"
-path = "examples/list_album_tracks.rs"
-
-[[example]]
 name = "rename_album"
 path = "examples/rename_album.rs"
 
 [[example]]
 name = "clean_artist_tracks"
 path = "examples/clean_artist_tracks.rs"
-
-[[example]]
-name = "test_album_artist"
-path = "examples/test_album_artist.rs"
 
 [[example]]
 name = "remove_remaster"

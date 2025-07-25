@@ -1,4 +1,5 @@
-use crate::{Album, AlbumPage, LastFmEditClientImpl, Result, Track, TrackPage};
+use crate::r#trait::LastFmEditClient;
+use crate::{Album, AlbumPage, Result, Track, TrackPage};
 
 use async_trait::async_trait;
 
@@ -133,8 +134,8 @@ pub trait AsyncPaginatedIterator<T> {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });
 /// ```
-pub struct ArtistTracksIterator {
-    client: LastFmEditClientImpl,
+pub struct ArtistTracksIterator<C: LastFmEditClient> {
+    client: C,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -143,7 +144,7 @@ pub struct ArtistTracksIterator {
 }
 
 #[async_trait(?Send)]
-impl AsyncPaginatedIterator<Track> for ArtistTracksIterator {
+impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for ArtistTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -161,11 +162,11 @@ impl AsyncPaginatedIterator<Track> for ArtistTracksIterator {
     }
 }
 
-impl ArtistTracksIterator {
+impl<C: LastFmEditClient> ArtistTracksIterator<C> {
     /// Create a new artist tracks iterator.
     ///
     /// This is typically called via [`LastFmEditClient::artist_tracks`](crate::LastFmEditClient::artist_tracks).
-    pub fn new(client: LastFmEditClientImpl, artist: String) -> Self {
+    pub fn new(client: C, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -227,8 +228,8 @@ impl ArtistTracksIterator {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });
 /// ```
-pub struct ArtistAlbumsIterator {
-    client: LastFmEditClientImpl,
+pub struct ArtistAlbumsIterator<C: LastFmEditClient> {
+    client: C,
     artist: String,
     current_page: u32,
     has_more: bool,
@@ -237,7 +238,7 @@ pub struct ArtistAlbumsIterator {
 }
 
 #[async_trait(?Send)]
-impl AsyncPaginatedIterator<Album> for ArtistAlbumsIterator {
+impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for ArtistAlbumsIterator<C> {
     async fn next(&mut self) -> Result<Option<Album>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -255,11 +256,11 @@ impl AsyncPaginatedIterator<Album> for ArtistAlbumsIterator {
     }
 }
 
-impl ArtistAlbumsIterator {
+impl<C: LastFmEditClient> ArtistAlbumsIterator<C> {
     /// Create a new artist albums iterator.
     ///
     /// This is typically called via [`LastFmEditClient::artist_albums`](crate::LastFmEditClient::artist_albums).
-    pub fn new(client: LastFmEditClientImpl, artist: String) -> Self {
+    pub fn new(client: C, artist: String) -> Self {
         Self {
             client,
             artist,
@@ -327,8 +328,8 @@ impl ArtistAlbumsIterator {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });
 /// ```
-pub struct RecentTracksIterator {
-    client: LastFmEditClientImpl,
+pub struct RecentTracksIterator<C: LastFmEditClient> {
+    client: C,
     current_page: u32,
     has_more: bool,
     buffer: Vec<Track>,
@@ -336,7 +337,7 @@ pub struct RecentTracksIterator {
 }
 
 #[async_trait(?Send)]
-impl AsyncPaginatedIterator<Track> for RecentTracksIterator {
+impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for RecentTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -380,11 +381,11 @@ impl AsyncPaginatedIterator<Track> for RecentTracksIterator {
     }
 }
 
-impl RecentTracksIterator {
+impl<C: LastFmEditClient> RecentTracksIterator<C> {
     /// Create a new recent tracks iterator starting from page 1.
     ///
     /// This is typically called via [`LastFmEditClient::recent_tracks`](crate::LastFmEditClient::recent_tracks).
-    pub fn new(client: LastFmEditClientImpl) -> Self {
+    pub fn new(client: C) -> Self {
         Self::with_starting_page(client, 1)
     }
 
@@ -412,7 +413,7 @@ impl RecentTracksIterator {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// # });
     /// ```
-    pub fn with_starting_page(client: LastFmEditClientImpl, starting_page: u32) -> Self {
+    pub fn with_starting_page(client: C, starting_page: u32) -> Self {
         let page = std::cmp::max(1, starting_page);
         Self {
             client,
@@ -476,8 +477,8 @@ impl RecentTracksIterator {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });
 /// ```
-pub struct AlbumTracksIterator {
-    client: LastFmEditClientImpl,
+pub struct AlbumTracksIterator<C: LastFmEditClient> {
+    client: C,
     album_name: String,
     artist_name: String,
     tracks: Option<Vec<Track>>,
@@ -485,7 +486,7 @@ pub struct AlbumTracksIterator {
 }
 
 #[async_trait(?Send)]
-impl AsyncPaginatedIterator<Track> for AlbumTracksIterator {
+impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for AlbumTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // Load tracks if not already loaded
         if self.tracks.is_none() {
@@ -516,11 +517,11 @@ impl AsyncPaginatedIterator<Track> for AlbumTracksIterator {
     }
 }
 
-impl AlbumTracksIterator {
+impl<C: LastFmEditClient> AlbumTracksIterator<C> {
     /// Create a new album tracks iterator.
     ///
     /// This is typically called via [`LastFmEditClient::album_tracks`](crate::LastFmEditClient::album_tracks).
-    pub fn new(client: LastFmEditClientImpl, album_name: String, artist_name: String) -> Self {
+    pub fn new(client: C, album_name: String, artist_name: String) -> Self {
         Self {
             client,
             album_name,

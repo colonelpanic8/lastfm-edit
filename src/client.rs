@@ -249,14 +249,6 @@ impl LastFmEditClientImpl {
         self.session.lock().unwrap().username.clone()
     }
 
-    /// Check if the client's session is still valid.
-    ///
-    /// Returns `true` if the session appears to be valid (has cookies, username, etc.).
-    /// Note: This does not verify if the session is still active on the server.
-    pub fn is_logged_in(&self) -> bool {
-        self.session.lock().unwrap().is_valid()
-    }
-
     /// Subscribe to internal client events.
     pub fn subscribe(&self) -> ClientEventReceiver {
         self.broadcaster.subscribe()
@@ -484,12 +476,6 @@ impl LastFmEditClientImpl {
     }
 
     async fn edit_scrobble_impl(&self, exact_edit: &ExactScrobbleEdit) -> Result<bool> {
-        if !self.is_logged_in() {
-            return Err(LastFmError::Auth(
-                "Must be logged in to edit scrobbles".to_string(),
-            ));
-        }
-
         let edit_url = {
             let session = self.session.lock().unwrap();
             format!(
@@ -696,8 +682,8 @@ impl LastFmEditClientImpl {
         Ok(all_scrobble_edits)
     }
 
-    /// Extract scrobble edit data directly from track page forms
-    /// Based on the approach used in lastfm-bulk-edit
+    /// Extract scrobble edit data directly from track page forms. Based on the
+    /// approach used in lastfm-bulk-edit
     fn extract_scrobble_edits_from_page(
         &self,
         document: &Html,
@@ -789,133 +775,6 @@ impl LastFmEditClientImpl {
         }
 
         Ok(scrobble_edits)
-    }
-
-    /// Discover all scrobble edit variations based on the provided ScrobbleEdit template.
-    ///
-    /// This method analyzes what fields are specified in the input ScrobbleEdit and discovers
-    /// all relevant scrobble instances that match the criteria:
-    /// - If track_name_original is specified: discovers all album variations of that track
-    /// - If only album_name_original is specified: discovers all tracks in that album
-    /// - If neither is specified: discovers all tracks by that artist
-    ///
-    /// # Arguments
-    /// * `edit` - A ScrobbleEdit template specifying what to discover
-    ///
-    /// # Returns
-    /// A vector of ExactScrobbleEdit objects representing all discovered variations
-    pub async fn discover_scrobble_edit_variations(
-        &self,
-        edit: &ScrobbleEdit,
-    ) -> Result<Vec<ExactScrobbleEdit>> {
-        // Use the incremental iterator and collect all results
-        let mut discovery_iterator = self.discover_scrobbles(edit.clone());
-        discovery_iterator.collect_all().await
-    }
-
-    /// Get tracks from a specific album page
-    /// This makes a single request to the album page and extracts track data
-    pub async fn get_album_tracks(
-        &self,
-        album_name: &str,
-        artist_name: &str,
-    ) -> Result<Vec<Track>> {
-        log::debug!("Getting tracks from album '{album_name}' by '{artist_name}'");
-
-        // Get the album page directly - this should contain track listings
-        let album_url = {
-            let session = self.session.lock().unwrap();
-            format!(
-                "{}/user/{}/library/music/{}/{}",
-                session.base_url,
-                session.username,
-                urlencoding::encode(artist_name),
-                urlencoding::encode(album_name)
-            )
-        };
-
-        log::debug!("Fetching album page: {album_url}");
-
-        let mut response = self.get(&album_url).await?;
-        let html = response
-            .body_string()
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        let document = Html::parse_document(&html);
-
-        // Use the shared track extraction function
-        let tracks =
-            self.parser
-                .extract_tracks_from_document(&document, artist_name, Some(album_name))?;
-
-        log::debug!(
-            "Successfully parsed {} tracks from album page",
-            tracks.len()
-        );
-        Ok(tracks)
-    }
-
-    /// Edit album metadata by updating scrobbles with new album name
-    /// This edits ALL tracks from the album that are found in recent scrobbles
-    pub async fn edit_album(
-        &self,
-        old_album_name: &str,
-        new_album_name: &str,
-        artist_name: &str,
-    ) -> Result<EditResponse> {
-        log::debug!("Editing album '{old_album_name}' -> '{new_album_name}' by '{artist_name}'");
-
-        let edit = ScrobbleEdit::for_album(old_album_name, artist_name, artist_name)
-            .with_album_name(new_album_name);
-
-        self.edit_scrobble(&edit).await
-    }
-
-    /// Edit artist metadata by updating scrobbles with new artist name
-    /// This edits ALL tracks from the artist that are found in recent scrobbles
-    pub async fn edit_artist(
-        &self,
-        old_artist_name: &str,
-        new_artist_name: &str,
-    ) -> Result<EditResponse> {
-        log::debug!("Editing artist '{old_artist_name}' -> '{new_artist_name}'");
-
-        let edit = ScrobbleEdit::for_artist(old_artist_name, new_artist_name);
-
-        self.edit_scrobble(&edit).await
-    }
-
-    /// Edit artist metadata for a specific track only
-    /// This edits only the specified track if found in recent scrobbles
-    pub async fn edit_artist_for_track(
-        &self,
-        track_name: &str,
-        old_artist_name: &str,
-        new_artist_name: &str,
-    ) -> Result<EditResponse> {
-        log::debug!("Editing artist for track '{track_name}' from '{old_artist_name}' -> '{new_artist_name}'");
-
-        let edit = ScrobbleEdit::from_track_and_artist(track_name, old_artist_name)
-            .with_artist_name(new_artist_name);
-
-        self.edit_scrobble(&edit).await
-    }
-
-    /// Edit artist metadata for all tracks in a specific album
-    /// This edits ALL tracks from the specified album that are found in recent scrobbles
-    pub async fn edit_artist_for_album(
-        &self,
-        album_name: &str,
-        old_artist_name: &str,
-        new_artist_name: &str,
-    ) -> Result<EditResponse> {
-        log::debug!("Editing artist for album '{album_name}' from '{old_artist_name}' -> '{new_artist_name}'");
-
-        let edit = ScrobbleEdit::for_album(album_name, old_artist_name, old_artist_name)
-            .with_artist_name(new_artist_name);
-
-        self.edit_scrobble(&edit).await
     }
 
     pub async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
@@ -1266,10 +1125,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
         self.username()
     }
 
-    fn is_logged_in(&self) -> bool {
-        self.is_logged_in()
-    }
-
     async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>> {
         self.get_recent_scrobbles(page).await
     }
@@ -1296,53 +1151,55 @@ impl LastFmEditClient for LastFmEditClientImpl {
         self.edit_scrobble_single(exact_edit, max_retries).await
     }
 
-    async fn discover_scrobble_edit_variations(
-        &self,
-        edit: &ScrobbleEdit,
-    ) -> Result<Vec<ExactScrobbleEdit>> {
-        self.discover_scrobble_edit_variations(edit).await
+    fn get_session(&self) -> LastFmEditSession {
+        self.get_session()
     }
 
-    async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>> {
-        self.get_album_tracks(album_name, artist_name).await
+    fn restore_session(&self, session: LastFmEditSession) {
+        self.restore_session(session)
     }
 
-    async fn edit_album(
-        &self,
-        old_album_name: &str,
-        new_album_name: &str,
-        artist_name: &str,
-    ) -> Result<EditResponse> {
-        self.edit_album(old_album_name, new_album_name, artist_name)
-            .await
+    fn subscribe(&self) -> ClientEventReceiver {
+        self.subscribe()
     }
 
-    async fn edit_artist(
-        &self,
-        old_artist_name: &str,
-        new_artist_name: &str,
-    ) -> Result<EditResponse> {
-        self.edit_artist(old_artist_name, new_artist_name).await
+    fn latest_event(&self) -> Option<ClientEvent> {
+        self.latest_event()
     }
 
-    async fn edit_artist_for_track(
+    fn discover_scrobbles(
         &self,
-        track_name: &str,
-        old_artist_name: &str,
-        new_artist_name: &str,
-    ) -> Result<EditResponse> {
-        self.edit_artist_for_track(track_name, old_artist_name, new_artist_name)
-            .await
-    }
+        edit: ScrobbleEdit,
+    ) -> Box<dyn crate::AsyncDiscoveryIterator<crate::ExactScrobbleEdit>> {
+        let track_name = edit.track_name_original.clone();
+        let album_name = edit.album_name_original.clone();
 
-    async fn edit_artist_for_album(
-        &self,
-        album_name: &str,
-        old_artist_name: &str,
-        new_artist_name: &str,
-    ) -> Result<EditResponse> {
-        self.edit_artist_for_album(album_name, old_artist_name, new_artist_name)
-            .await
+        match (&track_name, &album_name) {
+            // Case 1: Track+Album specified - exact match lookup
+            (Some(track_name), Some(album_name)) => Box::new(crate::ExactMatchDiscovery::new(
+                self.clone(),
+                edit,
+                track_name.clone(),
+                album_name.clone(),
+            )),
+
+            // Case 2: Track-specific discovery (discover all album variations of a specific track)
+            (Some(track_name), None) => Box::new(crate::TrackVariationsDiscovery::new(
+                self.clone(),
+                edit,
+                track_name.clone(),
+            )),
+
+            // Case 3: Album-specific discovery (discover all tracks in a specific album)
+            (None, Some(album_name)) => Box::new(crate::AlbumTracksDiscovery::new(
+                self.clone(),
+                edit,
+                album_name.clone(),
+            )),
+
+            // Case 4: Artist-specific discovery (discover all tracks by an artist)
+            (None, None) => Box::new(crate::ArtistTracksDiscovery::new(self.clone(), edit)),
+        }
     }
 
     async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
@@ -1351,18 +1208,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
         self.get_artist_albums_page(artist, page).await
-    }
-
-    async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
-        self.get_recent_tracks_page(page).await
-    }
-
-    fn get_session(&self) -> LastFmEditSession {
-        self.get_session()
-    }
-
-    fn restore_session(&self, session: LastFmEditSession) {
-        self.restore_session(session)
     }
 
     fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator {
@@ -1387,13 +1232,5 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator {
         crate::RecentTracksIterator::with_starting_page(self.clone(), starting_page)
-    }
-
-    fn subscribe(&self) -> ClientEventReceiver {
-        self.subscribe()
-    }
-
-    fn latest_event(&self) -> Option<ClientEvent> {
-        self.latest_event()
     }
 }

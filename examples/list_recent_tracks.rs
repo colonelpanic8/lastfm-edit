@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::{AsyncPaginatedIterator, Result};
+use lastfm_edit::{AsyncPaginatedIterator, LastFmEditClient, Result};
 use std::env;
 
 #[tokio::main]

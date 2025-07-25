@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::{ArtistTracksIterator, AsyncPaginatedIterator, Result};
+use lastfm_edit::{AsyncPaginatedIterator, LastFmEditClient, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
     println!("🎵 Listing all tracks for artist: {artist}\n");
 
     // Use the iterator the same way as Case 4: Artist-specific discovery
-    let mut tracks_iterator = ArtistTracksIterator::new(client, artist.clone());
+    let mut tracks_iterator = client.artist_tracks(&artist);
     let mut track_count = 0;
 
     println!("🔍 Fetching tracks using iterator...\n");

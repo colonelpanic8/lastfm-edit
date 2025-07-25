@@ -10,12 +10,6 @@ mod mock_tests {
     async fn test_mock_basic_functionality() -> Result<()> {
         let mut mock_client = MockLastFmEditClient::new();
 
-        // Set up expectations
-        mock_client
-            .expect_is_logged_in()
-            .times(1)
-            .returning(|| true);
-
         mock_client
             .expect_username()
             .times(1)
@@ -23,9 +17,6 @@ mod mock_tests {
 
         // Use the mock as a trait object
         let client: &dyn LastFmEditClient = &mock_client;
-
-        // Test authentication check
-        assert!(client.is_logged_in());
 
         // Test username retrieval
         assert_eq!(client.username(), "testuser");

@@ -239,87 +239,15 @@ pub use r#trait::LastFmEditClient;
 // Re-export the mock when the mock feature is enabled
 pub use edit::{EditResponse, ExactScrobbleEdit, ScrobbleEdit, SingleEditResponse};
 pub use error::LastFmError;
-pub use iterator::{
-    AlbumTracksIterator, ArtistAlbumsIterator, ArtistTracksIterator, AsyncPaginatedIterator,
-    RecentTracksIterator,
-};
+pub use iterator::AsyncPaginatedIterator;
+
+// Type aliases for iterators with the concrete client type
+pub type ArtistTracksIterator = iterator::ArtistTracksIterator<LastFmEditClientImpl>;
+pub type ArtistAlbumsIterator = iterator::ArtistAlbumsIterator<LastFmEditClientImpl>;
+pub type AlbumTracksIterator = iterator::AlbumTracksIterator<LastFmEditClientImpl>;
+pub type RecentTracksIterator = iterator::RecentTracksIterator<LastFmEditClientImpl>;
 #[cfg(feature = "mock")]
 pub use r#trait::MockLastFmEditClient;
-
-// Iterator-based convenience methods for the client
-impl LastFmEditClientImpl {
-    /// Create an iterator for browsing an artist's tracks from the user's library.
-    pub fn artist_tracks(&self, artist: &str) -> ArtistTracksIterator {
-        ArtistTracksIterator::new(self.clone(), artist.to_string())
-    }
-
-    /// Create an iterator for browsing an artist's albums from the user's library.
-    pub fn artist_albums(&self, artist: &str) -> ArtistAlbumsIterator {
-        ArtistAlbumsIterator::new(self.clone(), artist.to_string())
-    }
-
-    /// Create an iterator for browsing tracks in a specific album from the user's library.
-    pub fn album_tracks(&self, album_name: &str, artist_name: &str) -> AlbumTracksIterator {
-        AlbumTracksIterator::new(
-            self.clone(),
-            album_name.to_string(),
-            artist_name.to_string(),
-        )
-    }
-
-    /// Create an iterator for browsing the user's recent tracks/scrobbles.
-    pub fn recent_tracks(&self) -> RecentTracksIterator {
-        RecentTracksIterator::new(self.clone())
-    }
-
-    /// Create an iterator for browsing the user's recent tracks starting from a specific page.
-    pub fn recent_tracks_from_page(&self, starting_page: u32) -> RecentTracksIterator {
-        RecentTracksIterator::with_starting_page(self.clone(), starting_page)
-    }
-
-    /// Create an incremental discovery iterator for scrobble editing
-    ///
-    /// This returns the appropriate discovery iterator based on what fields are specified
-    /// in the ScrobbleEdit. The iterator yields `ExactScrobbleEdit` results incrementally,
-    /// which helps avoid rate limiting issues when discovering many scrobbles.
-    ///
-    /// Returns a `Box<dyn AsyncDiscoveryIterator<ExactScrobbleEdit>>` to handle the different
-    /// discovery strategies uniformly.
-    pub fn discover_scrobbles(
-        &self,
-        edit: ScrobbleEdit,
-    ) -> Box<dyn AsyncDiscoveryIterator<ExactScrobbleEdit>> {
-        let track_name = edit.track_name_original.clone();
-        let album_name = edit.album_name_original.clone();
-
-        match (&track_name, &album_name) {
-            // Case 1: Track+Album specified - exact match lookup
-            (Some(track_name), Some(album_name)) => Box::new(crate::ExactMatchDiscovery::new(
-                self.clone(),
-                edit,
-                track_name.clone(),
-                album_name.clone(),
-            )),
-
-            // Case 2: Track-specific discovery (discover all album variations of a specific track)
-            (Some(track_name), None) => Box::new(crate::TrackVariationsDiscovery::new(
-                self.clone(),
-                edit,
-                track_name.clone(),
-            )),
-
-            // Case 3: Album-specific discovery (discover all tracks in a specific album)
-            (None, Some(album_name)) => Box::new(crate::AlbumTracksDiscovery::new(
-                self.clone(),
-                edit,
-                album_name.clone(),
-            )),
-
-            // Case 4: Artist-specific discovery (discover all tracks by an artist)
-            (None, None) => Box::new(crate::ArtistTracksDiscovery::new(self.clone(), edit)),
-        }
-    }
-}
 
 // Re-export the mock iterator when the mock feature is enabled
 #[cfg(feature = "mock")]

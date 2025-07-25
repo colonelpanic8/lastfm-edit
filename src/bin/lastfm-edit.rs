@@ -1,5 +1,5 @@
 use clap::Parser;
-use lastfm_edit::{LastFmEditClientImpl, ScrobbleEdit};
+use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
 use std::env;
 
 /// Last.fm scrobble metadata editor

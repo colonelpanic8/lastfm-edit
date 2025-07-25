@@ -1,7 +1,8 @@
 use crate::client::{ClientEvent, ClientEventReceiver};
 use crate::edit::ExactScrobbleEdit;
+use crate::iterator::AsyncPaginatedIterator;
 use crate::session::LastFmEditSession;
-use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
+use crate::{EditResponse, LastFmError, Result, ScrobbleEdit, Track};
 use async_trait::async_trait;
 
 /// Trait for Last.fm client operations that can be mocked for testing.
@@ -20,9 +21,6 @@ use async_trait::async_trait;
 pub trait LastFmEditClient {
     /// Get the currently authenticated username.
     fn username(&self) -> String;
-
-    /// Check if the client is currently authenticated.
-    fn is_logged_in(&self) -> bool;
 
     /// Fetch recent scrobbles from the user's listening history.
     async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>>;
@@ -170,6 +168,19 @@ pub trait LastFmEditClient {
         max_retries: u32,
     ) -> Result<EditResponse>;
 
+    /// Create an incremental discovery iterator for scrobble editing.
+    ///
+    /// This returns the appropriate discovery iterator based on what fields are specified
+    /// in the ScrobbleEdit. The iterator yields `ExactScrobbleEdit` results incrementally,
+    /// which helps avoid rate limiting issues when discovering many scrobbles.
+    ///
+    /// Returns a `Box<dyn AsyncDiscoveryIterator<ExactScrobbleEdit>>` to handle the different
+    /// discovery strategies uniformly.
+    fn discover_scrobbles(
+        &self,
+        edit: ScrobbleEdit,
+    ) -> Box<dyn crate::AsyncDiscoveryIterator<crate::ExactScrobbleEdit>>;
+
     /// Discover all scrobble edit variations based on the provided ScrobbleEdit template.
     ///
     /// This method analyzes what fields are specified in the input ScrobbleEdit and discovers
@@ -183,10 +194,17 @@ pub trait LastFmEditClient {
     async fn discover_scrobble_edit_variations(
         &self,
         edit: &ScrobbleEdit,
-    ) -> Result<Vec<ExactScrobbleEdit>>;
+    ) -> Result<Vec<ExactScrobbleEdit>> {
+        // Use the incremental iterator and collect all results
+        let mut discovery_iterator = self.discover_scrobbles(edit.clone());
+        discovery_iterator.collect_all().await
+    }
 
     /// Get tracks from a specific album page.
-    async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>>;
+    async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>> {
+        let mut tracks_iterator = self.album_tracks(album_name, artist_name);
+        tracks_iterator.collect_all().await
+    }
 
     /// Edit album metadata by updating scrobbles with new album name.
     async fn edit_album(
@@ -194,39 +212,63 @@ pub trait LastFmEditClient {
         old_album_name: &str,
         new_album_name: &str,
         artist_name: &str,
-    ) -> Result<EditResponse>;
+    ) -> Result<EditResponse> {
+        log::debug!("Editing album '{old_album_name}' -> '{new_album_name}' by '{artist_name}'");
+
+        let edit = ScrobbleEdit::for_album(old_album_name, artist_name, artist_name)
+            .with_album_name(new_album_name);
+
+        self.edit_scrobble(&edit).await
+    }
 
     /// Edit artist metadata by updating scrobbles with new artist name.
+    ///
+    /// This edits ALL tracks from the artist that are found in recent scrobbles.
     async fn edit_artist(
         &self,
         old_artist_name: &str,
         new_artist_name: &str,
-    ) -> Result<EditResponse>;
+    ) -> Result<EditResponse> {
+        log::debug!("Editing artist '{old_artist_name}' -> '{new_artist_name}'");
+
+        let edit = ScrobbleEdit::for_artist(old_artist_name, new_artist_name);
+
+        self.edit_scrobble(&edit).await
+    }
 
     /// Edit artist metadata for a specific track only.
+    ///
+    /// This edits only the specified track if found in recent scrobbles.
     async fn edit_artist_for_track(
         &self,
         track_name: &str,
         old_artist_name: &str,
         new_artist_name: &str,
-    ) -> Result<EditResponse>;
+    ) -> Result<EditResponse> {
+        log::debug!("Editing artist for track '{track_name}' from '{old_artist_name}' -> '{new_artist_name}'");
+
+        let edit = ScrobbleEdit::from_track_and_artist(track_name, old_artist_name)
+            .with_artist_name(new_artist_name);
+
+        self.edit_scrobble(&edit).await
+    }
 
     /// Edit artist metadata for all tracks in a specific album.
+    ///
+    /// This edits ALL tracks from the specified album that are found in recent scrobbles.
     async fn edit_artist_for_album(
         &self,
         album_name: &str,
         old_artist_name: &str,
         new_artist_name: &str,
-    ) -> Result<EditResponse>;
+    ) -> Result<EditResponse> {
+        log::debug!("Editing artist for album '{album_name}' from '{old_artist_name}' -> '{new_artist_name}'");
 
-    /// Get a page of tracks from the user's library for the specified artist.
-    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage>;
+        let edit = ScrobbleEdit::for_album(album_name, old_artist_name, old_artist_name)
+            .with_artist_name(new_artist_name);
 
-    /// Get a page of albums from the user's library for the specified artist.
-    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage>;
-
-    /// Get a page of tracks from the user's recent listening history.
-    async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage>;
+        self.edit_scrobble(&edit).await
+    }
 
     /// Extract the current session state for persistence.
     ///
@@ -246,21 +288,6 @@ pub trait LastFmEditClient {
     ///
     /// * `session` - Previously saved session state
     fn restore_session(&self, session: LastFmEditSession);
-
-    /// Create an iterator for browsing an artist's tracks from the user's library.
-    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator;
-
-    /// Create an iterator for browsing an artist's albums from the user's library.
-    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator;
-
-    /// Create an iterator for browsing tracks from a specific album.
-    fn album_tracks(&self, album_name: &str, artist_name: &str) -> crate::AlbumTracksIterator;
-
-    /// Create an iterator for browsing the user's recent tracks/scrobbles.
-    fn recent_tracks(&self) -> crate::RecentTracksIterator;
-
-    /// Create an iterator for browsing the user's recent tracks starting from a specific page.
-    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
 
     /// Subscribe to internal client events.
     ///
@@ -307,4 +334,37 @@ pub trait LastFmEditClient {
     /// }
     /// ```
     fn latest_event(&self) -> Option<ClientEvent>;
+
+    /// Get a page of tracks from the user's library for the specified artist.
+    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<crate::TrackPage>;
+
+    /// Get a page of albums from the user's library for the specified artist.
+    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<crate::AlbumPage>;
+
+    /// Get a page of tracks from the user's recent listening history.
+    async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage> {
+        let tracks = self.get_recent_scrobbles(page).await?;
+        let has_next_page = !tracks.is_empty();
+        Ok(crate::TrackPage {
+            tracks,
+            page_number: page,
+            has_next_page,
+            total_pages: None,
+        })
+    }
+
+    /// Create an iterator for browsing an artist's tracks from the user's library.
+    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator;
+
+    /// Create an iterator for browsing an artist's albums from the user's library.
+    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator;
+
+    /// Create an iterator for browsing tracks from a specific album.
+    fn album_tracks(&self, album_name: &str, artist_name: &str) -> crate::AlbumTracksIterator;
+
+    /// Create an iterator for browsing the user's recent tracks/scrobbles.
+    fn recent_tracks(&self) -> crate::RecentTracksIterator;
+
+    /// Create an iterator for browsing the user's recent tracks starting from a specific page.
+    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
 }

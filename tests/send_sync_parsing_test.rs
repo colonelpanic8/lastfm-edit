@@ -1,5 +1,5 @@
 use http_client::native::NativeClient;
-use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession};
+use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession};
 
 fn create_test_session() -> LastFmEditSession {
     LastFmEditSession::new(

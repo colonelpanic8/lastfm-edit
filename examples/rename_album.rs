@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::Result;
+use lastfm_edit::{LastFmEditClient, Result};
 use std::env;
 
 #[tokio::main]
