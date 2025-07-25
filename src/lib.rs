@@ -52,8 +52,8 @@
 //! Add this to your `Cargo.toml`:
 //! ```toml
 //! [dependencies]
-//! lastfm-edit = "0.1.0"
-//! http-client = { version = "6.5", features = ["curl_client"] }
+//! lastfm-edit = "3.0.0"
+//! http-client = { version = "^6.6.3", package = "http-client-2", features = ["curl_client"] }
 //! tokio = { version = "1.0", features = ["full"] }
 //! ```
 //!
@@ -152,7 +152,7 @@
 //!
 //! ```toml
 //! [dev-dependencies]
-//! lastfm-edit = { version = "1.0.0", features = ["mock"] }
+//! lastfm-edit = { version = "3.0.0", features = ["mock"] }
 //! mockall = "0.13"
 //! ```
 //!
