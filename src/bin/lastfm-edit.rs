@@ -149,92 +149,87 @@ async fn discover_and_handle_edits(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔍 Discovering scrobble edit variations...");
 
-    match client.discover_scrobble_edit_variations(edit).await {
-        Ok(discovered_edits) => {
-            println!("✅ Found {} scrobble variations:", discovered_edits.len());
+    // Use the discovery iterator for incremental results
+    let mut discovery_iterator = client.discover_scrobbles(edit.clone());
+    let mut discovered_edits = Vec::new();
+    let mut count = 0;
 
-            if discovered_edits.is_empty() {
-                println!("No matching scrobbles found. This might mean:");
-                println!("  - The specified metadata is not in your recent scrobbles");
-                println!("  - The names don't match exactly");
-                println!("  - There's a network or parsing issue");
-                return Ok(());
-            }
+    // Process results incrementally
+    while let Some(discovered_edit) = discovery_iterator.next().await? {
+        count += 1;
+        println!("\n  {count}. Found scrobble:");
+        println!("     Track: '{}'", discovered_edit.track_name_original);
+        println!("     Album: '{}'", discovered_edit.album_name_original);
+        println!("     Artist: '{}'", discovered_edit.artist_name_original);
+        println!(
+            "     Album Artist: '{}'",
+            discovered_edit.album_artist_name_original
+        );
+        println!("     Timestamp: {}", discovered_edit.timestamp);
 
-            // Print each discovered variation
-            for (i, discovered_edit) in discovered_edits.iter().enumerate() {
-                println!("\n  {}. Original Metadata:", i + 1);
-                println!("     Track: '{}'", discovered_edit.track_name_original);
-                println!("     Album: '{}'", discovered_edit.album_name_original);
-                println!("     Artist: '{}'", discovered_edit.artist_name_original);
-                println!(
-                    "     Album Artist: '{}'",
-                    discovered_edit.album_artist_name_original
-                );
-                println!("     Timestamp: {}", discovered_edit.timestamp);
+        // Show what this would change to
+        println!("     Would change to:");
+        println!("       Track: '{}'", discovered_edit.track_name);
+        println!("       Album: '{}'", discovered_edit.album_name);
+        println!("       Artist: '{}'", discovered_edit.artist_name);
+        println!(
+            "       Album Artist: '{}'",
+            discovered_edit.album_artist_name
+        );
 
-                // Show what this would change to
-                println!("     Would change to:");
-                println!("       Track: '{}'", discovered_edit.track_name);
-                println!("       Album: '{}'", discovered_edit.album_name);
-                println!("       Artist: '{}'", discovered_edit.artist_name);
-                println!(
-                    "       Album Artist: '{}'",
-                    discovered_edit.album_artist_name
-                );
-            }
+        discovered_edits.push(discovered_edit);
+    }
 
-            println!("\n📊 Summary:");
-            println!("  Total variations found: {}", discovered_edits.len());
+    if discovered_edits.is_empty() {
+        println!("No matching scrobbles found. This might mean:");
+        println!("  - The specified metadata is not in your recent scrobbles");
+        println!("  - The names don't match exactly");
+        println!("  - There's a network or parsing issue");
+        return Ok(());
+    }
 
-            // Group by unique original metadata combinations
-            let mut unique_tracks = std::collections::HashSet::new();
-            let mut unique_albums = std::collections::HashSet::new();
+    println!("\n📊 Summary:");
+    println!("  Total variations found: {}", discovered_edits.len());
 
-            for edit in &discovered_edits {
-                unique_tracks.insert(&edit.track_name_original);
-                unique_albums.insert(&edit.album_name_original);
-            }
+    // Group by unique original metadata combinations
+    let mut unique_tracks = std::collections::HashSet::new();
+    let mut unique_albums = std::collections::HashSet::new();
 
-            println!("  Unique tracks: {}", unique_tracks.len());
-            println!("  Unique albums: {}", unique_albums.len());
+    for edit in &discovered_edits {
+        unique_tracks.insert(&edit.track_name_original);
+        unique_albums.insert(&edit.album_name_original);
+    }
 
-            if dry_run {
-                println!("\n🔍 DRY RUN - No actual edits performed");
-                println!("Use --apply to execute these edits");
-            } else {
-                println!("\n🚀 Executing edits...");
-                match client.edit_scrobble(edit).await {
-                    Ok(response) => {
-                        if response.all_successful() {
-                            println!(
-                                "✅ All {} edits completed successfully!",
-                                response.total_edits()
-                            );
-                        } else {
-                            println!("⚠️  Some edits had issues:");
-                            println!(
-                                "  {} successful, {} failed",
-                                response.successful_edits(),
-                                response.failed_edits()
-                            );
-                            for (i, msg) in response.detailed_messages().iter().enumerate() {
-                                println!("    {}: {}", i + 1, msg);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("❌ Error executing edits: {e}");
+    println!("  Unique tracks: {}", unique_tracks.len());
+    println!("  Unique albums: {}", unique_albums.len());
+
+    if dry_run {
+        println!("\n🔍 DRY RUN - No actual edits performed");
+        println!("Use --apply to execute these edits");
+    } else {
+        println!("\n🚀 Executing edits...");
+        match client.edit_scrobble(edit).await {
+            Ok(response) => {
+                if response.all_successful() {
+                    println!(
+                        "✅ All {} edits completed successfully!",
+                        response.total_edits()
+                    );
+                } else {
+                    println!("⚠️  Some edits had issues:");
+                    println!(
+                        "  {} successful, {} failed",
+                        response.successful_edits(),
+                        response.failed_edits()
+                    );
+                    for (i, msg) in response.detailed_messages().iter().enumerate() {
+                        println!("    {}: {}", i + 1, msg);
                     }
                 }
             }
-        }
-        Err(e) => {
-            println!("❌ Could not discover scrobble variations: {e}");
-            println!("This might mean:");
-            println!("  - The specified metadata is not in your recent scrobbles");
-            println!("  - The names don't match exactly");
-            println!("  - There's a network or parsing issue");
+            Err(e) => {
+                println!("❌ Error executing edits: {e}");
+            }
         }
     }
 
