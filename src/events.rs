@@ -1,8 +1,10 @@
 //! Event system for monitoring HTTP client activity.
 //!
 //! This module provides comprehensive event broadcasting for observing internal
-//! HTTP client operations, including request lifecycle and rate limiting detection.
+//! HTTP client operations, including request lifecycle, rate limiting detection,
+//! and scrobble editing operations.
 
+use crate::edit::ExactScrobbleEdit;
 use tokio::sync::{broadcast, watch};
 
 /// Request information for client events
@@ -120,6 +122,17 @@ pub enum ClientEvent {
         request: Option<RequestInfo>,
         /// Type of rate limiting detected
         rate_limit_type: RateLimitType,
+    },
+    /// Scrobble edit attempt completed
+    EditAttempted {
+        /// The exact scrobble edit that was attempted
+        edit: ExactScrobbleEdit,
+        /// Whether the edit was successful
+        success: bool,
+        /// Optional error message if the edit failed
+        error_message: Option<String>,
+        /// Duration of the edit operation in milliseconds
+        duration_ms: u64,
     },
 }
 

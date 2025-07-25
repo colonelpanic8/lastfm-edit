@@ -53,6 +53,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "⏳ Rate limited ({rate_limit_type:?})! {req_desc} - Waiting {delay_seconds} seconds"
                     );
                 }
+                ClientEvent::EditAttempted {
+                    edit,
+                    success,
+                    error_message,
+                    duration_ms,
+                } => {
+                    if success {
+                        println!(
+                            "✅ Edit succeeded: '{}' -> '{}' ({duration_ms} ms)",
+                            edit.track_name_original, edit.track_name
+                        );
+                    } else {
+                        let error_msg = error_message
+                            .as_ref()
+                            .map(|s| format!(" - {s}"))
+                            .unwrap_or_default();
+                        println!(
+                            "❌ Edit failed: '{}' -> '{}' ({duration_ms} ms){error_msg}",
+                            edit.track_name_original, edit.track_name
+                        );
+                    }
+                }
             }
         }
     });
@@ -92,6 +114,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(
                     "📊 Latest event: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
                 );
+            }
+            ClientEvent::EditAttempted {
+                edit,
+                success,
+                error_message,
+                duration_ms,
+            } => {
+                if success {
+                    println!(
+                        "📊 Latest event: Edit succeeded '{}' -> '{}' ({duration_ms} ms)",
+                        edit.track_name_original, edit.track_name
+                    );
+                } else {
+                    let error_msg = error_message
+                        .as_ref()
+                        .map(|s| format!(" - {s}"))
+                        .unwrap_or_default();
+                    println!(
+                        "📊 Latest event: Edit failed '{}' -> '{}' ({duration_ms} ms){error_msg}",
+                        edit.track_name_original, edit.track_name
+                    );
+                }
             }
         }
     } else {

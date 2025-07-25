@@ -66,6 +66,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "⏳ Client1 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
                     );
                 }
+                ClientEvent::EditAttempted {
+                    edit,
+                    success,
+                    error_message,
+                    duration_ms,
+                } => {
+                    if success {
+                        println!(
+                            "✅ Client1 monitor: Edit succeeded '{}' -> '{}' ({duration_ms} ms)",
+                            edit.track_name_original, edit.track_name
+                        );
+                    } else {
+                        let error_msg = error_message
+                            .as_ref()
+                            .map(|s| format!(" - {s}"))
+                            .unwrap_or_default();
+                        println!(
+                            "❌ Client1 monitor: Edit failed '{}' -> '{}' ({duration_ms} ms){error_msg}",
+                            edit.track_name_original, edit.track_name
+                        );
+                    }
+                }
             }
         }
     });
@@ -104,6 +126,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!(
                         "⏳ Client2 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
                     );
+                }
+                ClientEvent::EditAttempted {
+                    edit,
+                    success,
+                    error_message,
+                    duration_ms,
+                } => {
+                    if success {
+                        println!(
+                            "✅ Client2 monitor: Edit succeeded '{}' -> '{}' ({duration_ms} ms)",
+                            edit.track_name_original, edit.track_name
+                        );
+                    } else {
+                        let error_msg = error_message
+                            .as_ref()
+                            .map(|s| format!(" - {s}"))
+                            .unwrap_or_default();
+                        println!(
+                            "❌ Client2 monitor: Edit failed '{}' -> '{}' ({duration_ms} ms){error_msg}",
+                            edit.track_name_original, edit.track_name
+                        );
+                    }
                 }
             }
         }
@@ -149,6 +193,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(ClientEvent::RequestCompleted { .. }),
         ) => {
             println!("✅ Both clients show completed requests (shared broadcaster working!)");
+        }
+        (
+            Some(ClientEvent::EditAttempted {
+                success: success1, ..
+            }),
+            Some(ClientEvent::EditAttempted {
+                success: success2, ..
+            }),
+        ) => {
+            if success1 == success2 {
+                println!("✅ Both clients show same edit result (shared broadcaster working!)");
+            } else {
+                println!("❌ UNEXPECTED: Different edit results reported");
+            }
         }
         (None, None) => {
             println!("📊 No events occurred yet - this is normal");

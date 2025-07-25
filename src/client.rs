@@ -1,6 +1,8 @@
 use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
 use crate::edit_analysis;
-use crate::events::{ClientEvent, RequestInfo, RateLimitType, SharedEventBroadcaster, ClientEventReceiver};
+use crate::events::{
+    ClientEvent, ClientEventReceiver, RateLimitType, RequestInfo, SharedEventBroadcaster,
+};
 use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
@@ -15,7 +17,6 @@ use scraper::{Html, Selector};
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-
 
 /// Main implementation for interacting with Last.fm's web interface.
 ///
@@ -435,6 +436,34 @@ impl LastFmEditClientImpl {
     }
 
     async fn edit_scrobble_impl(&self, exact_edit: &ExactScrobbleEdit) -> Result<bool> {
+        let start_time = std::time::Instant::now();
+        let result = self.edit_scrobble_impl_internal(exact_edit).await;
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
+        // Broadcast edit attempt event
+        match &result {
+            Ok(success) => {
+                self.broadcast_event(ClientEvent::EditAttempted {
+                    edit: exact_edit.clone(),
+                    success: *success,
+                    error_message: None,
+                    duration_ms,
+                });
+            }
+            Err(error) => {
+                self.broadcast_event(ClientEvent::EditAttempted {
+                    edit: exact_edit.clone(),
+                    success: false,
+                    error_message: Some(error.to_string()),
+                    duration_ms,
+                });
+            }
+        }
+
+        result
+    }
+
+    async fn edit_scrobble_impl_internal(&self, exact_edit: &ExactScrobbleEdit) -> Result<bool> {
         let edit_url = {
             let session = self.session.lock().unwrap();
             format!(

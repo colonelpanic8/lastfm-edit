@@ -1,5 +1,5 @@
-use crate::events::{ClientEvent, ClientEventReceiver};
 use crate::edit::ExactScrobbleEdit;
+use crate::events::{ClientEvent, ClientEventReceiver};
 use crate::iterator::AsyncPaginatedIterator;
 use crate::session::LastFmEditSession;
 use crate::{EditResponse, LastFmError, Result, ScrobbleEdit, Track};
@@ -360,8 +360,19 @@ pub trait LastFmEditClient {
     /// tokio::spawn(async move {
     ///     while let Ok(event) = events.recv().await {
     ///         match event {
-    ///             ClientEvent::RateLimited(delay) => {
-    ///                 println!("Rate limited! Waiting {} seconds", delay);
+    ///             ClientEvent::RequestStarted { request } => {
+    ///                 println!("Request started: {}", request.short_description());
+    ///             }
+    ///             ClientEvent::RequestCompleted { request, status_code, duration_ms } => {
+    ///                 println!("Request completed: {} - {} ({} ms)", request.short_description(), status_code, duration_ms);
+    ///             }
+    ///             ClientEvent::RateLimited { delay_seconds, .. } => {
+    ///                 println!("Rate limited! Waiting {} seconds", delay_seconds);
+    ///             }
+    ///             ClientEvent::EditAttempted { edit, success, .. } => {
+    ///                 println!("Edit attempt: '{}' -> '{}' - {}",
+    ///                          edit.track_name_original, edit.track_name,
+    ///                          if success { "Success" } else { "Failed" });
     ///             }
     ///         }
     ///     }
@@ -382,8 +393,8 @@ pub trait LastFmEditClient {
     /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
     /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
     ///
-    /// if let Some(ClientEvent::RateLimited(delay)) = client.latest_event() {
-    ///     println!("Currently rate limited for {} seconds", delay);
+    /// if let Some(ClientEvent::RateLimited { delay_seconds, .. }) = client.latest_event() {
+    ///     println!("Currently rate limited for {} seconds", delay_seconds);
     /// }
     /// ```
     fn latest_event(&self) -> Option<ClientEvent>;

@@ -230,11 +230,13 @@ pub mod r#trait;
 
 pub use album::{Album, AlbumPage};
 pub use client::LastFmEditClientImpl;
-pub use events::{ClientEvent, ClientEventReceiver, ClientEventWatcher, RateLimitType, RequestInfo};
 pub use discovery::{
     AlbumTracksDiscovery, ArtistTracksDiscovery, ExactMatchDiscovery, TrackVariationsDiscovery,
 };
 pub use discovery_iterator::AsyncDiscoveryIterator;
+pub use events::{
+    ClientEvent, ClientEventReceiver, ClientEventWatcher, RateLimitType, RequestInfo,
+};
 pub use login::LoginManager;
 pub use r#trait::LastFmEditClient;
 
