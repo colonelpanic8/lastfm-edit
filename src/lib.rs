@@ -214,7 +214,6 @@
 pub mod album;
 pub mod client;
 pub mod discovery;
-pub mod discovery_iterator;
 pub mod edit;
 pub mod edit_analysis;
 pub mod error;
@@ -231,9 +230,9 @@ pub mod r#trait;
 pub use album::{Album, AlbumPage};
 pub use client::LastFmEditClientImpl;
 pub use discovery::{
-    AlbumTracksDiscovery, ArtistTracksDiscovery, ExactMatchDiscovery, TrackVariationsDiscovery,
+    AlbumTracksDiscovery, ArtistTracksDiscovery, AsyncDiscoveryIterator, ExactMatchDiscovery,
+    TrackVariationsDiscovery,
 };
-pub use discovery_iterator::AsyncDiscoveryIterator;
 pub use events::{
     ClientEvent, ClientEventReceiver, ClientEventWatcher, RateLimitType, RequestInfo,
 };
