@@ -1,5 +1,5 @@
 use clap::Parser;
-use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
+use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit, SessionPersistence};
 use std::env;
 
 /// Last.fm scrobble metadata editor
@@ -103,12 +103,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Default is dry-run mode unless --apply is specified
     let dry_run = !cli.apply;
 
-    // Login and create client
-    let http_client = http_client::native::NativeClient::new();
-    println!("🔐 Logging in to Last.fm...");
-    let client =
-        LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password)
-            .await?;
+    // Try to load existing session first, then fallback to fresh login
+    let client = load_or_create_client(&username, &password).await?;
     println!("✅ Successfully authenticated as {}", client.username());
 
     // Create ScrobbleEdit based on provided arguments
@@ -266,4 +262,66 @@ async fn discover_and_handle_edits(
     }
 
     Ok(())
+}
+
+/// Load existing session or create a new client with fresh login.
+///
+/// This function implements the session management logic:
+/// 1. Try to load a saved session from XDG directory
+/// 2. Validate the loaded session
+/// 3. If session is invalid or doesn't exist, perform fresh login
+/// 4. Save the new session for future use
+async fn load_or_create_client(
+    username: &str,
+    password: &str,
+) -> Result<LastFmEditClientImpl, Box<dyn std::error::Error>> {
+    // Check if we have a saved session
+    if SessionPersistence::session_exists(username) {
+        println!("📁 Found existing session for user '{username}', attempting to restore...");
+
+        match SessionPersistence::load_session(username) {
+            Ok(session) => {
+                println!("📥 Session loaded successfully");
+
+                // Create client with loaded session
+                let http_client = http_client::native::NativeClient::new();
+                let client = LastFmEditClientImpl::from_session(Box::new(http_client), session);
+
+                // Validate the session
+                println!("🔍 Validating session...");
+                if client.validate_session().await {
+                    println!("✅ Session is valid, using saved session");
+                    return Ok(client);
+                } else {
+                    println!("❌ Session is invalid or expired");
+                    // Remove invalid session file
+                    let _ = SessionPersistence::remove_session(username);
+                }
+            }
+            Err(e) => {
+                println!("❌ Failed to load session: {e}");
+                // Remove corrupted session file
+                let _ = SessionPersistence::remove_session(username);
+            }
+        }
+    }
+
+    // No valid session found, perform fresh login
+    println!("🔐 No valid session found, performing fresh login...");
+    let http_client = http_client::native::NativeClient::new();
+    let client =
+        LastFmEditClientImpl::login_with_credentials(Box::new(http_client), username, password)
+            .await?;
+
+    // Save the new session
+    println!("💾 Saving session for future use...");
+    let session = client.get_session();
+    if let Err(e) = SessionPersistence::save_session(&session) {
+        println!("⚠️  Warning: Failed to save session: {e}");
+        println!("   (You'll need to login again next time)");
+    } else {
+        println!("✅ Session saved successfully");
+    }
+
+    Ok(client)
 }

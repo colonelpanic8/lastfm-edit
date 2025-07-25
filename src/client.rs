@@ -200,6 +200,43 @@ impl LastFmEditClientImpl {
         self.session.lock().unwrap().username.clone()
     }
 
+    pub async fn validate_session(&self) -> bool {
+        let test_url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/settings/subscription/automatic-edits/tracks",
+                session.base_url
+            )
+        };
+
+        let mut request = Request::new(Method::Get, test_url.parse::<Url>().unwrap());
+
+        {
+            let session = self.session.lock().unwrap();
+            headers::add_cookies(&mut request, &session.cookies);
+        }
+
+        headers::add_get_headers(&mut request, false, None);
+
+        match self.client.send(request).await {
+            Ok(response) => {
+                // Check if we got redirected to login
+                if response.status() == 302 || response.status() == 301 {
+                    if let Some(location) = response.header("location") {
+                        if let Some(redirect_url) = location.get(0) {
+                            let redirect_url_str = redirect_url.as_str();
+                            let is_valid = !redirect_url_str.contains("/login");
+
+                            return is_valid;
+                        }
+                    }
+                }
+                true
+            }
+            Err(_e) => false,
+        }
+    }
+
     /// Subscribe to internal client events.
     pub fn subscribe(&self) -> ClientEventReceiver {
         self.broadcaster.subscribe()
@@ -1206,5 +1243,9 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator {
         crate::RecentTracksIterator::with_starting_page(self.clone(), starting_page)
+    }
+
+    async fn validate_session(&self) -> bool {
+        self.validate_session().await
     }
 }

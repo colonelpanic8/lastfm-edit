@@ -398,4 +398,19 @@ pub trait LastFmEditClient {
     /// }
     /// ```
     fn latest_event(&self) -> Option<ClientEvent>;
+
+    /// Validate if the current session is still working.
+    ///
+    /// This method makes a test request to a protected Last.fm settings page to verify
+    /// that the current session is still valid. If the session has expired or become
+    /// invalid, Last.fm will redirect to the login page.
+    ///
+    /// This is useful for checking session validity before attempting operations that
+    /// require authentication, especially after loading a previously saved session.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the session is valid and can be used for authenticated operations,
+    /// `false` if the session is invalid or expired.
+    async fn validate_session(&self) -> bool;
 }

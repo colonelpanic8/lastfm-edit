@@ -28,6 +28,7 @@ async-trait = "0.1"
 tokio = { version = "1.0", features = ["full"] }
 env_logger = { version = "0.11" }
 clap = { version = "4.4", features = ["derive"] }
+dirs = "5.0"
 
 # Optional mocking support
 mockall = { version = "0.13", optional = true }
