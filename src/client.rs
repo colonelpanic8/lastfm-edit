@@ -4,6 +4,7 @@ use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
+use crate::retry::{self, RetryConfig};
 use crate::session::LastFmEditSession;
 use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
 use async_trait::async_trait;
@@ -496,49 +497,44 @@ impl LastFmEditClientImpl {
         exact_edit: &ExactScrobbleEdit,
         max_retries: u32,
     ) -> Result<EditResponse> {
-        let mut retries = 0;
+        let config = RetryConfig {
+            max_retries,
+            base_delay: 5,
+            max_delay: 300,
+        };
 
-        loop {
-            match self.edit_scrobble_impl(exact_edit).await {
-                Ok(success) => {
-                    return Ok(EditResponse::single(
-                        success,
-                        None,
-                        None,
-                        exact_edit.clone(),
-                    ));
-                }
-                Err(LastFmError::RateLimit { retry_after }) => {
-                    if retries >= max_retries {
-                        log::warn!("Max retries ({max_retries}) exceeded for edit operation");
-                        return Ok(EditResponse::single(
-                            false,
-                            Some(format!("Rate limit exceeded after {max_retries} retries")),
-                            None,
-                            exact_edit.clone(),
-                        ));
-                    }
+        let edit_clone = exact_edit.clone();
+        let client = self.clone();
 
-                    let delay = std::cmp::min(retry_after, 2_u64.pow(retries + 1) * 5);
-                    log::info!(
-                        "Edit rate limited. Waiting {} seconds before retry {} of {}",
-                        delay,
-                        retries + 1,
-                        max_retries
-                    );
-                    self.broadcast_event(ClientEvent::RateLimited(delay));
-                    tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
-                    retries += 1;
-                }
-                Err(other_error) => {
-                    return Ok(EditResponse::single(
-                        false,
-                        Some(other_error.to_string()),
-                        None,
-                        exact_edit.clone(),
-                    ));
-                }
-            }
+        match retry::retry_with_backoff(
+            config,
+            "Edit scrobble",
+            || client.edit_scrobble_impl(&edit_clone),
+            |delay, operation_name| {
+                self.broadcast_event(ClientEvent::RateLimited(delay));
+                log::debug!("{} rate limited, waiting {} seconds", operation_name, delay);
+            },
+        )
+        .await
+        {
+            Ok(retry_result) => Ok(EditResponse::single(
+                retry_result.result,
+                None,
+                None,
+                exact_edit.clone(),
+            )),
+            Err(LastFmError::RateLimit { .. }) => Ok(EditResponse::single(
+                false,
+                Some(format!("Rate limit exceeded after {} retries", max_retries)),
+                None,
+                exact_edit.clone(),
+            )),
+            Err(other_error) => Ok(EditResponse::single(
+                false,
+                Some(other_error.to_string()),
+                None,
+                exact_edit.clone(),
+            )),
         }
     }
 
@@ -1077,58 +1073,51 @@ impl LastFmEditClientImpl {
 
     /// Make an HTTP GET request with retry logic for rate limits
     async fn get_with_retry(&self, url: &str, max_retries: u32) -> Result<Response> {
-        let mut retries = 0;
+        let config = RetryConfig {
+            max_retries,
+            base_delay: 30, // Longer base delay for GET requests
+            max_delay: 300,
+        };
 
-        loop {
-            match self.get_with_redirects(url, 0).await {
-                Ok(mut response) => {
-                    // Extract body and save debug info if enabled
-                    let body = self.extract_response_body(url, &mut response).await?;
+        let url_string = url.to_string();
+        let client = self.clone();
 
-                    // Check for rate limit patterns in successful responses
-                    if response.status().is_success() && self.is_rate_limit_response(&body) {
-                        log::debug!("Response body contains rate limit patterns");
-                        if retries < max_retries {
-                            let delay = 60 + (retries as u64 * 30); // Exponential backoff
-                            log::info!("Rate limit detected in response body, retrying in {delay}s (attempt {}/{max_retries})", retries + 1);
-                            self.broadcast_event(ClientEvent::RateLimited(delay));
-                            tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
-                            retries += 1;
-                            continue;
-                        }
-                        self.broadcast_event(ClientEvent::RateLimited(60));
-                        return Err(crate::LastFmError::RateLimit { retry_after: 60 });
-                    }
+        let retry_result = retry::retry_with_backoff(
+            config,
+            &format!("GET {}", url),
+            || async {
+                let mut response = client.get_with_redirects(&url_string, 0).await?;
 
-                    // Recreate response with the body we extracted
-                    let mut new_response = http_types::Response::new(response.status());
-                    for (name, values) in response.iter() {
-                        for value in values {
-                            let _ = new_response.insert_header(name.clone(), value.clone());
-                        }
-                    }
-                    new_response.set_body(body);
+                // Extract body and save debug info if enabled
+                let body = client
+                    .extract_response_body(&url_string, &mut response)
+                    .await?;
 
-                    return Ok(new_response);
+                // Check for rate limit patterns in successful responses
+                if response.status().is_success() && client.is_rate_limit_response(&body) {
+                    log::debug!("Response body contains rate limit patterns");
+                    return Err(LastFmError::RateLimit { retry_after: 60 });
                 }
-                Err(crate::LastFmError::RateLimit { retry_after }) => {
-                    if retries < max_retries {
-                        let delay = retry_after + (retries as u64 * 30); // Exponential backoff
-                        log::info!(
-                            "Rate limit detected, retrying in {delay}s (attempt {}/{max_retries})",
-                            retries + 1
-                        );
-                        self.broadcast_event(ClientEvent::RateLimited(delay));
-                        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
-                        retries += 1;
-                    } else {
-                        self.broadcast_event(ClientEvent::RateLimited(retry_after));
-                        return Err(crate::LastFmError::RateLimit { retry_after });
+
+                // Recreate response with the body we extracted
+                let mut new_response = http_types::Response::new(response.status());
+                for (name, values) in response.iter() {
+                    for value in values {
+                        let _ = new_response.insert_header(name.clone(), value.clone());
                     }
                 }
-                Err(e) => return Err(e),
-            }
-        }
+                new_response.set_body(body);
+
+                Ok(new_response)
+            },
+            |delay, operation_name| {
+                self.broadcast_event(ClientEvent::RateLimited(delay));
+                log::debug!("{} rate limited, waiting {} seconds", operation_name, delay);
+            },
+        )
+        .await?;
+
+        Ok(retry_result.result)
     }
 
     async fn get_with_redirects(&self, url: &str, redirect_count: u32) -> Result<Response> {

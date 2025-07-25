@@ -222,6 +222,7 @@ pub mod headers;
 pub mod iterator;
 pub mod login;
 pub mod parsing;
+pub mod retry;
 pub mod session;
 pub mod track;
 pub mod r#trait;
