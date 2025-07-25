@@ -14,8 +14,6 @@ use async_trait::async_trait;
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};
-use std::fs;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 /// Main implementation for interacting with Last.fm's web interface.
@@ -28,7 +26,6 @@ pub struct LastFmEditClientImpl {
     client: Arc<dyn HttpClient + Send + Sync>,
     session: Arc<Mutex<LastFmEditSession>>,
     rate_limit_patterns: Vec<String>,
-    debug_save_responses: bool,
     parser: LastFmParser,
     broadcaster: Arc<SharedEventBroadcaster>,
 }
@@ -83,7 +80,6 @@ impl LastFmEditClientImpl {
             client: Arc::from(client),
             session: Arc::new(Mutex::new(session)),
             rate_limit_patterns,
-            debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
             broadcaster: Arc::new(SharedEventBroadcaster::new()),
         }
@@ -164,7 +160,6 @@ impl LastFmEditClientImpl {
                 "limit exceeded".to_string(),
                 "daily limit".to_string(),
             ],
-            debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
             broadcaster,
         }
@@ -925,7 +920,6 @@ impl LastFmEditClientImpl {
             }
         }
 
-        // Determine if this is an AJAX request and set up referer
         let is_ajax = url.contains("ajax=true");
         let referer_url = if url.contains("page=") {
             Some(url.split('?').next().unwrap_or(url))
@@ -935,11 +929,9 @@ impl LastFmEditClientImpl {
 
         headers::add_get_headers(&mut request, is_ajax, referer_url);
 
-        // Create request info for event broadcasting
         let request_info = RequestInfo::from_url_and_method(url, "GET");
         let request_start = std::time::Instant::now();
 
-        // Broadcast request started event
         self.broadcast_event(ClientEvent::RequestStarted {
             request: request_info.clone(),
         });
@@ -950,7 +942,6 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Broadcast request completed event
         self.broadcast_event(ClientEvent::RequestCompleted {
             request: request_info.clone(),
             status_code: response.status().into(),
@@ -1061,62 +1052,13 @@ impl LastFmEditClientImpl {
     }
 
     /// Extract response body, optionally saving debug info
-    async fn extract_response_body(&self, url: &str, response: &mut Response) -> Result<String> {
+    async fn extract_response_body(&self, _url: &str, response: &mut Response) -> Result<String> {
         let body = response
             .body_string()
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        if self.debug_save_responses {
-            self.save_debug_response(url, response.status().into(), &body);
-        }
-
         Ok(body)
-    }
-
-    /// Save response to debug directory (optional debug feature)
-    fn save_debug_response(&self, url: &str, status_code: u16, body: &str) {
-        if let Err(e) = self.try_save_debug_response(url, status_code, body) {
-            log::warn!("Failed to save debug response: {e}");
-        }
-    }
-
-    /// Internal debug response saving implementation
-    fn try_save_debug_response(&self, url: &str, status_code: u16, body: &str) -> Result<()> {
-        // Create debug directory if it doesn't exist
-        let debug_dir = Path::new("debug_responses");
-        if !debug_dir.exists() {
-            fs::create_dir_all(debug_dir)
-                .map_err(|e| LastFmError::Http(format!("Failed to create debug directory: {e}")))?;
-        }
-
-        // Extract the path part of the URL (after base_url)
-        let url_path = {
-            let session = self.session.lock().unwrap();
-            if url.starts_with(&session.base_url) {
-                &url[session.base_url.len()..]
-            } else {
-                url
-            }
-        };
-
-        // Create safe filename from URL path and add timestamp
-        let now = chrono::Utc::now();
-        let timestamp = now.format("%Y%m%d_%H%M%S_%3f");
-        let safe_path = url_path.replace(['/', '?', '&', '=', '%', '+'], "_");
-
-        let filename = format!("{timestamp}_{safe_path}_status{status_code}.html");
-        let file_path = debug_dir.join(filename);
-
-        // Write response to file
-        fs::write(&file_path, body)
-            .map_err(|e| LastFmError::Http(format!("Failed to write debug file: {e}")))?;
-
-        log::debug!(
-            "Saved HTTP response to {file_path:?} (status: {status_code}, url: {url_path})"
-        );
-
-        Ok(())
     }
 
     pub async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
