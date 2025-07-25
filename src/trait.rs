@@ -150,6 +150,9 @@ pub trait LastFmEditClient {
     /// Create an iterator for browsing an artist's albums from the user's library.
     fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator;
 
+    /// Create an iterator for browsing tracks from a specific album.
+    fn album_tracks(&self, album_name: &str, artist_name: &str) -> crate::AlbumTracksIterator;
+
     /// Create an iterator for browsing the user's recent tracks/scrobbles.
     fn recent_tracks(&self) -> crate::RecentTracksIterator;
 
