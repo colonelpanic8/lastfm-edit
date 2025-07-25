@@ -85,7 +85,7 @@ pub trait LastFmEditClient {
     /// This method analyzes what fields are specified in the input ScrobbleEdit and discovers
     /// all relevant scrobble instances that match the criteria:
     /// - If track_name_original is specified: discovers all album variations of that track
-    /// - If only album_name_original is specified: discovers all tracks in that album  
+    /// - If only album_name_original is specified: discovers all tracks in that album
     /// - If neither is specified: discovers all tracks by that artist
     ///
     /// Returns fully-specified ExactScrobbleEdit instances with all metadata populated
