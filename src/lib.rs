@@ -216,6 +216,7 @@ pub mod client;
 pub mod discovery;
 pub mod discovery_iterator;
 pub mod edit;
+pub mod edit_analysis;
 pub mod error;
 pub mod headers;
 pub mod iterator;

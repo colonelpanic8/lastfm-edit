@@ -1,4 +1,5 @@
 use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
+use crate::edit_analysis;
 use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
@@ -612,98 +613,10 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Parse the HTML response to check for actual success/failure
-        let document = Html::parse_document(&response_text);
+        // Analyze the edit response to determine success/failure
+        let analysis = edit_analysis::analyze_edit_response(&response_text, response.status());
 
-        // Check for success indicator
-        let success_selector = Selector::parse(".alert-success").unwrap();
-        let error_selector = Selector::parse(".alert-danger, .alert-error, .error").unwrap();
-
-        let has_success_alert = document.select(&success_selector).next().is_some();
-        let has_error_alert = document.select(&error_selector).next().is_some();
-
-        // Also check if we can see the edited track in the response
-        // The response contains the track data in a table format within a script template
-        let mut actual_track_name = None;
-        let mut actual_album_name = None;
-
-        // Try direct selectors first
-        let track_name_selector = Selector::parse("td.chartlist-name a").unwrap();
-        let album_name_selector = Selector::parse("td.chartlist-album a").unwrap();
-
-        if let Some(track_element) = document.select(&track_name_selector).next() {
-            actual_track_name = Some(track_element.text().collect::<String>().trim().to_string());
-        }
-
-        if let Some(album_element) = document.select(&album_name_selector).next() {
-            actual_album_name = Some(album_element.text().collect::<String>().trim().to_string());
-        }
-
-        // If not found, try extracting from the raw response text using generic patterns
-        if actual_track_name.is_none() || actual_album_name.is_none() {
-            // Look for track name in href="/music/{artist}/_/{track}"
-            // Use regex to find track URLs
-            let track_pattern = regex::Regex::new(r#"href="/music/[^"]+/_/([^"]+)""#).unwrap();
-            if let Some(captures) = track_pattern.captures(&response_text) {
-                if let Some(track_match) = captures.get(1) {
-                    let raw_track = track_match.as_str();
-                    // URL decode the track name
-                    let decoded_track = urlencoding::decode(raw_track)
-                        .unwrap_or_else(|_| raw_track.into())
-                        .replace("+", " ");
-                    actual_track_name = Some(decoded_track);
-                }
-            }
-
-            // Look for album name in href="/music/{artist}/{album}"
-            // Find album links that are not track links (don't contain /_/)
-            let album_pattern =
-                regex::Regex::new(r#"href="/music/[^"]+/([^"/_]+)"[^>]*>[^<]*</a>"#).unwrap();
-            if let Some(captures) = album_pattern.captures(&response_text) {
-                if let Some(album_match) = captures.get(1) {
-                    let raw_album = album_match.as_str();
-                    // URL decode the album name
-                    let decoded_album = urlencoding::decode(raw_album)
-                        .unwrap_or_else(|_| raw_album.into())
-                        .replace("+", " ");
-                    actual_album_name = Some(decoded_album);
-                }
-            }
-        }
-
-        log::debug!(
-            "Response analysis: success_alert={}, error_alert={}, track='{}', album='{}'",
-            has_success_alert,
-            has_error_alert,
-            actual_track_name.as_deref().unwrap_or("not found"),
-            actual_album_name.as_deref().unwrap_or("not found")
-        );
-
-        // Determine if edit was truly successful
-        let final_success = response.status().is_success() && has_success_alert && !has_error_alert;
-
-        // Create detailed message
-        let _message = if has_error_alert {
-            // Extract error message
-            if let Some(error_element) = document.select(&error_selector).next() {
-                Some(format!(
-                    "Edit failed: {}",
-                    error_element.text().collect::<String>().trim()
-                ))
-            } else {
-                Some("Edit failed with unknown error".to_string())
-            }
-        } else if final_success {
-            Some(format!(
-                "Edit successful - Track: '{}', Album: '{}'",
-                actual_track_name.as_deref().unwrap_or("unknown"),
-                actual_album_name.as_deref().unwrap_or("unknown")
-            ))
-        } else {
-            Some(format!("Edit failed with status: {}", response.status()))
-        };
-
-        Ok(final_success)
+        Ok(analysis.success)
     }
 
     /// Fetch raw HTML content for edit form page
