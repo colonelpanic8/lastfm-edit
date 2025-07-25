@@ -1185,6 +1185,7 @@ impl LastFmEditClientImpl {
                     "Discovering all tracks by artist '{}'",
                     edit.artist_name_original
                 );
+
                 let mut tracks_iterator = crate::ArtistTracksIterator::new(
                     self.clone(),
                     edit.artist_name_original.clone(),
@@ -1192,27 +1193,52 @@ impl LastFmEditClientImpl {
                 let mut discovered_edits = Vec::new();
 
                 while let Some(track) = tracks_iterator.next().await? {
-                    if let Some(timestamp) = track.timestamp {
-                        discovered_edits.push(ExactScrobbleEdit::new(
-                            track.name.clone(),
-                            track.album.clone().unwrap_or_default(),
-                            edit.artist_name_original.clone(),
-                            track
-                                .album_artist
-                                .clone()
-                                .unwrap_or_else(|| edit.artist_name_original.clone()),
-                            track.name.clone(), // Keep original track name by default
-                            track.album.clone().unwrap_or_default(),
-                            edit.artist_name_original.clone(),
-                            track
-                                .album_artist
-                                .clone()
-                                .unwrap_or_else(|| edit.artist_name_original.clone()),
-                            timestamp,
-                            false,
-                        ));
+                    log::debug!(
+                        "Getting scrobble data for track '{}' by '{}'",
+                        track.name,
+                        edit.artist_name_original
+                    );
+
+                    // Use load_edit_form_values_internal to get actual scrobble data with timestamps
+                    match self
+                        .load_edit_form_values_internal(&track.name, &edit.artist_name_original)
+                        .await
+                    {
+                        Ok(track_scrobbles) => {
+                            // Apply the user's desired changes to each scrobble of this track
+                            for scrobble in track_scrobbles {
+                                let mut modified_edit = scrobble.clone();
+                                if let Some(new_track_name) = &edit.track_name {
+                                    modified_edit.track_name = new_track_name.clone();
+                                }
+                                if let Some(new_album_name) = &edit.album_name {
+                                    modified_edit.album_name = new_album_name.clone();
+                                }
+                                modified_edit.artist_name = edit.artist_name.clone();
+                                if let Some(new_album_artist_name) = &edit.album_artist_name {
+                                    modified_edit.album_artist_name = new_album_artist_name.clone();
+                                }
+                                modified_edit.edit_all = edit.edit_all;
+
+                                discovered_edits.push(modified_edit);
+                            }
+                        }
+                        Err(e) => {
+                            log::debug!(
+                                "Failed to get scrobble data for track '{}': {}",
+                                track.name,
+                                e
+                            );
+                            // Continue with other tracks even if one fails
+                        }
                     }
                 }
+
+                log::debug!(
+                    "Found {} scrobbles from '{}' across all tracks",
+                    discovered_edits.len(),
+                    edit.artist_name_original
+                );
 
                 Ok(discovered_edits)
             }
