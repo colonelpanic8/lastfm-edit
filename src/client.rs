@@ -1052,7 +1052,41 @@ impl LastFmEditClientImpl {
     /// - If track_name_original is specified: discovers all album variations of that track
     /// - If only album_name_original is specified: discovers all tracks in that album
     /// - If neither is specified: discovers all tracks by that artist
+
+    /// Filter discovered edits based on original album artist if specified
     ///
+    /// When album_artist_name_original is specified in the ScrobbleEdit, we only want
+    /// to return ExactScrobbleEdits that match that original album artist value.
+    /// This prevents implicit fan-out over different album artists.
+    fn filter_by_original_album_artist(
+        discovered_edits: Vec<ExactScrobbleEdit>,
+        edit: &ScrobbleEdit,
+    ) -> Vec<ExactScrobbleEdit> {
+        if let Some(target_album_artist) = &edit.album_artist_name_original {
+            log::debug!(
+                "Filtering {} discovered edits to only include album artist '{}'",
+                discovered_edits.len(),
+                target_album_artist
+            );
+
+            let filtered: Vec<ExactScrobbleEdit> = discovered_edits
+                .into_iter()
+                .filter(|scrobble| scrobble.album_artist_name_original == *target_album_artist)
+                .collect();
+
+            log::debug!(
+                "After filtering by album artist '{}': {} edits remain",
+                target_album_artist,
+                filtered.len()
+            );
+
+            filtered
+        } else {
+            // No filtering needed if album_artist_name_original is not specified
+            discovered_edits
+        }
+    }
+
     /// # Arguments
     /// * `edit` - A ScrobbleEdit template specifying what to discover
     ///
@@ -1103,8 +1137,11 @@ impl LastFmEditClientImpl {
                     .load_edit_form_values_internal(track_name, &edit.artist_name_original)
                     .await?;
 
-                // Find the variation that matches the specific album
-                if let Some(exact_edit) = all_variations
+                // Filter by album artist first if specified, then find the variation that matches the specific album
+                let filtered_variations =
+                    Self::filter_by_original_album_artist(all_variations, edit);
+
+                if let Some(exact_edit) = filtered_variations
                     .iter()
                     .find(|variation| variation.album_name_original == *album_name)
                 {
@@ -1124,9 +1161,17 @@ impl LastFmEditClientImpl {
 
                     Ok(vec![modified_edit])
                 } else {
+                    let album_artist_filter = if edit.album_artist_name_original.is_some() {
+                        format!(
+                            " with album artist '{}'",
+                            edit.album_artist_name_original.as_ref().unwrap()
+                        )
+                    } else {
+                        String::new()
+                    };
                     Err(LastFmError::Parse(format!(
-                        "Track '{}' not found on album '{}' by '{}' in recent scrobbles",
-                        track_name, album_name, edit.artist_name_original
+                        "Track '{}' not found on album '{}' by '{}'{} in recent scrobbles",
+                        track_name, album_name, edit.artist_name_original, album_artist_filter
                     )))
                 }
             }
@@ -1138,8 +1183,13 @@ impl LastFmEditClientImpl {
                     track_name,
                     edit.artist_name_original
                 );
-                self.load_edit_form_values_internal(track_name, &edit.artist_name_original)
-                    .await
+                let discovered_edits = self
+                    .load_edit_form_values_internal(track_name, &edit.artist_name_original)
+                    .await?;
+                Ok(Self::filter_by_original_album_artist(
+                    discovered_edits,
+                    edit,
+                ))
             }
 
             // Case 3: Album-specific discovery (discover all tracks in a specific album)
@@ -1152,7 +1202,7 @@ impl LastFmEditClientImpl {
                 let tracks = self
                     .get_album_tracks(album_name, &edit.artist_name_original)
                     .await?;
-                Ok(tracks
+                let discovered_edits: Vec<ExactScrobbleEdit> = tracks
                     .iter()
                     .filter_map(|track| {
                         track.timestamp.map(|timestamp| {
@@ -1176,7 +1226,11 @@ impl LastFmEditClientImpl {
                             )
                         })
                     })
-                    .collect())
+                    .collect();
+                Ok(Self::filter_by_original_album_artist(
+                    discovered_edits,
+                    edit,
+                ))
             }
 
             // Case 4: Artist-specific discovery (discover all tracks by an artist)
@@ -1240,7 +1294,10 @@ impl LastFmEditClientImpl {
                     edit.artist_name_original
                 );
 
-                Ok(discovered_edits)
+                Ok(Self::filter_by_original_album_artist(
+                    discovered_edits,
+                    edit,
+                ))
             }
         }
     }
