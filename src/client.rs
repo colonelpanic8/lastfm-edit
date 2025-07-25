@@ -457,7 +457,7 @@ impl LastFmEditClientImpl {
             || client.edit_scrobble_impl(&edit_clone),
             |delay, operation_name| {
                 self.broadcast_event(ClientEvent::RateLimited(delay));
-                log::debug!("{} rate limited, waiting {} seconds", operation_name, delay);
+                log::debug!("{operation_name} rate limited, waiting {delay} seconds");
             },
         )
         .await
@@ -470,7 +470,7 @@ impl LastFmEditClientImpl {
             )),
             Err(LastFmError::RateLimit { .. }) => Ok(EditResponse::single(
                 false,
-                Some(format!("Rate limit exceeded after {} retries", max_retries)),
+                Some(format!("Rate limit exceeded after {max_retries} retries")),
                 None,
                 exact_edit.clone(),
             )),
@@ -1029,7 +1029,7 @@ impl LastFmEditClientImpl {
 
         let retry_result = retry::retry_with_backoff(
             config,
-            &format!("GET {}", url),
+            &format!("GET {url}"),
             || async {
                 let mut response = client.get_with_redirects(&url_string, 0).await?;
 
@@ -1057,7 +1057,7 @@ impl LastFmEditClientImpl {
             },
             |delay, operation_name| {
                 self.broadcast_event(ClientEvent::RateLimited(delay));
-                log::debug!("{} rate limited, waiting {} seconds", operation_name, delay);
+                log::debug!("{operation_name} rate limited, waiting {delay} seconds");
             },
         )
         .await?;

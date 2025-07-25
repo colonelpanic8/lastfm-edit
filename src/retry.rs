@@ -119,7 +119,7 @@ where
     Fut: Future<Output = Result<T>>,
 {
     retry_with_backoff(config, operation_name, operation, |delay, op_name| {
-        log::debug!("Rate limited during {}: waiting {} seconds", op_name, delay);
+        log::debug!("Rate limited during {op_name}: waiting {delay} seconds");
     })
     .await
 }
@@ -193,7 +193,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             LastFmError::RateLimit { .. } => {} // Expected
-            other => panic!("Expected rate limit error, got: {:?}", other),
+            other => panic!("Expected rate limit error, got: {other:?}"),
         }
     }
 }

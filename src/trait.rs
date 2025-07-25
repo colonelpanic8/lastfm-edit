@@ -109,7 +109,7 @@ pub trait LastFmEditClient {
     ///
     /// let response = client.edit_scrobble(&edit).await?;
     /// if response.success() {
-    ///     println!("Successfully edited {} scrobbles", response.results().len());
+    ///     println!("Successfully edited {} scrobbles", response.total_edits());
     /// }
     /// # Ok(())
     /// # }
