@@ -217,6 +217,7 @@ pub mod discovery;
 pub mod discovery_iterator;
 pub mod edit;
 pub mod error;
+pub mod headers;
 pub mod iterator;
 pub mod login;
 pub mod parsing;

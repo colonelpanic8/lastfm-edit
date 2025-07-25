@@ -334,6 +334,42 @@ impl ExactScrobbleEdit {
         }
     }
 
+    /// Build the form data for submitting this scrobble edit.
+    ///
+    /// This creates a HashMap containing all the form fields needed to submit
+    /// the edit request to Last.fm, including the CSRF token and all metadata fields.
+    pub fn build_form_data(&self, csrf_token: &str) -> std::collections::HashMap<&str, String> {
+        let mut form_data = std::collections::HashMap::new();
+
+        // Add fresh CSRF token (required)
+        form_data.insert("csrfmiddlewaretoken", csrf_token.to_string());
+
+        // Include ALL form fields (using ExactScrobbleEdit which has all required fields)
+        form_data.insert("track_name_original", self.track_name_original.clone());
+        form_data.insert("track_name", self.track_name.clone());
+        form_data.insert("artist_name_original", self.artist_name_original.clone());
+        form_data.insert("artist_name", self.artist_name.clone());
+        form_data.insert("album_name_original", self.album_name_original.clone());
+        form_data.insert("album_name", self.album_name.clone());
+        form_data.insert(
+            "album_artist_name_original",
+            self.album_artist_name_original.clone(),
+        );
+        form_data.insert("album_artist_name", self.album_artist_name.clone());
+
+        // Include timestamp (ExactScrobbleEdit always has a timestamp)
+        form_data.insert("timestamp", self.timestamp.to_string());
+
+        // Edit flags
+        if self.edit_all {
+            form_data.insert("edit_all", "1".to_string());
+        }
+        form_data.insert("submit", "edit-scrobble".to_string());
+        form_data.insert("ajax", "1".to_string());
+
+        form_data
+    }
+
     /// Convert this exact edit back to a public ScrobbleEdit.
     ///
     /// This is useful when you need to expose the edit data through the public API.

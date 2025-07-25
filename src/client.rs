@@ -1,4 +1,5 @@
 use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
+use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
@@ -8,7 +9,6 @@ use async_trait::async_trait;
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -567,34 +567,7 @@ impl LastFmEditClientImpl {
 
         log::debug!("Submitting edit with fresh token");
 
-        let mut form_data = HashMap::new();
-
-        // Add fresh CSRF token (required)
-        form_data.insert("csrfmiddlewaretoken", fresh_csrf_token.as_str());
-
-        // Include ALL form fields (using ExactScrobbleEdit which has all required fields)
-        form_data.insert("track_name_original", &exact_edit.track_name_original);
-        form_data.insert("track_name", &exact_edit.track_name);
-        form_data.insert("artist_name_original", &exact_edit.artist_name_original);
-        form_data.insert("artist_name", &exact_edit.artist_name);
-        form_data.insert("album_name_original", &exact_edit.album_name_original);
-        form_data.insert("album_name", &exact_edit.album_name);
-        form_data.insert(
-            "album_artist_name_original",
-            &exact_edit.album_artist_name_original,
-        );
-        form_data.insert("album_artist_name", &exact_edit.album_artist_name);
-
-        // Include timestamp (ExactScrobbleEdit always has a timestamp)
-        let timestamp_str = exact_edit.timestamp.to_string();
-        form_data.insert("timestamp", &timestamp_str);
-
-        // Edit flags
-        if exact_edit.edit_all {
-            form_data.insert("edit_all", "1");
-        }
-        form_data.insert("submit", "edit-scrobble");
-        form_data.insert("ajax", "1");
+        let form_data = exact_edit.build_form_data(&fresh_csrf_token);
 
         log::debug!(
             "Editing scrobble: '{}' -> '{}'",
@@ -608,43 +581,14 @@ impl LastFmEditClientImpl {
 
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
 
-        // Add comprehensive headers matching your browser request
-        let _ = request.insert_header("Accept", "*/*");
-        let _ = request.insert_header("Accept-Language", "en-US,en;q=0.9");
-        let _ = request.insert_header(
-            "Content-Type",
-            "application/x-www-form-urlencoded;charset=UTF-8",
-        );
-        let _ = request.insert_header("Priority", "u=1, i");
-        let _ = request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
-        let _ = request.insert_header("X-Requested-With", "XMLHttpRequest");
-        let _ = request.insert_header("Sec-Fetch-Dest", "empty");
-        let _ = request.insert_header("Sec-Fetch-Mode", "cors");
-        let _ = request.insert_header("Sec-Fetch-Site", "same-origin");
-        let _ = request.insert_header(
-            "sec-ch-ua",
-            "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
-        );
-        let _ = request.insert_header("sec-ch-ua-mobile", "?0");
-        let _ = request.insert_header("sec-ch-ua-platform", "\"Linux\"");
-
-        // Add session cookies
-        {
+        // Add session cookies and set up headers
+        let referer_url = {
             let session = self.session.lock().unwrap();
-            if !session.cookies.is_empty() {
-                let cookie_header = session.cookies.join("; ");
-                let _ = request.insert_header("Cookie", &cookie_header);
-            }
-        }
+            headers::add_cookies(&mut request, &session.cookies);
+            format!("{}/user/{}/library", session.base_url, session.username)
+        };
 
-        // Add referer header - use the current artist being edited
-        {
-            let session = self.session.lock().unwrap();
-            let _ = request.insert_header(
-                "Referer",
-                format!("{}/user/{}/library", session.base_url, session.username),
-            );
-        }
+        headers::add_edit_headers(&mut request, &referer_url);
 
         // Convert form data to URL-encoded string
         let form_string: String = form_data
@@ -1280,39 +1224,25 @@ impl LastFmEditClientImpl {
         }
 
         let mut request = Request::new(Method::Get, url.parse::<Url>().unwrap());
-        let _ = request.insert_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
 
         // Add session cookies for all authenticated requests
         {
             let session = self.session.lock().unwrap();
-            if !session.cookies.is_empty() {
-                let cookie_header = session.cookies.join("; ");
-                let _ = request.insert_header("Cookie", &cookie_header);
-            } else if url.contains("page=") {
+            headers::add_cookies(&mut request, &session.cookies);
+            if session.cookies.is_empty() && url.contains("page=") {
                 log::debug!("No cookies available for paginated request!");
             }
         }
 
-        // Add browser-like headers for all requests
-        if url.contains("ajax=true") {
-            // AJAX request headers
-            let _ = request.insert_header("Accept", "*/*");
-            let _ = request.insert_header("X-Requested-With", "XMLHttpRequest");
+        // Determine if this is an AJAX request and set up referer
+        let is_ajax = url.contains("ajax=true");
+        let referer_url = if url.contains("page=") {
+            Some(url.split('?').next().unwrap_or(url))
         } else {
-            // Regular page request headers
-            let _ = request.insert_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
-        }
-        let _ = request.insert_header("Accept-Language", "en-US,en;q=0.9");
-        let _ = request.insert_header("Accept-Encoding", "gzip, deflate, br");
-        let _ = request.insert_header("DNT", "1");
-        let _ = request.insert_header("Connection", "keep-alive");
-        let _ = request.insert_header("Upgrade-Insecure-Requests", "1");
+            None
+        };
 
-        // Add referer for paginated requests
-        if url.contains("page=") {
-            let base_url = url.split('?').next().unwrap_or(url);
-            let _ = request.insert_header("Referer", base_url);
-        }
+        headers::add_get_headers(&mut request, is_ajax, referer_url);
 
         let response = self
             .client
