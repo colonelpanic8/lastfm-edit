@@ -181,7 +181,7 @@ async fn discover_and_handle_edits(
         );
 
         if dry_run {
-            println!("     [DRY RUN - would apply edit]");
+            println!("     DRY RUN - proceeding without submitting edit");
             discovered_edits.push(discovered_edit);
         } else {
             // Apply edit immediately
