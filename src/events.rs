@@ -5,10 +5,11 @@
 //! and scrobble editing operations.
 
 use crate::edit::ExactScrobbleEdit;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, watch};
 
 /// Request information for client events
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestInfo {
     /// The HTTP method (GET, POST, etc.)
     pub method: String,
@@ -87,7 +88,7 @@ impl RequestInfo {
 }
 
 /// Type of rate limiting detected
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RateLimitType {
     /// HTTP 429 Too Many Requests
     Http429,
@@ -98,7 +99,7 @@ pub enum RateLimitType {
 }
 
 /// Event type to describe internal HTTP client activity
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ClientEvent {
     /// Request started
     RequestStarted {
