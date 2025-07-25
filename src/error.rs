@@ -28,7 +28,7 @@ use thiserror::Error;
 ///
 /// # Automatic Retry
 ///
-/// Some operations like [`LastFmEditClient::edit_scrobble_with_retry`](crate::LastFmEditClient::edit_scrobble_with_retry)
+/// Some operations like [`LastFmEditClient::edit_scrobble_single`](crate::LastFmEditClient::edit_scrobble_single)
 /// automatically handle rate limiting errors by waiting and retrying:
 ///
 /// ```rust,no_run

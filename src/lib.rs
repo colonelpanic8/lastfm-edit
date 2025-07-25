@@ -40,7 +40,7 @@
 //!
 //! ## Core Components
 //!
-//! - [`LastFmClient`] - Main client for interacting with Last.fm
+//! - [`LastFmEditClient`] - Main client trait for interacting with Last.fm
 //! - [`Track`], [`Album`] - Data structures for music metadata
 //! - [`AsyncPaginatedIterator`] - Trait for streaming paginated data
 //! - [`ScrobbleEdit`] - Represents track edit operations
