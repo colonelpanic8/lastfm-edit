@@ -65,13 +65,105 @@ pub trait LastFmEditClient {
         max_pages: u32,
     ) -> Result<Option<Track>>;
 
-    /// Edit a scrobble with the given edit parameters.
+    /// Edit scrobbles by discovering and updating all matching instances.
+    ///
+    /// This is the main editing method that automatically discovers all scrobble instances
+    /// that match the provided criteria and applies the specified changes to each one.
+    ///
+    /// # How it works
+    ///
+    /// 1. **Discovery**: Analyzes the `ScrobbleEdit` to determine what to search for:
+    ///    - If `track_name_original` is specified: finds all album variations of that track
+    ///    - If only `album_name_original` is specified: finds all tracks in that album
+    ///    - If neither is specified: finds all tracks by that artist
+    ///
+    /// 2. **Enrichment**: For each discovered scrobble, extracts complete metadata
+    ///    including album artist information from the user's library
+    ///
+    /// 3. **Editing**: Applies the requested changes to each discovered instance
+    ///
+    /// # Arguments
+    ///
+    /// * `edit` - A `ScrobbleEdit` specifying what to find and how to change it
+    ///
+    /// # Returns
+    ///
+    /// Returns an `EditResponse` containing results for all edited scrobbles, including:
+    /// - Overall success status
+    /// - Individual results for each scrobble instance
+    /// - Detailed error messages if any edits fail
+    ///
+    /// # Errors
+    ///
+    /// Returns `LastFmError::Parse` if no matching scrobbles are found, or other errors
+    /// for network/authentication issues.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use lastfm_edit::{LastFmEditClient, ScrobbleEdit, Result};
+    /// # async fn example(client: &dyn LastFmEditClient) -> Result<()> {
+    /// // Change track name for all instances of a track
+    /// let edit = ScrobbleEdit::from_track_and_artist("Old Track Name", "Artist")
+    ///     .with_track_name("New Track Name");
+    ///
+    /// let response = client.edit_scrobble(&edit).await?;
+    /// if response.success() {
+    ///     println!("Successfully edited {} scrobbles", response.results().len());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse>;
 
-    /// Edit a single scrobble with complete information.
+    /// Edit a single scrobble with complete information and retry logic.
     ///
     /// This method performs a single edit operation on a fully-specified scrobble.
-    /// Unlike `edit_scrobble`, it does not perform enrichment or multiple edits.
+    /// Unlike [`edit_scrobble`], this method does not perform discovery, enrichment,
+    /// or multiple edits - it edits exactly one scrobble instance.
+    ///
+    /// # Key Differences from `edit_scrobble`
+    ///
+    /// - **No discovery**: Requires a fully-specified `ExactScrobbleEdit`
+    /// - **Single edit**: Only edits one scrobble instance
+    /// - **No enrichment**: All fields must be provided upfront
+    /// - **Retry logic**: Automatically retries on rate limiting
+    ///
+    /// # Arguments
+    ///
+    /// * `exact_edit` - A fully-specified edit with all required fields populated,
+    ///   including original metadata and timestamps
+    /// * `max_retries` - Maximum number of retry attempts for rate limiting.
+    ///   The method will wait with exponential backoff between retries.
+    ///
+    /// # Returns
+    ///
+    /// Returns an `EditResponse` with a single result indicating success or failure.
+    /// If max retries are exceeded due to rate limiting, returns a failed response
+    /// rather than an error.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use lastfm_edit::{LastFmEditClient, ExactScrobbleEdit, Result};
+    /// # async fn example(client: &dyn LastFmEditClient) -> Result<()> {
+    /// let exact_edit = ExactScrobbleEdit::new(
+    ///     "Original Track".to_string(),
+    ///     "Original Album".to_string(),
+    ///     "Artist".to_string(),
+    ///     "Artist".to_string(),
+    ///     "New Track Name".to_string(),
+    ///     "Original Album".to_string(),
+    ///     "Artist".to_string(),
+    ///     "Artist".to_string(),
+    ///     1640995200, // timestamp
+    ///     false
+    /// );
+    ///
+    /// let response = client.edit_scrobble_single(&exact_edit, 3).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn edit_scrobble_single(
         &self,
         exact_edit: &ExactScrobbleEdit,
@@ -137,9 +229,22 @@ pub trait LastFmEditClient {
     async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage>;
 
     /// Extract the current session state for persistence.
+    ///
+    /// This allows you to save the authentication state and restore it later
+    /// without requiring the user to log in again.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`LastFmEditSession`] that can be serialized and saved.
     fn get_session(&self) -> LastFmEditSession;
 
     /// Restore session state from a previously saved session.
+    ///
+    /// This allows you to restore authentication state without logging in again.
+    ///
+    /// # Arguments
+    ///
+    /// * `session` - Previously saved session state
     fn restore_session(&self, session: LastFmEditSession);
 
     /// Create an iterator for browsing an artist's tracks from the user's library.
@@ -161,11 +266,45 @@ pub trait LastFmEditClient {
     ///
     /// Returns a broadcast receiver that can be used to listen to events like rate limiting.
     /// Multiple subscribers can listen simultaneously.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
+    ///
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
+    /// let mut events = client.subscribe();
+    ///
+    /// // Listen for events in a background task
+    /// tokio::spawn(async move {
+    ///     while let Ok(event) = events.recv().await {
+    ///         match event {
+    ///             ClientEvent::RateLimited(delay) => {
+    ///                 println!("Rate limited! Waiting {} seconds", delay);
+    ///             }
+    ///         }
+    ///     }
+    /// });
+    /// ```
     fn subscribe(&self) -> ClientEventReceiver;
 
     /// Get the latest client event without subscribing to future events.
     ///
     /// This returns the most recent event that occurred, or `None` if no events have occurred yet.
     /// Unlike `subscribe()`, this provides instant access to the current state without waiting.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
+    ///
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
+    ///
+    /// if let Some(ClientEvent::RateLimited(delay)) = client.latest_event() {
+    ///     println!("Currently rate limited for {} seconds", delay);
+    /// }
+    /// ```
     fn latest_event(&self) -> Option<ClientEvent>;
 }

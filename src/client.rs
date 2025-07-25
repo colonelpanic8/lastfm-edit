@@ -215,26 +215,11 @@ impl LastFmEditClientImpl {
     }
 
     /// Extract the current session state for persistence.
-    ///
-    /// This allows you to save the authentication state and restore it later
-    /// without requiring the user to log in again.
-    ///
-    /// # Returns
-    ///
-    /// Returns a [`LastFmEditSession`] that can be serialized and saved.
-    ///
     pub fn get_session(&self) -> LastFmEditSession {
         self.session.lock().unwrap().clone()
     }
 
-    /// Restore session state from a previously saved [`LastFmEditSession`].
-    ///
-    /// This allows you to restore authentication state without logging in again.
-    ///
-    /// # Arguments
-    ///
-    /// * `session` - Previously saved session state
-    ///
+    /// Restore session state from a previously saved session.
     pub fn restore_session(&self, session: LastFmEditSession) {
         *self.session.lock().unwrap() = session;
     }
@@ -273,51 +258,11 @@ impl LastFmEditClientImpl {
     }
 
     /// Subscribe to internal client events.
-    ///
-    /// Returns a broadcast receiver that can be used to listen to events like rate limiting.
-    /// Multiple subscribers can listen simultaneously.
-    ///
-    /// # Example
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
-    ///
-    /// let http_client = http_client::native::NativeClient::new();
-    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
-    /// let mut events = client.subscribe();
-    ///
-    /// // Listen for events in a background task
-    /// tokio::spawn(async move {
-    ///     while let Ok(event) = events.recv().await {
-    ///         match event {
-    ///             ClientEvent::RateLimited(delay) => {
-    ///                 println!("Rate limited! Waiting {} seconds", delay);
-    ///             }
-    ///         }
-    ///     }
-    /// });
-    /// ```
     pub fn subscribe(&self) -> ClientEventReceiver {
         self.broadcaster.subscribe()
     }
 
     /// Get the latest client event without subscribing to future events.
-    ///
-    /// This returns the most recent event that occurred, or `None` if no events have occurred yet.
-    /// Unlike `subscribe()`, this provides instant access to the current state without waiting.
-    ///
-    /// # Example
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
-    ///
-    /// let http_client = http_client::native::NativeClient::new();
-    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
-    ///
-    /// if let Some(ClientEvent::RateLimited(delay)) = client.latest_event() {
-    ///     println!("Currently rate limited for {} seconds", delay);
-    /// }
-    /// ```
     pub fn latest_event(&self) -> Option<ClientEvent> {
         self.broadcaster.latest_event()
     }
