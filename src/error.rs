@@ -12,10 +12,10 @@ use thiserror::Error;
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
+///     let http_client = http_client::native::NativeClient::new();
 ///
-///     match client.login("username", "password").await {
-///         Ok(()) => println!("Login successful"),
+///     match LastFmEditClientImpl::login_with_credentials(Box::new(http_client), "username", "password").await {
+///         Ok(client) => println!("Login successful"),
 ///         Err(LastFmError::Auth(msg)) => eprintln!("Authentication failed: {}", msg),
 ///         Err(LastFmError::RateLimit { retry_after }) => {
 ///             eprintln!("Rate limited, retry in {} seconds", retry_after);
@@ -32,10 +32,10 @@ use thiserror::Error;
 /// automatically handle rate limiting errors by waiting and retrying:
 ///
 /// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, ScrobbleEdit};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-/// // client.login(...).await?;
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
 ///
 /// let edit = ScrobbleEdit::from_track_info("Track", "Album", "Artist", 1640995200);
 ///

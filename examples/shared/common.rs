@@ -10,12 +10,12 @@ pub async fn setup_client() -> Result<LastFmEditClientImpl> {
     let password = env::var("LASTFM_EDIT_PASSWORD")
         .expect("LASTFM_EDIT_PASSWORD environment variable not set");
 
-    // Create client and login
+    // Login and create client
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClientImpl::new(Box::new(http_client));
-
     println!("Logging in as {username}...");
-    client.login(&username, &password).await?;
+    let client =
+        LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password)
+            .await?;
     println!("✓ Logged in successfully");
 
     Ok(client)

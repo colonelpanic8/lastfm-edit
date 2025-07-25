@@ -10,9 +10,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let password =
         env::var("LASTFM_EDIT_PASSWORD").expect("Set LASTFM_EDIT_PASSWORD environment variable");
 
-    // Create HTTP client and lastfm-edit client
+    // Login and create client
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClientImpl::new(Box::new(http_client));
+    println!("Logging in as {username}...");
+    let client =
+        LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password)
+            .await?;
 
     // Subscribe to client events before any operations
     let mut events = client.subscribe();
@@ -29,9 +32,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Login
-    println!("🔐 Logging in...");
-    client.login(&username, &password).await?;
     println!("✅ Successfully logged in as: {}", client.username());
 
     // Check latest event after login

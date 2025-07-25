@@ -7,16 +7,10 @@ mod mock_tests {
     use mockall::predicate::*; // for eq(), any(), etc.
 
     #[tokio::test]
-    async fn test_mock_login() -> Result<()> {
+    async fn test_mock_basic_functionality() -> Result<()> {
         let mut mock_client = MockLastFmEditClient::new();
 
         // Set up expectations
-        mock_client
-            .expect_login()
-            .with(eq("testuser"), eq("testpass"))
-            .times(1)
-            .returning(|_, _| Ok(()));
-
         mock_client
             .expect_is_logged_in()
             .times(1)
@@ -29,9 +23,6 @@ mod mock_tests {
 
         // Use the mock as a trait object
         let client: &dyn LastFmEditClient = &mock_client;
-
-        // Test login
-        client.login("testuser", "testpass").await?;
 
         // Test authentication check
         assert!(client.is_logged_in());

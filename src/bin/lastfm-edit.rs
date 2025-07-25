@@ -103,12 +103,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Default is dry-run mode unless --apply is specified
     let dry_run = !cli.apply;
 
-    // Create and authenticate client
+    // Login and create client
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClientImpl::new(Box::new(http_client));
-
     println!("🔐 Logging in to Last.fm...");
-    client.login(&username, &password).await?;
+    let client =
+        LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password)
+            .await?;
     println!("✅ Successfully authenticated as {}", client.username());
 
     // Create ScrobbleEdit based on provided arguments

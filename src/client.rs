@@ -1,4 +1,5 @@
 use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
+use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
 use crate::session::LastFmEditSession;
@@ -61,8 +62,8 @@ impl SharedEventBroadcaster {
 
 /// Main implementation for interacting with Last.fm's web interface.
 ///
-/// This implementation handles authentication, session management, and provides methods for
-/// browsing user libraries and editing scrobble data through web scraping.
+/// This implementation provides methods for browsing user libraries and editing scrobble data
+/// through web scraping. It requires a valid authenticated session to function.
 ///
 #[derive(Clone)]
 pub struct LastFmEditClientImpl {
@@ -75,75 +76,54 @@ pub struct LastFmEditClientImpl {
 }
 
 impl LastFmEditClientImpl {
-    /// Create a new [`LastFmEditClient`] with the default Last.fm URL.
+    /// Create a new [`LastFmEditClient`] from an authenticated session.
     ///
-    /// **Note:** This creates an unauthenticated client. You must call [`login`](Self::login)
-    /// or [`restore_session`](Self::restore_session) before using most functionality.
+    /// This is the primary constructor for creating a client. You must obtain a valid
+    /// session first using the [`login`](crate::login::LoginManager::login) function.
     ///
     /// # Arguments
     ///
     /// * `client` - Any HTTP client implementation that implements [`HttpClient`]
+    /// * `session` - A valid authenticated session
     ///
-    pub fn new(client: Box<dyn HttpClient + Send + Sync>) -> Self {
-        Self::with_base_url(client, "https://www.last.fm".to_string())
+    pub fn from_session(
+        client: Box<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+    ) -> Self {
+        Self::from_session_with_arc(Arc::from(client), session)
     }
 
-    /// Create a new [`LastFmEditClient`] with a custom base URL.
+    /// Create a new [`LastFmEditClient`] from an authenticated session with Arc client.
     ///
-    /// **Note:** This creates an unauthenticated client. You must call [`login`](Self::login)
-    /// or [`restore_session`](Self::restore_session) before using most functionality.
-    ///
-    /// This is useful for testing or if Last.fm changes their domain.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `base_url` - The base URL for Last.fm (e.g., <https://www.last.fm>)
-    pub fn with_base_url(client: Box<dyn HttpClient + Send + Sync>, base_url: String) -> Self {
-        Self::with_rate_limit_patterns(
+    /// Internal helper method to avoid Arc/Box conversion issues.
+    fn from_session_with_arc(
+        client: Arc<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+    ) -> Self {
+        Self::from_session_with_broadcaster_arc(
             client,
-            base_url,
-            vec![
-                "you've tried to log in too many times".to_string(),
-                "you're requesting too many pages".to_string(),
-                "slow down".to_string(),
-                "too fast".to_string(),
-                "rate limit".to_string(),
-                "throttled".to_string(),
-                "temporarily blocked".to_string(),
-                "temporarily restricted".to_string(),
-                "captcha".to_string(),
-                "verify you're human".to_string(),
-                "prove you're not a robot".to_string(),
-                "security check".to_string(),
-                "service temporarily unavailable".to_string(),
-                "quota exceeded".to_string(),
-                "limit exceeded".to_string(),
-                "daily limit".to_string(),
-            ],
+            session,
+            Arc::new(SharedEventBroadcaster::new()),
         )
     }
 
-    /// Create a new [`LastFmEditClient`] with custom rate limit detection patterns.
+    /// Create a new [`LastFmEditClient`] from an authenticated session with custom rate limit patterns.
+    ///
+    /// This is useful for testing or customizing rate limit detection.
     ///
     /// # Arguments
     ///
     /// * `client` - Any HTTP client implementation
-    /// * `base_url` - The base URL for Last.fm
+    /// * `session` - A valid authenticated session
     /// * `rate_limit_patterns` - Text patterns that indicate rate limiting in responses
-    pub fn with_rate_limit_patterns(
+    pub fn from_session_with_rate_limit_patterns(
         client: Box<dyn HttpClient + Send + Sync>,
-        base_url: String,
+        session: LastFmEditSession,
         rate_limit_patterns: Vec<String>,
     ) -> Self {
         Self {
             client: Arc::from(client),
-            session: Arc::new(Mutex::new(LastFmEditSession::new(
-                String::new(),
-                Vec::new(),
-                None,
-                base_url,
-            ))),
+            session: Arc::new(Mutex::new(session)),
             rate_limit_patterns,
             debug_save_responses: std::env::var("LASTFM_DEBUG_SAVE_RESPONSES").is_ok(),
             parser: LastFmParser::new(),
@@ -153,7 +133,7 @@ impl LastFmEditClientImpl {
 
     /// Create a new authenticated [`LastFmEditClient`] by logging in with username and password.
     ///
-    /// This is a convenience method that combines client creation and login into one step.
+    /// This is a convenience method that combines login and client creation into one step.
     ///
     /// # Arguments
     ///
@@ -170,37 +150,14 @@ impl LastFmEditClientImpl {
         username: &str,
         password: &str,
     ) -> Result<Self> {
-        let new_client = Self::new(client);
-        new_client.login(username, password).await?;
-        Ok(new_client)
+        let client_arc: Arc<dyn HttpClient + Send + Sync> = Arc::from(client);
+        let login_manager =
+            crate::login::LoginManager::new(client_arc.clone(), "https://www.last.fm".to_string());
+        let session = login_manager.login(username, password).await?;
+        Ok(Self::from_session_with_arc(client_arc, session))
     }
 
-    /// Create a new [`LastFmEditClient`] by restoring a previously saved session.
-    ///
-    /// This allows you to resume a Last.fm session without requiring the user to log in again.
-    /// Creates a new broadcaster, so events won't be shared with other clients.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `session` - Previously saved [`LastFmEditSession`]
-    ///
-    /// # Returns
-    ///
-    /// Returns a client with the restored session.
-    ///
-    pub fn from_session(
-        client: Box<dyn HttpClient + Send + Sync>,
-        session: LastFmEditSession,
-    ) -> Self {
-        Self::from_session_with_broadcaster(
-            client,
-            session,
-            Arc::new(SharedEventBroadcaster::new()),
-        )
-    }
-
-    /// Create a new [`LastFmEditClient`] by restoring a session with a shared broadcaster.
+    /// Create a new [`LastFmEditClient`] from a session with a shared broadcaster.
     ///
     /// This allows you to create multiple clients that share the same event broadcasting system.
     /// When any client encounters rate limiting, all clients sharing the broadcaster will see the event.
@@ -208,20 +165,28 @@ impl LastFmEditClientImpl {
     /// # Arguments
     ///
     /// * `client` - Any HTTP client implementation
-    /// * `session` - Previously saved [`LastFmEditSession`]
+    /// * `session` - A valid authenticated session
     /// * `broadcaster` - Shared broadcaster from another client
     ///
     /// # Returns
     ///
-    /// Returns a client with the restored session and shared broadcaster.
-    ///
+    /// Returns a client with the session and shared broadcaster.
     fn from_session_with_broadcaster(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
         broadcaster: Arc<SharedEventBroadcaster>,
     ) -> Self {
+        Self::from_session_with_broadcaster_arc(Arc::from(client), session, broadcaster)
+    }
+
+    /// Internal helper for creating client with Arc and broadcaster
+    fn from_session_with_broadcaster_arc(
+        client: Arc<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+        broadcaster: Arc<SharedEventBroadcaster>,
+    ) -> Self {
         Self {
-            client: Arc::from(client),
+            client,
             session: Arc::new(Mutex::new(session)),
             rate_limit_patterns: vec![
                 "you've tried to log in too many times".to_string(),
@@ -290,177 +255,6 @@ impl LastFmEditClientImpl {
         Self::from_session_with_broadcaster(client, session, self.broadcaster.clone())
     }
 
-    /// Authenticate with Last.fm using username and password.
-    ///
-    /// This method:
-    /// 1. Fetches the login page to extract CSRF tokens
-    /// 2. Submits the login form with credentials
-    /// 3. Validates the authentication by checking for session cookies
-    /// 4. Stores session data for subsequent requests
-    ///
-    /// # Arguments
-    ///
-    /// * `username` - Last.fm username or email
-    /// * `password` - Last.fm password
-    ///
-    /// # Returns
-    ///
-    /// Returns [`Ok(())`] on successful authentication, or [`LastFmError::Auth`] on failure.
-    ///
-    pub async fn login(&self, username: &str, password: &str) -> Result<()> {
-        // Get login page to extract CSRF token
-        let login_url = {
-            let session = self.session.lock().unwrap();
-            format!("{}/login", session.base_url)
-        };
-        let mut response = self.get(&login_url).await?;
-
-        // Extract any initial cookies from the login page
-        self.extract_cookies(&response);
-
-        let html = response
-            .body_string()
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        // Parse HTML synchronously to avoid holding parser state across await boundaries
-        let (csrf_token, next_field) = self.extract_login_form_data(&html)?;
-
-        // Submit login form
-        let mut form_data = HashMap::new();
-        form_data.insert("csrfmiddlewaretoken", csrf_token.as_str());
-        form_data.insert("username_or_email", username);
-        form_data.insert("password", password);
-
-        // Add 'next' field if present
-        if let Some(ref next_value) = next_field {
-            form_data.insert("next", next_value);
-        }
-
-        let mut request = Request::new(Method::Post, login_url.parse::<Url>().unwrap());
-        let _ = request.insert_header("Referer", &login_url);
-        {
-            let session = self.session.lock().unwrap();
-            let _ = request.insert_header("Origin", &session.base_url);
-        }
-        let _ = request.insert_header("Content-Type", "application/x-www-form-urlencoded");
-        let _ = request.insert_header(
-            "User-Agent",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
-        );
-        let _ = request.insert_header(
-            "Accept",
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-        );
-        let _ = request.insert_header("Accept-Language", "en-US,en;q=0.9");
-        let _ = request.insert_header("Accept-Encoding", "gzip, deflate, br");
-        let _ = request.insert_header("DNT", "1");
-        let _ = request.insert_header("Connection", "keep-alive");
-        let _ = request.insert_header("Upgrade-Insecure-Requests", "1");
-        let _ = request.insert_header(
-            "sec-ch-ua",
-            "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
-        );
-        let _ = request.insert_header("sec-ch-ua-mobile", "?0");
-        let _ = request.insert_header("sec-ch-ua-platform", "\"Linux\"");
-        let _ = request.insert_header("Sec-Fetch-Dest", "document");
-        let _ = request.insert_header("Sec-Fetch-Mode", "navigate");
-        let _ = request.insert_header("Sec-Fetch-Site", "same-origin");
-        let _ = request.insert_header("Sec-Fetch-User", "?1");
-
-        // Add any cookies we already have
-        {
-            let session = self.session.lock().unwrap();
-            if !session.cookies.is_empty() {
-                let cookie_header = session.cookies.join("; ");
-                let _ = request.insert_header("Cookie", &cookie_header);
-            }
-        }
-
-        // Convert form data to URL-encoded string
-        let form_string: String = form_data
-            .iter()
-            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
-            .collect::<Vec<_>>()
-            .join("&");
-
-        request.set_body(form_string);
-
-        let mut response = self
-            .client
-            .send(request)
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        // Extract session cookies from login response
-        self.extract_cookies(&response);
-
-        log::debug!("Login response status: {}", response.status());
-
-        // If we get a 403, it might be rate limiting or auth failure
-        if response.status() == 403 {
-            // Get the response body to check if it's rate limiting
-            let response_html = response
-                .body_string()
-                .await
-                .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-            // Look for rate limit indicators in the response
-            if self.is_rate_limit_response(&response_html) {
-                log::debug!("403 response appears to be rate limiting");
-                self.broadcast_event(ClientEvent::RateLimited(60));
-                return Err(LastFmError::RateLimit { retry_after: 60 });
-            }
-            log::debug!("403 response appears to be authentication failure");
-
-            // Continue with the normal auth failure handling using the response_html
-            let login_error = self.parse_login_error(&response_html);
-            return Err(LastFmError::Auth(login_error));
-        }
-
-        // Check if we got a new sessionid that looks like a real Last.fm session
-        let has_real_session = {
-            let session = self.session.lock().unwrap();
-            session
-                .cookies
-                .iter()
-                .any(|cookie| cookie.starts_with("sessionid=.") && cookie.len() > 50)
-        };
-
-        if has_real_session && (response.status() == 302 || response.status() == 200) {
-            // We got a real session ID, login was successful
-            {
-                let mut session = self.session.lock().unwrap();
-                session.username = username.to_string();
-                session.csrf_token = Some(csrf_token);
-            }
-            log::debug!("Login successful - authenticated session established");
-            return Ok(());
-        }
-
-        // At this point, we didn't get a 403, so read the response body for other cases
-        let response_html = response
-            .body_string()
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        // Check if we were redirected away from login page (success) by parsing synchronously
-        let has_login_form = self.check_for_login_form(&response_html);
-
-        if !has_login_form && response.status() == 200 {
-            {
-                let mut session = self.session.lock().unwrap();
-                session.username = username.to_string();
-                session.csrf_token = Some(csrf_token);
-            }
-            Ok(())
-        } else {
-            // Parse error messages synchronously
-            let error_msg = self.parse_login_error(&response_html);
-            Err(LastFmError::Auth(error_msg))
-        }
-    }
-
     /// Get the currently authenticated username.
     ///
     /// Returns an empty string if not logged in.
@@ -468,9 +262,10 @@ impl LastFmEditClientImpl {
         self.session.lock().unwrap().username.clone()
     }
 
-    /// Check if the client is currently authenticated.
+    /// Check if the client's session is still valid.
     ///
-    /// Returns `true` if [`login`](Self::login) was successful and session is active.
+    /// Returns `true` if the session appears to be valid (has cookies, username, etc.).
+    /// Note: This does not verify if the session is still active on the server.
     pub fn is_logged_in(&self) -> bool {
         self.session.lock().unwrap().is_valid()
     }
@@ -482,10 +277,11 @@ impl LastFmEditClientImpl {
     ///
     /// # Example
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClientImpl, ClientEvent};
+    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
     ///
     /// let http_client = http_client::native::NativeClient::new();
-    /// let client = LastFmEditClientImpl::new(Box::new(http_client));
+    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
     /// let mut events = client.subscribe();
     ///
     /// // Listen for events in a background task
@@ -510,10 +306,11 @@ impl LastFmEditClientImpl {
     ///
     /// # Example
     /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClientImpl, ClientEvent};
+    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
     ///
     /// let http_client = http_client::native::NativeClient::new();
-    /// let client = LastFmEditClientImpl::new(Box::new(http_client));
+    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
     ///
     /// if let Some(ClientEvent::RateLimited(delay)) = client.latest_event() {
     ///     println!("Currently rate limited for {} seconds", delay);
@@ -1416,52 +1213,6 @@ impl LastFmEditClientImpl {
             .ok_or(LastFmError::CsrfNotFound)
     }
 
-    /// Extract login form data (CSRF token and next field) - synchronous parsing helper
-    fn extract_login_form_data(&self, html: &str) -> Result<(String, Option<String>)> {
-        let document = Html::parse_document(html);
-
-        let csrf_token = self.extract_csrf_token(&document)?;
-
-        // Check if there's a 'next' field in the form
-        let next_selector = Selector::parse("input[name=\"next\"]").unwrap();
-        let next_field = document
-            .select(&next_selector)
-            .next()
-            .and_then(|input| input.value().attr("value"))
-            .map(|s| s.to_string());
-
-        Ok((csrf_token, next_field))
-    }
-
-    /// Parse login error messages from HTML - synchronous parsing helper
-    fn parse_login_error(&self, html: &str) -> String {
-        let document = Html::parse_document(html);
-
-        let error_selector = Selector::parse(".alert-danger, .form-error, .error-message").unwrap();
-
-        let mut error_messages = Vec::new();
-        for error in document.select(&error_selector) {
-            let error_text = error.text().collect::<String>().trim().to_string();
-            if !error_text.is_empty() {
-                error_messages.push(error_text);
-            }
-        }
-
-        if error_messages.is_empty() {
-            "Login failed - please check your credentials".to_string()
-        } else {
-            format!("Login failed: {}", error_messages.join("; "))
-        }
-    }
-
-    /// Check if HTML contains a login form - synchronous parsing helper
-    fn check_for_login_form(&self, html: &str) -> bool {
-        let document = Html::parse_document(html);
-        let login_form_selector =
-            Selector::parse("form[action*=\"login\"], input[name=\"username_or_email\"]").unwrap();
-        document.select(&login_form_selector).next().is_some()
-    }
-
     /// Make an HTTP GET request with authentication and retry logic
     pub async fn get(&self, url: &str) -> Result<Response> {
         self.get_with_retry(url, 3).await
@@ -1660,46 +1411,8 @@ impl LastFmEditClientImpl {
     }
 
     fn extract_cookies(&self, response: &Response) {
-        // Extract Set-Cookie headers and store them (avoiding duplicates)
-        if let Some(cookie_headers) = response.header("set-cookie") {
-            let mut new_cookies = 0;
-            for cookie_header in cookie_headers {
-                let cookie_str = cookie_header.as_str();
-                // Extract just the cookie name=value part (before any semicolon)
-                if let Some(cookie_value) = cookie_str.split(';').next() {
-                    let cookie_name = cookie_value.split('=').next().unwrap_or("");
-
-                    // Remove any existing cookie with the same name
-                    {
-                        let mut session = self.session.lock().unwrap();
-                        session
-                            .cookies
-                            .retain(|existing| !existing.starts_with(&format!("{cookie_name}=")));
-                        session.cookies.push(cookie_value.to_string());
-                    }
-                    new_cookies += 1;
-                }
-            }
-            if new_cookies > 0 {
-                {
-                    let session = self.session.lock().unwrap();
-                    log::trace!(
-                        "Extracted {} new cookies, total: {}",
-                        new_cookies,
-                        session.cookies.len()
-                    );
-                    log::trace!("Updated cookies: {:?}", &session.cookies);
-
-                    // Check if sessionid changed
-                    for cookie in &session.cookies {
-                        if cookie.starts_with("sessionid=") {
-                            log::trace!("Current sessionid: {}", &cookie[10..50.min(cookie.len())]);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        let mut session = self.session.lock().unwrap();
+        extract_cookies_from_response(response, &mut session.cookies);
     }
 
     /// Extract response body, optionally saving debug info
@@ -1787,40 +1500,14 @@ impl LastFmEditClientImpl {
             content.len()
         );
 
-        // Check if we got JSON or HTML
-        if content.trim_start().starts_with("{") || content.trim_start().starts_with("[") {
-            log::debug!("Parsing JSON response from AJAX endpoint");
-            self.parse_json_albums_page(&content, page, artist)
-        } else {
-            log::debug!("Parsing HTML response from AJAX endpoint");
-            let document = Html::parse_document(&content);
-            self.parser.parse_albums_page(&document, page, artist)
-        }
-    }
-
-    fn parse_json_albums_page(
-        &self,
-        _json_content: &str,
-        page_number: u32,
-        _artist: &str,
-    ) -> Result<AlbumPage> {
-        // JSON parsing not yet implemented - fallback to empty page
-        log::debug!("JSON parsing not implemented, returning empty page");
-        Ok(AlbumPage {
-            albums: Vec::new(),
-            page_number,
-            has_next_page: false,
-            total_pages: Some(1),
-        })
+        log::debug!("Parsing HTML response from AJAX endpoint");
+        let document = Html::parse_document(&content);
+        self.parser.parse_albums_page(&document, page, artist)
     }
 }
 
 #[async_trait(?Send)]
 impl LastFmEditClient for LastFmEditClientImpl {
-    async fn login(&self, username: &str, password: &str) -> Result<()> {
-        self.login(username, password).await
-    }
-
     fn username(&self) -> String {
         self.username()
     }

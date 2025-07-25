@@ -12,13 +12,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🔧 Demonstrating shared event broadcasting between clients...");
 
-    // Create HTTP client and lastfm-edit client
+    // Create HTTP client and login to create first client
     let http_client = http_client::native::NativeClient::new();
-    let client1 = LastFmEditClientImpl::new(Box::new(http_client));
-
-    // Login with first client
     println!("🔐 Logging in with client1...");
-    client1.login(&username, &password).await?;
+    let client1 =
+        LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password)
+            .await?;
     println!("✅ Successfully logged in as: {}", client1.username());
 
     // Create a second client that shares the broadcaster with client1

@@ -1,5 +1,14 @@
 use http_client::native::NativeClient;
-use lastfm_edit::LastFmEditClientImpl;
+use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession};
+
+fn create_test_session() -> LastFmEditSession {
+    LastFmEditSession::new(
+        "test_user".to_string(),
+        vec!["sessionid=.test_session_id_12345".to_string()],
+        Some("test_csrf_token".to_string()),
+        "https://www.last.fm".to_string(),
+    )
+}
 
 /// Test that futures from client operations are Send.
 /// This ensures they can be used across await boundaries in async contexts.
@@ -8,11 +17,7 @@ async fn test_client_futures_are_send() {
     fn assert_send<T: Send>(_: T) {}
 
     let client = Box::new(NativeClient::new());
-    let lastfm_client = LastFmEditClientImpl::new(client);
-
-    // Test that client login future is Send
-    let login_future = lastfm_client.login("test", "test");
-    assert_send(login_future);
+    let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // Test that client get_recent_scrobbles future is Send
     let get_scrobbles_future = lastfm_client.get_recent_scrobbles(1);
@@ -42,7 +47,7 @@ async fn test_iterator_futures_are_send() {
 #[tokio::test]
 async fn test_futures_can_be_spawned() {
     let client = Box::new(NativeClient::new());
-    let lastfm_client = LastFmEditClientImpl::new(client);
+    let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // This should compile if futures are Send
     let handle = tokio::spawn(async move {
@@ -60,7 +65,7 @@ async fn test_futures_can_be_spawned() {
 #[tokio::test]
 async fn test_pagination_methods_across_await_boundaries() {
     let client = Box::new(NativeClient::new());
-    let lastfm_client = LastFmEditClientImpl::new(client);
+    let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // This demonstrates using the underlying pagination methods which are Send
     let handle = tokio::spawn(async move {

@@ -21,12 +21,13 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     // Create client with any HTTP implementation
+//!     // Create HTTP client and login
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let mut client = LastFmEditClientImpl::new(Box::new(http_client));
-//!
-//!     // Login to Last.fm
-//!     client.login("username", "password").await?;
+//!     let client = LastFmEditClientImpl::login_with_credentials(
+//!         Box::new(http_client),
+//!         "username",
+//!         "password"
+//!     ).await?;
 //!
 //!     // Browse recent tracks
 //!     let mut recent_tracks = client.recent_tracks();
@@ -66,9 +67,11 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let client = LastFmEditClientImpl::new(Box::new(http_client));
-//!
-//!     client.login("username", "password").await?;
+//!     let client = LastFmEditClientImpl::login_with_credentials(
+//!         Box::new(http_client),
+//!         "username",
+//!         "password"
+//!     ).await?;
 //!
 //!     // Get all tracks by an artist
 //!     let mut tracks = client.artist_tracks("Radiohead");
@@ -88,9 +91,11 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let client = LastFmEditClientImpl::new(Box::new(http_client));
-//!
-//!     client.login("username", "password").await?;
+//!     let client = LastFmEditClientImpl::login_with_credentials(
+//!         Box::new(http_client),
+//!         "username",
+//!         "password"
+//!     ).await?;
 //!
 //!     // Find and edit tracks
 //!     let tracks = client.artist_tracks("Artist Name").collect_all().await?;
@@ -127,9 +132,11 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let http_client = http_client::native::NativeClient::new();
-//!     let client = LastFmEditClientImpl::new(Box::new(http_client));
-//!
-//!     client.login("username", "password").await?;
+//!     let client = LastFmEditClientImpl::login_with_credentials(
+//!         Box::new(http_client),
+//!         "username",
+//!         "password"
+//!     ).await?;
 //!
 //!     // Get recent tracks (first 100)
 //!     let recent_tracks = client.recent_tracks().take(100).await?;
@@ -211,6 +218,7 @@ pub mod discovery_iterator;
 pub mod edit;
 pub mod error;
 pub mod iterator;
+pub mod login;
 pub mod parsing;
 pub mod session;
 pub mod track;
@@ -222,6 +230,7 @@ pub use discovery::{
     AlbumTracksDiscovery, ArtistTracksDiscovery, ExactMatchDiscovery, TrackVariationsDiscovery,
 };
 pub use discovery_iterator::AsyncDiscoveryIterator;
+pub use login::LoginManager;
 pub use r#trait::LastFmEditClient;
 
 // Re-export the mock when the mock feature is enabled

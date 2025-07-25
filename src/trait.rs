@@ -18,9 +18,6 @@ use async_trait::async_trait;
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait(?Send)]
 pub trait LastFmEditClient {
-    /// Authenticate with Last.fm using username and password.
-    async fn login(&self, username: &str, password: &str) -> Result<()>;
-
     /// Get the currently authenticated username.
     fn username(&self) -> String;
 

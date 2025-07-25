@@ -106,26 +106,12 @@ async fn restore_from_session() -> Result<LastFmEditClientImpl> {
 
 /// Perform fresh login with credentials
 async fn login_with_credentials() -> Result<LastFmEditClientImpl> {
-    // Method 1: Traditional create + login
-    println!("🔧 Using traditional initialization pattern...");
-    let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClientImpl::new(Box::new(http_client));
-
-    let username = get_username();
-    let password = get_password();
-
-    client.login(&username, &password).await?;
-    Ok(client)
-
-    // Alternative Method 2: One-step initialization (commented out)
-    /*
-    println!("🔧 Using one-step initialization pattern...");
+    println!("🔧 Using login with credentials pattern...");
     let username = get_username();
     let password = get_password();
 
     let http_client = http_client::native::NativeClient::new();
     LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password).await
-    */
 }
 
 /// Save current session to file

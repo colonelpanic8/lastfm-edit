@@ -9,10 +9,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let password = env::var("LASTFM_PASSWORD").expect("LASTFM_PASSWORD env var required");
 
     let http_client = http_client::native::NativeClient::new();
-    let client = LastFmEditClientImpl::new(Box::new(http_client));
-
     println!("🔑 Logging in to Last.fm...");
-    client.login(&username, &password).await?;
+    let client =
+        LastFmEditClientImpl::login_with_credentials(Box::new(http_client), &username, &password)
+            .await?;
 
     println!("\n📡 Fetching recent scrobbles to test album artist extraction...");
     let recent_tracks = client.get_recent_scrobbles(1).await?;

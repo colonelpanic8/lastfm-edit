@@ -11,11 +11,11 @@ use async_trait::async_trait;
 /// # Examples
 ///
 /// ```rust,no_run
-/// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+/// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
 ///
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-/// // client.login(...).await?;
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
 ///
 /// let mut tracks = client.artist_tracks("Radiohead");
 ///
@@ -53,9 +53,10 @@ pub trait AsyncPaginatedIterator<T> {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
+    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
     /// let mut tracks = client.artist_tracks("Small Artist");
     /// let all_tracks = tracks.collect_all().await?;
     /// println!("Found {} tracks total", all_tracks.len());
@@ -82,9 +83,10 @@ pub trait AsyncPaginatedIterator<T> {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
+    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
     /// let mut tracks = client.artist_tracks("Radiohead");
     /// let top_20 = tracks.take(20).await?;
     /// println!("Top 20 tracks: {:?}", top_20);
@@ -116,10 +118,10 @@ pub trait AsyncPaginatedIterator<T> {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-/// // client.login(...).await?;
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
 ///
 /// let mut tracks = client.artist_tracks("The Beatles");
 ///
@@ -211,10 +213,10 @@ impl ArtistTracksIterator {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-/// // client.login(...).await?;
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
 ///
 /// let mut albums = client.artist_albums("Pink Floyd");
 ///
@@ -305,10 +307,10 @@ impl ArtistAlbumsIterator {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-/// // client.login(...).await?;
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
 ///
 /// // Get recent tracks with timestamps
 /// let mut recent = client.recent_tracks();
@@ -399,9 +401,10 @@ impl RecentTracksIterator {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
+    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
     ///
     /// // Start from page 5
     /// let mut recent = client.recent_tracks_from_page(5);
@@ -433,9 +436,10 @@ impl RecentTracksIterator {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
     /// # tokio_test::block_on(async {
-    /// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
+    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
     /// let last_processed = 1640995200; // Some previous timestamp
     ///
     /// let mut recent = client.recent_tracks().with_stop_timestamp(last_processed);
@@ -458,10 +462,10 @@ impl RecentTracksIterator {
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, AsyncPaginatedIterator};
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
 /// # tokio_test::block_on(async {
-/// let mut client = LastFmEditClientImpl::new(Box::new(http_client::native::NativeClient::new()));
-/// // client.login(...).await?;
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
 ///
 /// let mut tracks = client.album_tracks("The Dark Side of the Moon", "Pink Floyd");
 ///
