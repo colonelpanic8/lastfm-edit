@@ -2,27 +2,28 @@ use clap::Parser;
 use lastfm_edit::{LastFmEditClientImpl, ScrobbleEdit};
 use std::env;
 
-/// Example demonstrating the discover_scrobble_edit_variations functionality.
+/// Last.fm scrobble metadata editor
 ///
-/// This example allows you to specify all fields of a ScrobbleEdit (optionally),
-/// except for artist which is required. It then discovers the variations and prints them out.
+/// This tool allows you to edit scrobble metadata by specifying what to search for
+/// and what to change it to. You can specify any combination of fields to search for,
+/// and any combination of new values to change them to.
 ///
 /// Usage examples:
-/// # Discover variations for an artist
-/// direnv exec . cargo run --example enrich_metadata_example --artist "Jimi Hendrix"
+/// # Discover variations for an artist (dry run by default)
+/// lastfm-edit --artist "Jimi Hendrix"
 ///
 /// # Discover variations with optional track name
-/// direnv exec . cargo run --example enrich_metadata_example --artist "Radiohead" --track "Creep"
+/// lastfm-edit --artist "Radiohead" --track "Creep"
 ///
-/// # Discover variations with multiple fields
-/// direnv exec . cargo run --example enrich_metadata_example --artist "The Beatles" --album "Abbey Road" --track "Come Together"
+/// # Actually apply edits (change artist name)
+/// lastfm-edit --artist "The Beatles" --new-artist "Beatles, The" --apply
 ///
-/// # Show detailed debug information
-/// direnv exec . cargo run --example enrich_metadata_example --artist "Radiohead" --verbose
+/// # Change track name for specific track
+/// lastfm-edit --artist "Jimi Hendrix" --track "Lover Man" --new-track "Lover Man (Live)" --apply
 #[derive(Parser)]
 #[command(
-    name = "enrich_metadata_example",
-    about = "Discover scrobble edit variations for specified metadata",
+    name = "lastfm-edit",
+    about = "Last.fm scrobble metadata editor",
     long_about = None
 )]
 struct Cli {
@@ -66,6 +67,14 @@ struct Cli {
     #[arg(long)]
     edit_all: bool,
 
+    /// Actually apply the edits (default is dry-run mode)
+    #[arg(long)]
+    apply: bool,
+
+    /// Perform a dry run without actually submitting edits (default behavior)
+    #[arg(long)]
+    dry_run: bool,
+
     /// Show detailed debug information
     #[arg(long)]
     verbose: bool,
@@ -90,6 +99,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let password = env::var("LASTFM_EDIT_PASSWORD")
         .expect("LASTFM_EDIT_PASSWORD environment variable not set");
 
+    // Determine whether to actually apply edits
+    // Default is dry-run mode unless --apply is specified
+    let dry_run = !cli.apply;
+
     // Create and authenticate client
     let http_client = http_client::native::NativeClient::new();
     let client = LastFmEditClientImpl::new(Box::new(http_client));
@@ -101,11 +114,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create ScrobbleEdit based on provided arguments
     let edit = create_scrobble_edit(&cli);
 
-    // Show what we're searching for
-    print_search_criteria(&cli);
+    // Show the ScrobbleEdit that will be sent
+    println!("\n📦 ScrobbleEdit to be sent:");
+    println!("{edit:#?}");
 
-    // Discover and print variations
-    discover_and_print_variations(&client, &edit).await?;
+    // Discover and apply/show variations
+    discover_and_handle_edits(&client, &edit, dry_run).await?;
 
     Ok(())
 }
@@ -128,56 +142,10 @@ fn create_scrobble_edit(cli: &Cli) -> ScrobbleEdit {
     )
 }
 
-fn print_search_criteria(cli: &Cli) {
-    println!("\n🔍 Search Criteria:");
-    println!("  Artist: '{}'", cli.artist);
-
-    if let Some(track) = &cli.track {
-        println!("  Track: '{track}'");
-    }
-
-    if let Some(album) = &cli.album {
-        println!("  Album: '{album}'");
-    }
-
-    if let Some(album_artist) = &cli.album_artist {
-        println!("  Album Artist: '{album_artist}'");
-    }
-
-    if let Some(timestamp) = cli.timestamp {
-        println!("  Timestamp: {timestamp}");
-    }
-
-    if cli.edit_all {
-        println!("  Edit All: true");
-    }
-
-    // Show what changes would be made if any
-    let has_changes = cli.new_track.is_some()
-        || cli.new_album.is_some()
-        || cli.new_artist.is_some()
-        || cli.new_album_artist.is_some();
-
-    if has_changes {
-        println!("\n📝 Proposed Changes:");
-        if let Some(new_track) = &cli.new_track {
-            println!("  New Track: '{new_track}'");
-        }
-        if let Some(new_album) = &cli.new_album {
-            println!("  New Album: '{new_album}'");
-        }
-        if let Some(new_artist) = &cli.new_artist {
-            println!("  New Artist: '{new_artist}'");
-        }
-        if let Some(new_album_artist) = &cli.new_album_artist {
-            println!("  New Album Artist: '{new_album_artist}'");
-        }
-    }
-}
-
-async fn discover_and_print_variations(
+async fn discover_and_handle_edits(
     client: &LastFmEditClientImpl,
     edit: &ScrobbleEdit,
+    dry_run: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔍 Discovering scrobble edit variations...");
 
@@ -231,8 +199,35 @@ async fn discover_and_print_variations(
             println!("  Unique tracks: {}", unique_tracks.len());
             println!("  Unique albums: {}", unique_albums.len());
 
-            println!("\n💡 To actually perform these edits, use the edit_scrobble method:");
-            println!("  client.edit_scrobble(&edit).await?;");
+            if dry_run {
+                println!("\n🔍 DRY RUN - No actual edits performed");
+                println!("Use --apply to execute these edits");
+            } else {
+                println!("\n🚀 Executing edits...");
+                match client.edit_scrobble(edit).await {
+                    Ok(response) => {
+                        if response.all_successful() {
+                            println!(
+                                "✅ All {} edits completed successfully!",
+                                response.total_edits()
+                            );
+                        } else {
+                            println!("⚠️  Some edits had issues:");
+                            println!(
+                                "  {} successful, {} failed",
+                                response.successful_edits(),
+                                response.failed_edits()
+                            );
+                            for (i, msg) in response.detailed_messages().iter().enumerate() {
+                                println!("    {}: {}", i + 1, msg);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("❌ Error executing edits: {e}");
+                    }
+                }
+            }
         }
         Err(e) => {
             println!("❌ Could not discover scrobble variations: {e}");

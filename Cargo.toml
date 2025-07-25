@@ -24,9 +24,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 async-trait = "0.1"
 
-# Optional dependencies for examples
+# Optional dependencies for examples and binaries
 tokio = { version = "1.0", features = ["full"] }
 env_logger = { version = "0.11" }
+clap = { version = "4.4", features = ["derive"] }
 
 # Optional mocking support
 mockall = { version = "0.13", optional = true }
@@ -40,7 +41,10 @@ mock = ["mockall"]
 [dev-dependencies]
 tokio-test = "0.4"
 mockall = "0.13"
-clap = { version = "4.4", features = ["derive"] }
+
+[[bin]]
+name = "lastfm-edit"
+path = "src/bin/lastfm-edit.rs"
 
 [[example]]
 name = "login_test"
@@ -81,4 +85,5 @@ path = "examples/list_recent_tracks.rs"
 [[example]]
 name = "session_management"
 path = "examples/session_management.rs"
+
 

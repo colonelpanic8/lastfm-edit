@@ -1,7 +1,7 @@
 #[path = "shared/common.rs"]
 mod common;
 
-use lastfm_edit::Result;
+use lastfm_edit::{ArtistTracksIterator, AsyncPaginatedIterator, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -9,48 +9,41 @@ async fn main() -> Result<()> {
 
     let artist = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "The Beatles".to_string());
+        .unwrap_or_else(|| "Queen".to_string());
 
-    println!("=== Artist Tracks Listing ===\n");
+    println!("=== Artist Tracks Listing (using Iterator) ===\n");
     println!("🎵 Listing all tracks for artist: {artist}\n");
 
+    // Use the iterator the same way as Case 4: Artist-specific discovery
+    let mut tracks_iterator = ArtistTracksIterator::new(client, artist.clone());
     let mut track_count = 0;
-    let mut page = 1;
 
-    println!("🔍 Fetching tracks...\n");
+    println!("🔍 Fetching tracks using iterator...\n");
 
-    loop {
-        match client.get_artist_tracks_page(&artist, page).await {
-            Ok(track_page) => {
-                if track_page.tracks.is_empty() {
-                    println!("\n📚 Reached end of {artist} catalog");
-                    break;
-                }
+    while let Some(track) = tracks_iterator.next().await? {
+        track_count += 1;
+        println!(
+            "[{:4}] '{}' | Album: '{}' | Plays: {} | Timestamp: {:?}",
+            track_count,
+            track.name,
+            track.album.as_deref().unwrap_or("(no album)"),
+            track.playcount,
+            track.timestamp
+        );
 
-                for track in track_page.tracks {
-                    track_count += 1;
-                    println!(
-                        "[{:4}] '{}' (plays: {})",
-                        track_count, track.name, track.playcount
-                    );
-                }
-
-                if !track_page.has_next_page {
-                    println!("\n📚 Reached end of {artist} catalog");
-                    break;
-                }
-
-                page += 1;
-            }
-            Err(e) => {
-                println!("❌ Error fetching tracks page {page}: {e}");
-                break;
-            }
+        // Limit output for testing to avoid overwhelming output
+        if track_count >= 50 {
+            println!("\n⚠️  Limiting output to first 50 tracks for testing...");
+            break;
         }
     }
 
     println!("\n=== Summary ===");
-    println!("📊 Total tracks: {track_count}");
+    println!("📊 Total tracks displayed: {track_count}");
+
+    if let Some(total_pages) = tracks_iterator.total_pages() {
+        println!("📄 Total pages available: {total_pages}");
+    }
 
     Ok(())
 }
