@@ -2,31 +2,6 @@
 ///
 /// This structure contains all the information needed to edit a specific scrobble
 /// on Last.fm, including both the original and new metadata values.
-///
-/// # Examples
-///
-/// ```rust
-/// use lastfm_edit::ScrobbleEdit;
-///
-/// // Create an edit to fix a track name
-/// let edit = ScrobbleEdit::from_track_info(
-///     "Paranoid Andriod", // original (misspelled)
-///     "OK Computer",
-///     "Radiohead",
-///     1640995200
-/// )
-/// .with_track_name("Paranoid Android"); // corrected
-///
-/// // Create an edit to change artist name
-/// let edit = ScrobbleEdit::from_track_info(
-///     "Creep",
-///     "Pablo Honey",
-///     "Radio Head", // original (wrong)
-///     1640995200
-/// )
-/// .with_artist_name("Radiohead") // corrected
-/// .with_edit_all(true); // update all instances
-/// ```
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ScrobbleEdit {
     /// Original track name as it appears in the scrobble (optional - if None, edits all tracks)
@@ -79,41 +54,6 @@ pub struct SingleEditResponse {
 ///
 /// When editing a track that appears on multiple albums, this response contains
 /// the results of all individual edit operations performed.
-///
-/// # Examples
-///
-/// ```rust
-/// use lastfm_edit::{EditResponse, SingleEditResponse, ExactScrobbleEdit};
-///
-/// let exact_edit = ExactScrobbleEdit::new(
-///     "Track Name".to_string(),
-///     "Album Name".to_string(),
-///     "Artist Name".to_string(),
-///     "Artist Name".to_string(),
-///     "New Track".to_string(),
-///     "New Album".to_string(),
-///     "New Artist".to_string(),
-///     "New Artist".to_string(),
-///     1640995200,
-///     false,
-/// );
-///
-/// let response = EditResponse::from_results(vec![
-///     SingleEditResponse {
-///         success: true,
-///         message: Some("Edit successful".to_string()),
-///         album_info: Some("Album 1".to_string()),
-///         exact_scrobble_edit: exact_edit,
-///     }
-/// ]);
-///
-/// // Check if all edits succeeded
-/// if response.all_successful() {
-///     println!("All {} edits succeeded!", response.total_edits());
-/// } else {
-///     println!("Some edits failed: {}", response.summary_message());
-/// }
-/// ```
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EditResponse {
     /// Results of individual edit operations
@@ -210,20 +150,6 @@ impl ScrobbleEdit {
     /// * `original_album` - The current album name
     /// * `original_artist` - The current artist name
     /// * `timestamp` - Unix timestamp identifying the scrobble
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use lastfm_edit::ScrobbleEdit;
-    ///
-    /// let edit = ScrobbleEdit::from_track_info(
-    ///     "Highway to Hell",
-    ///     "Highway to Hell",
-    ///     "AC/DC",
-    ///     1640995200
-    /// )
-    /// .with_track_name("Highway to Hell (Remastered)");
-    /// ```
     pub fn from_track_info(
         original_track: &str,
         original_album: &str,
@@ -245,28 +171,12 @@ impl ScrobbleEdit {
     }
 
     /// Set the new track name.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use lastfm_edit::ScrobbleEdit;
-    /// let edit = ScrobbleEdit::from_track_info("Wrong Name", "Album", "Artist", 1640995200)
-    ///     .with_track_name("Correct Name");
-    /// ```
     pub fn with_track_name(mut self, track_name: &str) -> Self {
         self.track_name = Some(track_name.to_string());
         self
     }
 
     /// Set the new album name.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use lastfm_edit::ScrobbleEdit;
-    /// let edit = ScrobbleEdit::from_track_info("Track", "Wrong Album", "Artist", 1640995200)
-    ///     .with_album_name("Correct Album");
-    /// ```
     pub fn with_album_name(mut self, album_name: &str) -> Self {
         self.album_name = Some(album_name.to_string());
         self
@@ -275,14 +185,6 @@ impl ScrobbleEdit {
     /// Set the new artist name.
     ///
     /// This also sets the album artist name to the same value.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use lastfm_edit::ScrobbleEdit;
-    /// let edit = ScrobbleEdit::from_track_info("Track", "Album", "Wrong Artist", 1640995200)
-    ///     .with_artist_name("Correct Artist");
-    /// ```
     pub fn with_artist_name(mut self, artist_name: &str) -> Self {
         self.artist_name = artist_name.to_string();
         self.album_artist_name = Some(artist_name.to_string());
@@ -293,15 +195,6 @@ impl ScrobbleEdit {
     ///
     /// When `true`, Last.fm will update all scrobbles with the same metadata.
     /// When `false` (default), only the specific scrobble is updated.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use lastfm_edit::ScrobbleEdit;
-    /// let edit = ScrobbleEdit::from_track_info("Track", "Album", "Artist", 1640995200)
-    ///     .with_track_name("New Name")
-    ///     .with_edit_all(true); // Update all instances
-    /// ```
     pub fn with_edit_all(mut self, edit_all: bool) -> Self {
         self.edit_all = edit_all;
         self
@@ -318,20 +211,6 @@ impl ScrobbleEdit {
     /// * `artist_name` - The new artist name to set
     /// * `album_name` - The new album name to set
     /// * `timestamp` - Unix timestamp identifying the scrobble
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use lastfm_edit::ScrobbleEdit;
-    ///
-    /// // Create an edit where the client will look up original metadata
-    /// let edit = ScrobbleEdit::with_minimal_info(
-    ///     "Corrected Track Name",
-    ///     "Corrected Artist",
-    ///     "Corrected Album",
-    ///     1640995200
-    /// );
-    /// ```
     pub fn with_minimal_info(
         track_name: &str,
         artist_name: &str,
@@ -361,18 +240,6 @@ impl ScrobbleEdit {
     ///
     /// * `track_name` - The track name (used as both original and new)
     /// * `artist_name` - The artist name (used as both original and new)
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use lastfm_edit::ScrobbleEdit;
-    ///
-    /// // Create an edit where the client will look up album and timestamp info
-    /// let edit = ScrobbleEdit::from_track_and_artist(
-    ///     "Lover Man",
-    ///     "Jimi Hendrix"
-    /// );
-    /// ```
     pub fn from_track_and_artist(track_name: &str, artist_name: &str) -> Self {
         Self::new(
             Some(track_name.to_string()),
@@ -397,15 +264,6 @@ impl ScrobbleEdit {
     ///
     /// * `old_artist_name` - The current artist name to change from
     /// * `new_artist_name` - The new artist name to change to
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use lastfm_edit::ScrobbleEdit;
-    ///
-    /// // Edit all tracks by "Radio Head" to "Radiohead"
-    /// let edit = ScrobbleEdit::for_artist("Radio Head", "Radiohead");
-    /// ```
     pub fn for_artist(old_artist_name: &str, new_artist_name: &str) -> Self {
         Self::new(
             None, // No specific track - edit all tracks
@@ -431,15 +289,6 @@ impl ScrobbleEdit {
     /// * `album_name` - The album name containing tracks to edit
     /// * `artist_name` - The artist name for the album
     /// * `new_artist_name` - The new artist name to change to
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use lastfm_edit::ScrobbleEdit;
-    ///
-    /// // Edit all tracks in "OK Computer" by "Radio Head" to "Radiohead"
-    /// let edit = ScrobbleEdit::for_album("OK Computer", "Radio Head", "Radiohead");
-    /// ```
     pub fn for_album(album_name: &str, old_artist_name: &str, new_artist_name: &str) -> Self {
         Self::new(
             None, // No specific track - edit all tracks in album
