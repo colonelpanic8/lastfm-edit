@@ -19,49 +19,9 @@ use async_trait::async_trait;
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait(?Send)]
 pub trait LastFmEditClient {
-    /// Get the currently authenticated username.
-    fn username(&self) -> String;
-
-    /// Fetch recent scrobbles from the user's listening history.
-    async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>>;
-
-    /// Find a scrobble by its timestamp in recent scrobbles.
-    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
-        log::debug!("Searching for scrobble with timestamp {timestamp}");
-
-        // Search through recent scrobbles to find the one with matching timestamp
-        for page in 1..=10 {
-            // Search up to 10 pages of recent scrobbles
-            let scrobbles = self.get_recent_scrobbles(page).await?;
-
-            for scrobble in scrobbles {
-                if let Some(scrobble_timestamp) = scrobble.timestamp {
-                    if scrobble_timestamp == timestamp {
-                        log::debug!(
-                            "Found scrobble: '{}' by '{}' with album: '{:?}', album_artist: '{:?}'",
-                            scrobble.name,
-                            scrobble.artist,
-                            scrobble.album,
-                            scrobble.album_artist
-                        );
-                        return Ok(scrobble);
-                    }
-                }
-            }
-        }
-
-        Err(LastFmError::Parse(format!(
-            "Could not find scrobble with timestamp {timestamp}"
-        )))
-    }
-
-    /// Find the most recent scrobble for a specific track.
-    async fn find_recent_scrobble_for_track(
-        &self,
-        track_name: &str,
-        artist_name: &str,
-        max_pages: u32,
-    ) -> Result<Option<Track>>;
+    // =============================================================================
+    // CORE EDITING METHODS - Most important functionality
+    // =============================================================================
 
     /// Edit scrobbles by discovering and updating all matching instances.
     ///
@@ -181,6 +141,65 @@ pub trait LastFmEditClient {
         edit: ScrobbleEdit,
     ) -> Box<dyn crate::AsyncDiscoveryIterator<crate::ExactScrobbleEdit>>;
 
+    // =============================================================================
+    // ITERATOR METHODS - Core library browsing functionality
+    // =============================================================================
+
+    /// Create an iterator for browsing an artist's tracks from the user's library.
+    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator;
+
+    /// Create an iterator for browsing an artist's albums from the user's library.
+    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator;
+
+    /// Create an iterator for browsing tracks from a specific album.
+    fn album_tracks(&self, album_name: &str, artist_name: &str) -> crate::AlbumTracksIterator;
+
+    /// Create an iterator for browsing the user's recent tracks/scrobbles.
+    fn recent_tracks(&self) -> crate::RecentTracksIterator;
+
+    /// Create an iterator for browsing the user's recent tracks starting from a specific page.
+    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
+
+    // =============================================================================
+    // CORE DATA METHODS - Essential data access
+    // =============================================================================
+
+    /// Get the currently authenticated username.
+    fn username(&self) -> String;
+
+    /// Fetch recent scrobbles from the user's listening history.
+    async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>>;
+
+    /// Find the most recent scrobble for a specific track.
+    async fn find_recent_scrobble_for_track(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+        max_pages: u32,
+    ) -> Result<Option<Track>>;
+
+    /// Get a page of tracks from the user's library for the specified artist.
+    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<crate::TrackPage>;
+
+    /// Get a page of albums from the user's library for the specified artist.
+    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<crate::AlbumPage>;
+
+    /// Get a page of tracks from the user's recent listening history.
+    async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage> {
+        let tracks = self.get_recent_scrobbles(page).await?;
+        let has_next_page = !tracks.is_empty();
+        Ok(crate::TrackPage {
+            tracks,
+            page_number: page,
+            has_next_page,
+            total_pages: None,
+        })
+    }
+
+    // =============================================================================
+    // CONVENIENCE METHODS - Higher-level helpers and shortcuts
+    // =============================================================================
+
     /// Discover all scrobble edit variations based on the provided ScrobbleEdit template.
     ///
     /// This method analyzes what fields are specified in the input ScrobbleEdit and discovers
@@ -204,6 +223,36 @@ pub trait LastFmEditClient {
     async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>> {
         let mut tracks_iterator = self.album_tracks(album_name, artist_name);
         tracks_iterator.collect_all().await
+    }
+
+    /// Find a scrobble by its timestamp in recent scrobbles.
+    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
+        log::debug!("Searching for scrobble with timestamp {timestamp}");
+
+        // Search through recent scrobbles to find the one with matching timestamp
+        for page in 1..=10 {
+            // Search up to 10 pages of recent scrobbles
+            let scrobbles = self.get_recent_scrobbles(page).await?;
+
+            for scrobble in scrobbles {
+                if let Some(scrobble_timestamp) = scrobble.timestamp {
+                    if scrobble_timestamp == timestamp {
+                        log::debug!(
+                            "Found scrobble: '{}' by '{}' with album: '{:?}', album_artist: '{:?}'",
+                            scrobble.name,
+                            scrobble.artist,
+                            scrobble.album,
+                            scrobble.album_artist
+                        );
+                        return Ok(scrobble);
+                    }
+                }
+            }
+        }
+
+        Err(LastFmError::Parse(format!(
+            "Could not find scrobble with timestamp {timestamp}"
+        )))
     }
 
     /// Edit album metadata by updating scrobbles with new album name.
@@ -270,6 +319,10 @@ pub trait LastFmEditClient {
         self.edit_scrobble(&edit).await
     }
 
+    // =============================================================================
+    // SESSION & EVENT MANAGEMENT - Authentication and monitoring
+    // =============================================================================
+
     /// Extract the current session state for persistence.
     ///
     /// This allows you to save the authentication state and restore it later
@@ -334,37 +387,4 @@ pub trait LastFmEditClient {
     /// }
     /// ```
     fn latest_event(&self) -> Option<ClientEvent>;
-
-    /// Get a page of tracks from the user's library for the specified artist.
-    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<crate::TrackPage>;
-
-    /// Get a page of albums from the user's library for the specified artist.
-    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<crate::AlbumPage>;
-
-    /// Get a page of tracks from the user's recent listening history.
-    async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage> {
-        let tracks = self.get_recent_scrobbles(page).await?;
-        let has_next_page = !tracks.is_empty();
-        Ok(crate::TrackPage {
-            tracks,
-            page_number: page,
-            has_next_page,
-            total_pages: None,
-        })
-    }
-
-    /// Create an iterator for browsing an artist's tracks from the user's library.
-    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator;
-
-    /// Create an iterator for browsing an artist's albums from the user's library.
-    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator;
-
-    /// Create an iterator for browsing tracks from a specific album.
-    fn album_tracks(&self, album_name: &str, artist_name: &str) -> crate::AlbumTracksIterator;
-
-    /// Create an iterator for browsing the user's recent tracks/scrobbles.
-    fn recent_tracks(&self) -> crate::RecentTracksIterator;
-
-    /// Create an iterator for browsing the user's recent tracks starting from a specific page.
-    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
 }
