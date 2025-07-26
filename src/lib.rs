@@ -213,6 +213,7 @@
 
 pub mod album;
 pub mod client;
+pub mod commands;
 pub mod discovery;
 pub mod edit;
 pub mod edit_analysis;
