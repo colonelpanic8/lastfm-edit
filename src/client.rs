@@ -237,6 +237,152 @@ impl LastFmEditClientImpl {
         }
     }
 
+    /// Delete a scrobble by its identifying information.
+    pub async fn delete_scrobble(
+        &self,
+        artist_name: &str,
+        track_name: &str,
+        timestamp: u64,
+    ) -> Result<bool> {
+        let config = RetryConfig {
+            max_retries: 3,
+            base_delay: 5,
+            max_delay: 300,
+        };
+
+        let artist_name = artist_name.to_string();
+        let track_name = track_name.to_string();
+        let client = self.clone();
+
+        match retry::retry_with_backoff(
+            config,
+            "Delete scrobble",
+            || client.delete_scrobble_impl(&artist_name, &track_name, timestamp),
+            |delay, operation_name| {
+                self.broadcast_event(ClientEvent::RateLimited {
+                    delay_seconds: delay,
+                    request: None,
+                    rate_limit_type: RateLimitType::ResponsePattern,
+                });
+                log::debug!("{operation_name} rate limited, waiting {delay} seconds");
+            },
+        )
+        .await
+        {
+            Ok(retry_result) => Ok(retry_result.result),
+            Err(_) => Ok(false),
+        }
+    }
+
+    async fn delete_scrobble_impl(
+        &self,
+        artist_name: &str,
+        track_name: &str,
+        timestamp: u64,
+    ) -> Result<bool> {
+        let delete_url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library/delete",
+                session.base_url, session.username
+            )
+        };
+
+        log::debug!("Getting fresh CSRF token for delete");
+
+        // Get fresh CSRF token from any page that has it (we'll use the library page)
+        let library_url = {
+            let session = self.session.lock().unwrap();
+            format!("{}/user/{}/library", session.base_url, session.username)
+        };
+
+        let mut response = self.get(&library_url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        let document = Html::parse_document(&content);
+        let fresh_csrf_token = self.extract_csrf_token(&document)?;
+
+        log::debug!("Submitting delete request with fresh token");
+
+        let mut request = Request::new(Method::Post, delete_url.parse::<Url>().unwrap());
+
+        // Add session cookies and set up headers
+        let referer_url = {
+            let session = self.session.lock().unwrap();
+            headers::add_cookies(&mut request, &session.cookies);
+            format!("{}/user/{}", session.base_url, session.username)
+        };
+
+        // Add standard headers for AJAX delete requests
+        headers::add_edit_headers(&mut request, &referer_url);
+
+        // Build form data
+        let form_data = [
+            ("csrfmiddlewaretoken", fresh_csrf_token.as_str()),
+            ("artist_name", artist_name),
+            ("track_name", track_name),
+            ("timestamp", &timestamp.to_string()),
+            ("ajax", "1"),
+        ];
+
+        // Convert form data to URL-encoded string
+        let form_string: String = form_data
+            .iter()
+            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        request.set_body(form_string);
+
+        log::debug!(
+            "Deleting scrobble: '{track_name}' by '{artist_name}' with timestamp {timestamp}"
+        );
+
+        // Create request info for event broadcasting
+        let request_info = RequestInfo::from_url_and_method(&delete_url, "POST");
+        let request_start = std::time::Instant::now();
+
+        // Broadcast request started event
+        self.broadcast_event(ClientEvent::RequestStarted {
+            request: request_info.clone(),
+        });
+
+        let mut response = self
+            .client
+            .send(request)
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        // Broadcast request completed event
+        self.broadcast_event(ClientEvent::RequestCompleted {
+            request: request_info.clone(),
+            status_code: response.status().into(),
+            duration_ms: request_start.elapsed().as_millis() as u64,
+        });
+
+        log::debug!("Delete response status: {}", response.status());
+
+        let response_text = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        // Check if the delete was successful
+        // A successful delete typically returns a 200 status with empty or minimal content
+        let success = response.status().is_success();
+
+        if success {
+            log::debug!("Successfully deleted scrobble");
+        } else {
+            log::debug!("Delete failed with response: {response_text}");
+        }
+
+        Ok(success)
+    }
+
     /// Subscribe to internal client events.
     pub fn subscribe(&self) -> ClientEventReceiver {
         self.broadcaster.subscribe()
@@ -1247,5 +1393,15 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     async fn validate_session(&self) -> bool {
         self.validate_session().await
+    }
+
+    async fn delete_scrobble(
+        &self,
+        artist_name: &str,
+        track_name: &str,
+        timestamp: u64,
+    ) -> Result<bool> {
+        self.delete_scrobble(artist_name, track_name, timestamp)
+            .await
     }
 }

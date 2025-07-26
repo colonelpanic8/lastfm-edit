@@ -128,6 +128,27 @@ pub trait LastFmEditClient {
         max_retries: u32,
     ) -> Result<EditResponse>;
 
+    /// Delete a scrobble by its identifying information.
+    ///
+    /// This method deletes a specific scrobble from the user's library using the
+    /// artist name, track name, and timestamp to uniquely identify it.
+    ///
+    /// # Arguments
+    ///
+    /// * `artist_name` - The artist name of the scrobble to delete
+    /// * `track_name` - The track name of the scrobble to delete
+    /// * `timestamp` - The unix timestamp of the scrobble to delete
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the deletion was successful, `false` otherwise.
+    async fn delete_scrobble(
+        &self,
+        artist_name: &str,
+        track_name: &str,
+        timestamp: u64,
+    ) -> Result<bool>;
+
     /// Create an incremental discovery iterator for scrobble editing.
     ///
     /// This returns the appropriate discovery iterator based on what fields are specified
