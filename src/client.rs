@@ -16,11 +16,6 @@ use http_types::{Method, Url};
 use scraper::{Html, Selector};
 use std::sync::{Arc, Mutex};
 
-/// Main implementation for interacting with Last.fm's web interface.
-///
-/// This implementation provides methods for browsing user libraries and editing scrobble data
-/// through web scraping. It requires a valid authenticated session to function.
-///
 #[derive(Clone)]
 pub struct LastFmEditClientImpl {
     client: Arc<dyn HttpClient + Send + Sync>,
@@ -31,16 +26,6 @@ pub struct LastFmEditClientImpl {
 }
 
 impl LastFmEditClientImpl {
-    /// Create a new [`LastFmEditClient`] from an authenticated session.
-    ///
-    /// This is the primary constructor for creating a client. You must obtain a valid
-    /// session first using the [`login`](crate::login::LoginManager::login) function.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation that implements [`HttpClient`]
-    /// * `session` - A valid authenticated session
-    ///
     pub fn from_session(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -48,9 +33,6 @@ impl LastFmEditClientImpl {
         Self::from_session_with_arc(Arc::from(client), session)
     }
 
-    /// Create a new [`LastFmEditClient`] from an authenticated session with Arc client.
-    ///
-    /// Internal helper method to avoid Arc/Box conversion issues.
     fn from_session_with_arc(
         client: Arc<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -62,15 +44,6 @@ impl LastFmEditClientImpl {
         )
     }
 
-    /// Create a new [`LastFmEditClient`] from an authenticated session with custom rate limit patterns.
-    ///
-    /// This is useful for testing or customizing rate limit detection.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `session` - A valid authenticated session
-    /// * `rate_limit_patterns` - Text patterns that indicate rate limiting in responses
     pub fn from_session_with_rate_limit_patterns(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -82,20 +55,6 @@ impl LastFmEditClientImpl {
         Self::from_session_with_client_config(client, session, config)
     }
 
-    /// Create a new authenticated [`LastFmEditClient`] by logging in with username and password.
-    ///
-    /// This is a convenience method that combines login and client creation into one step.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `username` - Last.fm username or email
-    /// * `password` - Last.fm password
-    ///
-    /// # Returns
-    ///
-    /// Returns an authenticated client on success, or [`LastFmError::Auth`] on failure.
-    ///
     pub async fn login_with_credentials(
         client: Box<dyn HttpClient + Send + Sync>,
         username: &str,
@@ -108,16 +67,6 @@ impl LastFmEditClientImpl {
         Ok(Self::from_session_with_arc(client_arc, session))
     }
 
-    /// Create a new [`LastFmEditClient`] from a session with custom configuration.
-    ///
-    /// This constructor provides the most flexible configuration options.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `session` - A valid authenticated session
-    /// * `config` - Complete client configuration including retry and rate limit settings
-    ///
     pub fn from_session_with_client_config(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -126,17 +75,6 @@ impl LastFmEditClientImpl {
         Self::from_session_with_client_config_arc(Arc::from(client), session, config)
     }
 
-    /// Create a new authenticated [`LastFmEditClient`] with custom configuration by logging in.
-    ///
-    /// This convenience method combines login and client creation with custom configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `username` - Last.fm username or email
-    /// * `password` - Last.fm password
-    /// * `config` - Complete client configuration including retry and rate limit settings
-    ///
     pub async fn login_with_credentials_and_client_config(
         client: Box<dyn HttpClient + Send + Sync>,
         username: &str,
@@ -152,17 +90,6 @@ impl LastFmEditClientImpl {
         ))
     }
 
-    /// Create a new [`LastFmEditClient`] from a session with custom retry and rate limit configuration.
-    ///
-    /// This constructor allows full control over retry behavior and rate limit detection.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `session` - A valid authenticated session
-    /// * `retry_config` - Configuration for retry behavior
-    /// * `rate_limit_config` - Configuration for rate limit detection
-    ///
     pub fn from_session_with_config(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -177,18 +104,6 @@ impl LastFmEditClientImpl {
         )
     }
 
-    /// Create a new authenticated [`LastFmEditClient`] with custom configuration by logging in.
-    ///
-    /// This convenience method combines login and client creation with custom configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `username` - Last.fm username or email
-    /// * `password` - Last.fm password
-    /// * `retry_config` - Configuration for retry behavior
-    /// * `rate_limit_config` - Configuration for rate limit detection
-    ///
     pub async fn login_with_credentials_and_config(
         client: Box<dyn HttpClient + Send + Sync>,
         username: &str,
@@ -208,20 +123,6 @@ impl LastFmEditClientImpl {
         ))
     }
 
-    /// Create a new [`LastFmEditClient`] from a session with a shared broadcaster.
-    ///
-    /// This allows you to create multiple clients that share the same event broadcasting system.
-    /// When any client encounters rate limiting, all clients sharing the broadcaster will see the event.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - Any HTTP client implementation
-    /// * `session` - A valid authenticated session
-    /// * `broadcaster` - Shared broadcaster from another client
-    ///
-    /// # Returns
-    ///
-    /// Returns a client with the session and shared broadcaster.
     fn from_session_with_broadcaster(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -230,7 +131,6 @@ impl LastFmEditClientImpl {
         Self::from_session_with_broadcaster_arc(Arc::from(client), session, broadcaster)
     }
 
-    /// Internal helper for creating client with Arc and ClientConfig
     fn from_session_with_client_config_arc(
         client: Arc<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -244,7 +144,6 @@ impl LastFmEditClientImpl {
         )
     }
 
-    /// Internal helper for creating client with Arc and custom configuration
     fn from_session_with_config_arc(
         client: Arc<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -258,7 +157,6 @@ impl LastFmEditClientImpl {
         Self::from_session_with_client_config_arc(client, session, config)
     }
 
-    /// Internal helper for creating client with Arc and broadcaster
     fn from_session_with_broadcaster_arc(
         client: Arc<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -272,7 +170,6 @@ impl LastFmEditClientImpl {
         )
     }
 
-    /// Internal helper for creating client with Arc, ClientConfig, and broadcaster
     fn from_session_with_client_config_and_broadcaster_arc(
         client: Arc<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -288,37 +185,19 @@ impl LastFmEditClientImpl {
         }
     }
 
-    /// Extract the current session state for persistence.
     pub fn get_session(&self) -> LastFmEditSession {
         self.session.lock().unwrap().clone()
     }
 
-    /// Restore session state from a previously saved session.
     pub fn restore_session(&self, session: LastFmEditSession) {
         *self.session.lock().unwrap() = session;
     }
 
-    /// Create a new client that shares the same session and event broadcaster.
-    ///
-    /// This is useful when you want multiple HTTP client instances but want them to
-    /// share the same authentication state and event broadcasting system.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - A new HTTP client implementation
-    ///
-    /// # Returns
-    ///
-    /// Returns a new client that shares the session and broadcaster with this client.
-    ///
     pub fn with_shared_broadcaster(&self, client: Box<dyn HttpClient + Send + Sync>) -> Self {
         let session = self.get_session();
         Self::from_session_with_broadcaster(client, session, self.broadcaster.clone())
     }
 
-    /// Get the currently authenticated username.
-    ///
-    /// Returns an empty string if not logged in.
     pub fn username(&self) -> String {
         self.session.lock().unwrap().username.clone()
     }
@@ -343,7 +222,6 @@ impl LastFmEditClientImpl {
 
         match self.client.send(request).await {
             Ok(response) => {
-                // Check if we got redirected to login
                 if response.status() == 302 || response.status() == 301 {
                     if let Some(location) = response.header("location") {
                         if let Some(redirect_url) = location.get(0) {
@@ -360,7 +238,6 @@ impl LastFmEditClientImpl {
         }
     }
 
-    /// Delete a scrobble by its identifying information.
     pub async fn delete_scrobble(
         &self,
         artist_name: &str,
@@ -413,8 +290,6 @@ impl LastFmEditClientImpl {
         };
 
         log::debug!("Getting fresh CSRF token for delete");
-
-        // Get fresh CSRF token from any page that has it (we'll use the library page)
         let library_url = {
             let session = self.session.lock().unwrap();
             format!("{}/user/{}/library", session.base_url, session.username)
@@ -433,17 +308,14 @@ impl LastFmEditClientImpl {
 
         let mut request = Request::new(Method::Post, delete_url.parse::<Url>().unwrap());
 
-        // Add session cookies and set up headers
         let referer_url = {
             let session = self.session.lock().unwrap();
             headers::add_cookies(&mut request, &session.cookies);
             format!("{}/user/{}", session.base_url, session.username)
         };
 
-        // Add standard headers for AJAX delete requests
         headers::add_edit_headers(&mut request, &referer_url);
 
-        // Build form data
         let form_data = [
             ("csrfmiddlewaretoken", fresh_csrf_token.as_str()),
             ("artist_name", artist_name),
@@ -452,7 +324,6 @@ impl LastFmEditClientImpl {
             ("ajax", "1"),
         ];
 
-        // Convert form data to URL-encoded string
         let form_string: String = form_data
             .iter()
             .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
@@ -465,11 +336,9 @@ impl LastFmEditClientImpl {
             "Deleting scrobble: '{track_name}' by '{artist_name}' with timestamp {timestamp}"
         );
 
-        // Create request info for event broadcasting
         let request_info = RequestInfo::from_url_and_method(&delete_url, "POST");
         let request_start = std::time::Instant::now();
 
-        // Broadcast request started event
         self.broadcast_event(ClientEvent::RequestStarted {
             request: request_info.clone(),
         });
@@ -480,7 +349,6 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Broadcast request completed event
         self.broadcast_event(ClientEvent::RequestCompleted {
             request: request_info.clone(),
             status_code: response.status().into(),
@@ -494,8 +362,6 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Check if the delete was successful
-        // A successful delete typically returns a 200 status with empty or minimal content
         let success = response.status().is_success();
 
         if success {
@@ -507,25 +373,18 @@ impl LastFmEditClientImpl {
         Ok(success)
     }
 
-    /// Subscribe to internal client events.
     pub fn subscribe(&self) -> ClientEventReceiver {
         self.broadcaster.subscribe()
     }
 
-    /// Get the latest client event without subscribing to future events.
     pub fn latest_event(&self) -> Option<ClientEvent> {
         self.broadcaster.latest_event()
     }
 
-    /// Broadcast an internal event to all subscribers.
-    ///
-    /// This is used internally by the client to notify observers of important events.
     fn broadcast_event(&self, event: ClientEvent) {
         self.broadcaster.broadcast_event(event);
     }
 
-    /// Fetch recent scrobbles from the user's listening history
-    /// This gives us real scrobble data with timestamps for editing
     pub async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>> {
         let url = {
             let session = self.session.lock().unwrap();
@@ -552,24 +411,19 @@ impl LastFmEditClientImpl {
         self.parser.parse_recent_scrobbles(&document)
     }
 
-    /// Get a page of tracks from the user's recent listening history.
     pub async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
         let tracks = self.get_recent_scrobbles(page).await?;
 
-        // For now, we'll create a basic TrackPage from the tracks
-        // In a real implementation, we might need to parse pagination info from the HTML
-        let has_next_page = !tracks.is_empty(); // Simple heuristic
+        let has_next_page = !tracks.is_empty();
 
         Ok(TrackPage {
             tracks,
             page_number: page,
             has_next_page,
-            total_pages: None, // Recent tracks don't have a definite total
+            total_pages: None,
         })
     }
 
-    /// Find the most recent scrobble for a specific track
-    /// This searches through recent listening history to find real scrobble data
     pub async fn find_recent_scrobble_for_track(
         &self,
         track_name: &str,
@@ -600,7 +454,6 @@ impl LastFmEditClientImpl {
     }
 
     pub async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
-        // Use the generalized discovery function to find all relevant scrobble instances
         let discovered_edits = self.discover_scrobble_edit_variations(edit).await?;
 
         if discovered_edits.is_empty() {
@@ -625,7 +478,6 @@ impl LastFmEditClientImpl {
 
         let mut all_results = Vec::new();
 
-        // For each discovered scrobble instance, apply the user's desired changes and edit it
         for (index, discovered_edit) in discovered_edits.iter().enumerate() {
             log::debug!(
                 "Processing scrobble {}/{}: '{}' from '{}'",
@@ -635,10 +487,8 @@ impl LastFmEditClientImpl {
                 discovered_edit.album_name_original
             );
 
-            // Apply the user's desired changes to the discovered exact edit
             let mut modified_exact_edit = discovered_edit.clone();
 
-            // Apply user's changes or keep original values
             if let Some(new_track_name) = &edit.track_name {
                 modified_exact_edit.track_name = new_track_name.clone();
             }
@@ -668,7 +518,6 @@ impl LastFmEditClientImpl {
                 exact_scrobble_edit: modified_exact_edit.clone(),
             });
 
-            // Add delay between edits to be respectful to the server
             if index < discovered_edits.len() - 1 {
                 tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
             }
@@ -677,16 +526,6 @@ impl LastFmEditClientImpl {
         Ok(EditResponse::from_results(all_results))
     }
 
-    /// Edit a single scrobble with retry logic, returning a single-result EditResponse.
-    ///
-    /// This method takes a fully-specified `ExactScrobbleEdit` and performs a single
-    /// edit operation. Unlike `edit_scrobble`, this method does not perform enrichment
-    /// or multiple edits - it edits exactly one scrobble instance.
-    ///
-    /// # Arguments
-    /// * `exact_edit` - A fully-specified edit with all required fields populated
-    /// * `max_retries` - Maximum number of retry attempts for rate limiting
-    ///
     pub async fn edit_scrobble_single(
         &self,
         exact_edit: &ExactScrobbleEdit,
@@ -743,7 +582,6 @@ impl LastFmEditClientImpl {
         let result = self.edit_scrobble_impl_internal(exact_edit).await;
         let duration_ms = start_time.elapsed().as_millis() as u64;
 
-        // Broadcast edit attempt event
         match &result {
             Ok(success) => {
                 self.broadcast_event(ClientEvent::EditAttempted {
@@ -776,11 +614,8 @@ impl LastFmEditClientImpl {
         };
 
         log::debug!("Getting fresh CSRF token for edit");
-
-        // First request: Get the edit form to extract fresh CSRF token
         let form_html = self.get_edit_form_html(&edit_url).await?;
 
-        // Parse HTML to get fresh CSRF token - do parsing synchronously
         let form_document = Html::parse_document(&form_html);
         let fresh_csrf_token = self.extract_csrf_token(&form_document)?;
 
@@ -800,7 +635,6 @@ impl LastFmEditClientImpl {
 
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
 
-        // Add session cookies and set up headers
         let referer_url = {
             let session = self.session.lock().unwrap();
             headers::add_cookies(&mut request, &session.cookies);
@@ -809,7 +643,6 @@ impl LastFmEditClientImpl {
 
         headers::add_edit_headers(&mut request, &referer_url);
 
-        // Convert form data to URL-encoded string
         let form_string: String = form_data
             .iter()
             .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
@@ -818,11 +651,9 @@ impl LastFmEditClientImpl {
 
         request.set_body(form_string);
 
-        // Create request info for event broadcasting
         let request_info = RequestInfo::from_url_and_method(&edit_url, "POST");
         let request_start = std::time::Instant::now();
 
-        // Broadcast request started event
         self.broadcast_event(ClientEvent::RequestStarted {
             request: request_info.clone(),
         });
@@ -833,7 +664,6 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Broadcast request completed event
         self.broadcast_event(ClientEvent::RequestCompleted {
             request: request_info.clone(),
             status_code: response.status().into(),
@@ -847,14 +677,11 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Analyze the edit response to determine success/failure
         let analysis = edit_analysis::analyze_edit_response(&response_text, response.status());
 
         Ok(analysis.success)
     }
 
-    /// Fetch raw HTML content for edit form page
-    /// This separates HTTP fetching from parsing to avoid Send/Sync issues
     async fn get_edit_form_html(&self, edit_url: &str) -> Result<String> {
         let mut form_response = self.get(edit_url).await?;
         let form_html = form_response
@@ -866,8 +693,6 @@ impl LastFmEditClientImpl {
         Ok(form_html)
     }
 
-    /// Load prepopulated form values for editing a specific track
-    /// This extracts scrobble data directly from the track page forms
     pub async fn load_edit_form_values_internal(
         &self,
         track_name: &str,
@@ -875,9 +700,6 @@ impl LastFmEditClientImpl {
     ) -> Result<Vec<ExactScrobbleEdit>> {
         log::debug!("Loading edit form values for '{track_name}' by '{artist_name}'");
 
-        // Get the specific track page to find scrobble forms
-        // Add +noredirect to avoid redirects as per lastfm-bulk-edit approach
-        // Use the correct URL format with underscore: artist/_/track
         let base_track_url = {
             let session = self.session.lock().unwrap();
             format!(
@@ -899,12 +721,10 @@ impl LastFmEditClientImpl {
 
         let document = Html::parse_document(&html);
 
-        // Handle pagination with a loop
         let mut all_scrobble_edits = Vec::new();
         let mut unique_albums = std::collections::HashSet::new();
         let max_pages = 5;
 
-        // Start with the current page (page 1)
         let page_edits = self.extract_scrobble_edits_from_page(
             &document,
             track_name,
@@ -918,13 +738,11 @@ impl LastFmEditClientImpl {
             all_scrobble_edits.len()
         );
 
-        // Check for additional pages
         let pagination_selector = Selector::parse(".pagination .pagination-next").unwrap();
         let mut has_next_page = document.select(&pagination_selector).next().is_some();
         let mut page = 2;
 
         while has_next_page && page <= max_pages {
-            // For pagination, we need to remove +noredirect and add page parameter
             let page_url = {
                 let session = self.session.lock().unwrap();
                 format!(
@@ -957,7 +775,6 @@ impl LastFmEditClientImpl {
             all_scrobble_edits.extend(page_edits);
             let found_new_unique_albums = all_scrobble_edits.len() > initial_count;
 
-            // Check if there's another next page
             has_next_page = document.select(&pagination_selector).next().is_some();
 
             log::debug!(
@@ -970,8 +787,6 @@ impl LastFmEditClientImpl {
                 }
             );
 
-            // Continue to next page even if no new unique albums found on this page,
-            // as long as there are more pages available
             page += 1;
         }
 
@@ -989,8 +804,6 @@ impl LastFmEditClientImpl {
         Ok(all_scrobble_edits)
     }
 
-    /// Extract scrobble edit data directly from track page forms. Based on the
-    /// approach used in lastfm-bulk-edit
     fn extract_scrobble_edits_from_page(
         &self,
         document: &Html,
@@ -999,27 +812,22 @@ impl LastFmEditClientImpl {
         unique_albums: &mut std::collections::HashSet<(String, String)>,
     ) -> Result<Vec<ExactScrobbleEdit>> {
         let mut scrobble_edits = Vec::new();
-        // Look for the chartlist table that contains scrobbles
         let table_selector =
             Selector::parse("table.chartlist:not(.chartlist__placeholder)").unwrap();
         let table = document.select(&table_selector).next().ok_or_else(|| {
             crate::LastFmError::Parse("No chartlist table found on track page".to_string())
         })?;
 
-        // Look for table rows that contain scrobble edit forms
         let row_selector = Selector::parse("tr").unwrap();
         for row in table.select(&row_selector) {
-            // Check if this row has a count bar link (means it's an aggregation, not individual scrobbles)
             let count_bar_link_selector = Selector::parse(".chartlist-count-bar-link").unwrap();
             if row.select(&count_bar_link_selector).next().is_some() {
                 log::debug!("Found count bar link, skipping aggregated row");
                 continue;
             }
 
-            // Look for scrobble edit form in this row
             let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
             if let Some(form) = row.select(&form_selector).next() {
-                // Extract all form values directly
                 let extract_form_value = |name: &str| -> Option<String> {
                     let selector = Selector::parse(&format!("input[name='{name}']")).unwrap();
                     form.select(&selector)
@@ -1028,7 +836,6 @@ impl LastFmEditClientImpl {
                         .map(|s| s.to_string())
                 };
 
-                // Get the track and artist from this form
                 let form_track = extract_form_value("track_name").unwrap_or_default();
                 let form_artist = extract_form_value("artist_name").unwrap_or_default();
                 let form_album = extract_form_value("album_name").unwrap_or_default();
@@ -1036,16 +843,9 @@ impl LastFmEditClientImpl {
                     extract_form_value("album_artist_name").unwrap_or_else(|| form_artist.clone());
                 let form_timestamp = extract_form_value("timestamp").unwrap_or_default();
 
-                log::debug!(
-                    "Found scrobble form - Track: '{form_track}', Artist: '{form_artist}', Album: '{form_album}', Timestamp: {form_timestamp}"
-                );
-
-                // Check if this form matches the expected track and artist
                 if form_track == expected_track && form_artist == expected_artist {
-                    // Create a unique key for this album/album_artist combination
                     let album_key = (form_album.clone(), form_album_artist.clone());
                     if unique_albums.insert(album_key) {
-                        // Parse timestamp - skip entries without valid timestamps for ExactScrobbleEdit
                         let timestamp = if form_timestamp.is_empty() {
                             None
                         } else {
@@ -1053,11 +853,6 @@ impl LastFmEditClientImpl {
                         };
 
                         if let Some(timestamp) = timestamp {
-                            log::debug!(
-                                "✅ Found unique album variation: '{form_album}' by '{form_album_artist}' for '{expected_track}' by '{expected_artist}'"
-                            );
-
-                            // Create ExactScrobbleEdit with all fields specified
                             let scrobble_edit = ExactScrobbleEdit::new(
                                 form_track.clone(),
                                 form_album.clone(),
@@ -1072,8 +867,8 @@ impl LastFmEditClientImpl {
                             );
                             scrobble_edits.push(scrobble_edit);
                         } else {
-                            log::debug!(
-                                "⚠️ Skipping album variation without valid timestamp: '{form_album}' by '{form_album_artist}'"
+                            log::warn!(
+                                "⚠️ Skipping form without valid timestamp: '{form_album}' by '{form_album_artist}'"
                             );
                         }
                     }
@@ -1085,7 +880,6 @@ impl LastFmEditClientImpl {
     }
 
     pub async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
-        // Use AJAX endpoint for page content
         let url = {
             let session = self.session.lock().unwrap();
             format!(
@@ -1115,7 +909,6 @@ impl LastFmEditClientImpl {
         self.parser.parse_tracks_page(&document, page, artist, None)
     }
 
-    /// Extract tracks from HTML document (delegates to parser)
     pub fn extract_tracks_from_document(
         &self,
         document: &Html,
@@ -1126,7 +919,6 @@ impl LastFmEditClientImpl {
             .extract_tracks_from_document(document, artist, album)
     }
 
-    /// Parse tracks page (delegates to parser)
     pub fn parse_tracks_page(
         &self,
         document: &Html,
@@ -1138,7 +930,6 @@ impl LastFmEditClientImpl {
             .parse_tracks_page(document, page_number, artist, album)
     }
 
-    /// Parse recent scrobbles from HTML document (for testing)
     pub fn parse_recent_scrobbles(&self, document: &Html) -> Result<Vec<Track>> {
         self.parser.parse_recent_scrobbles(document)
     }
@@ -1154,12 +945,10 @@ impl LastFmEditClientImpl {
             .ok_or(LastFmError::CsrfNotFound)
     }
 
-    /// Make an HTTP GET request with authentication and retry logic
     pub async fn get(&self, url: &str) -> Result<Response> {
         self.get_with_retry(url).await
     }
 
-    /// Make an HTTP GET request with retry logic for rate limits
     async fn get_with_retry(&self, url: &str) -> Result<Response> {
         let config = self.config.retry.clone();
 
@@ -1172,18 +961,15 @@ impl LastFmEditClientImpl {
             || async {
                 let mut response = client.get_with_redirects(&url_string, 0).await?;
 
-                // Extract body and save debug info if enabled
                 let body = client
                     .extract_response_body(&url_string, &mut response)
                     .await?;
 
-                // Check for rate limit patterns in successful responses
                 if response.status().is_success() && client.is_rate_limit_response(&body) {
                     log::debug!("Response body contains rate limit patterns");
                     return Err(LastFmError::RateLimit { retry_after: 60 });
                 }
 
-                // Recreate response with the body we extracted
                 let mut new_response = http_types::Response::new(response.status());
                 for (name, values) in response.iter() {
                     for value in values {
@@ -1215,7 +1001,6 @@ impl LastFmEditClientImpl {
 
         let mut request = Request::new(Method::Get, url.parse::<Url>().unwrap());
 
-        // Add session cookies for all authenticated requests
         {
             let session = self.session.lock().unwrap();
             headers::add_cookies(&mut request, &session.cookies);
@@ -1252,10 +1037,8 @@ impl LastFmEditClientImpl {
             duration_ms: request_start.elapsed().as_millis() as u64,
         });
 
-        // Extract any new cookies from the response
         self.extract_cookies(&response);
 
-        // Handle redirects manually
         if response.status() == 302 || response.status() == 301 {
             if let Some(location) = response.header("location") {
                 if let Some(redirect_url) = location.get(0) {
@@ -1263,7 +1046,6 @@ impl LastFmEditClientImpl {
                     if url.contains("page=") {
                         log::debug!("Following redirect from {url} to {redirect_url_str}");
 
-                        // Check if this is a redirect to login - authentication issue
                         if redirect_url_str.contains("/login") {
                             log::debug!("Redirect to login page - authentication failed for paginated request");
                             return Err(LastFmError::Auth(
@@ -1272,14 +1054,12 @@ impl LastFmEditClientImpl {
                         }
                     }
 
-                    // Handle relative URLs
                     let full_redirect_url = if redirect_url_str.starts_with('/') {
                         let base_url = self.session.lock().unwrap().base_url.clone();
                         format!("{base_url}{redirect_url_str}")
                     } else if redirect_url_str.starts_with("http") {
                         redirect_url_str.to_string()
                     } else {
-                        // Relative to current path
                         let base_url = url
                             .rsplit('/')
                             .skip(1)
@@ -1291,7 +1071,6 @@ impl LastFmEditClientImpl {
                         format!("{base_url}/{redirect_url_str}")
                     };
 
-                    // Make a new request to the redirect URL
                     return Box::pin(
                         self.get_with_redirects(&full_redirect_url, redirect_count + 1),
                     )
@@ -1300,7 +1079,6 @@ impl LastFmEditClientImpl {
             }
         }
 
-        // Handle explicit rate limit responses
         if self.config.rate_limit.detect_by_status && response.status() == 429 {
             let retry_after = response
                 .header("retry-after")
@@ -1315,10 +1093,8 @@ impl LastFmEditClientImpl {
             return Err(LastFmError::RateLimit { retry_after });
         }
 
-        // Check for 403 responses that might be rate limits
         if self.config.rate_limit.detect_by_status && response.status() == 403 {
             log::debug!("Got 403 response, checking if it's a rate limit");
-            // For now, treat 403s from authenticated endpoints as potential rate limits
             {
                 let session = self.session.lock().unwrap();
                 if !session.cookies.is_empty() {
@@ -1336,25 +1112,21 @@ impl LastFmEditClientImpl {
         Ok(response)
     }
 
-    /// Check if a response body indicates rate limiting
     fn is_rate_limit_response(&self, response_body: &str) -> bool {
         let rate_limit_config = &self.config.rate_limit;
 
-        // If all pattern detection is disabled, return false
         if !rate_limit_config.detect_by_patterns && rate_limit_config.custom_patterns.is_empty() {
             return false;
         }
 
         let body_lower = response_body.to_lowercase();
 
-        // Check against custom patterns first
         for pattern in &rate_limit_config.custom_patterns {
             if body_lower.contains(&pattern.to_lowercase()) {
                 return true;
             }
         }
 
-        // Check against default rate limit patterns if enabled
         if rate_limit_config.detect_by_patterns {
             for pattern in &rate_limit_config.default_patterns {
                 if body_lower.contains(&pattern.to_lowercase()) {
@@ -1371,7 +1143,6 @@ impl LastFmEditClientImpl {
         extract_cookies_from_response(response, &mut session.cookies);
     }
 
-    /// Extract response body, optionally saving debug info
     async fn extract_response_body(&self, _url: &str, response: &mut Response) -> Result<String> {
         let body = response
             .body_string()
@@ -1382,7 +1153,6 @@ impl LastFmEditClientImpl {
     }
 
     pub async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
-        // Use AJAX endpoint for page content
         let url = {
             let session = self.session.lock().unwrap();
             format!(
@@ -1469,7 +1239,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
         let album_name = edit.album_name_original.clone();
 
         match (&track_name, &album_name) {
-            // Case 1: Track+Album specified - exact match lookup
             (Some(track_name), Some(album_name)) => Box::new(crate::ExactMatchDiscovery::new(
                 self.clone(),
                 edit,
@@ -1477,21 +1246,18 @@ impl LastFmEditClient for LastFmEditClientImpl {
                 album_name.clone(),
             )),
 
-            // Case 2: Track-specific discovery (discover all album variations of a specific track)
             (Some(track_name), None) => Box::new(crate::TrackVariationsDiscovery::new(
                 self.clone(),
                 edit,
                 track_name.clone(),
             )),
 
-            // Case 3: Album-specific discovery (discover all tracks in a specific album)
             (None, Some(album_name)) => Box::new(crate::AlbumTracksDiscovery::new(
                 self.clone(),
                 edit,
                 album_name.clone(),
             )),
 
-            // Case 4: Artist-specific discovery (discover all tracks by an artist)
             (None, None) => Box::new(crate::ArtistTracksDiscovery::new(self.clone(), edit)),
         }
     }
