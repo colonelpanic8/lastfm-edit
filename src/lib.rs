@@ -245,6 +245,7 @@ pub use r#trait::LastFmEditClient;
 pub use edit::{EditResponse, ExactScrobbleEdit, ScrobbleEdit, SingleEditResponse};
 pub use error::LastFmError;
 pub use iterator::AsyncPaginatedIterator;
+pub use retry::{ClientConfig, RateLimitConfig, RetryConfig};
 
 // Type aliases for iterators with the concrete client type
 pub type ArtistTracksIterator = iterator::ArtistTracksIterator<LastFmEditClientImpl>;

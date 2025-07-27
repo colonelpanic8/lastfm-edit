@@ -7,7 +7,7 @@ use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
-use crate::retry::{self, RetryConfig};
+use crate::retry::{self, ClientConfig, RateLimitConfig, RetryConfig};
 use crate::session::LastFmEditSession;
 use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
 use async_trait::async_trait;
@@ -25,9 +25,9 @@ use std::sync::{Arc, Mutex};
 pub struct LastFmEditClientImpl {
     client: Arc<dyn HttpClient + Send + Sync>,
     session: Arc<Mutex<LastFmEditSession>>,
-    rate_limit_patterns: Vec<String>,
     parser: LastFmParser,
     broadcaster: Arc<SharedEventBroadcaster>,
+    config: ClientConfig,
 }
 
 impl LastFmEditClientImpl {
@@ -76,13 +76,10 @@ impl LastFmEditClientImpl {
         session: LastFmEditSession,
         rate_limit_patterns: Vec<String>,
     ) -> Self {
-        Self {
-            client: Arc::from(client),
-            session: Arc::new(Mutex::new(session)),
-            rate_limit_patterns,
-            parser: LastFmParser::new(),
-            broadcaster: Arc::new(SharedEventBroadcaster::new()),
-        }
+        let config = ClientConfig::default().with_rate_limit_config(
+            RateLimitConfig::default().with_default_patterns(rate_limit_patterns),
+        );
+        Self::from_session_with_client_config(client, session, config)
     }
 
     /// Create a new authenticated [`LastFmEditClient`] by logging in with username and password.
@@ -111,6 +108,106 @@ impl LastFmEditClientImpl {
         Ok(Self::from_session_with_arc(client_arc, session))
     }
 
+    /// Create a new [`LastFmEditClient`] from a session with custom configuration.
+    ///
+    /// This constructor provides the most flexible configuration options.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `session` - A valid authenticated session
+    /// * `config` - Complete client configuration including retry and rate limit settings
+    ///
+    pub fn from_session_with_client_config(
+        client: Box<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+        config: ClientConfig,
+    ) -> Self {
+        Self::from_session_with_client_config_arc(Arc::from(client), session, config)
+    }
+
+    /// Create a new authenticated [`LastFmEditClient`] with custom configuration by logging in.
+    ///
+    /// This convenience method combines login and client creation with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `username` - Last.fm username or email
+    /// * `password` - Last.fm password
+    /// * `config` - Complete client configuration including retry and rate limit settings
+    ///
+    pub async fn login_with_credentials_and_client_config(
+        client: Box<dyn HttpClient + Send + Sync>,
+        username: &str,
+        password: &str,
+        config: ClientConfig,
+    ) -> Result<Self> {
+        let client_arc: Arc<dyn HttpClient + Send + Sync> = Arc::from(client);
+        let login_manager =
+            crate::login::LoginManager::new(client_arc.clone(), "https://www.last.fm".to_string());
+        let session = login_manager.login(username, password).await?;
+        Ok(Self::from_session_with_client_config_arc(
+            client_arc, session, config,
+        ))
+    }
+
+    /// Create a new [`LastFmEditClient`] from a session with custom retry and rate limit configuration.
+    ///
+    /// This constructor allows full control over retry behavior and rate limit detection.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `session` - A valid authenticated session
+    /// * `retry_config` - Configuration for retry behavior
+    /// * `rate_limit_config` - Configuration for rate limit detection
+    ///
+    pub fn from_session_with_config(
+        client: Box<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+        retry_config: RetryConfig,
+        rate_limit_config: RateLimitConfig,
+    ) -> Self {
+        Self::from_session_with_config_arc(
+            Arc::from(client),
+            session,
+            retry_config,
+            rate_limit_config,
+        )
+    }
+
+    /// Create a new authenticated [`LastFmEditClient`] with custom configuration by logging in.
+    ///
+    /// This convenience method combines login and client creation with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - Any HTTP client implementation
+    /// * `username` - Last.fm username or email
+    /// * `password` - Last.fm password
+    /// * `retry_config` - Configuration for retry behavior
+    /// * `rate_limit_config` - Configuration for rate limit detection
+    ///
+    pub async fn login_with_credentials_and_config(
+        client: Box<dyn HttpClient + Send + Sync>,
+        username: &str,
+        password: &str,
+        retry_config: RetryConfig,
+        rate_limit_config: RateLimitConfig,
+    ) -> Result<Self> {
+        let client_arc: Arc<dyn HttpClient + Send + Sync> = Arc::from(client);
+        let login_manager =
+            crate::login::LoginManager::new(client_arc.clone(), "https://www.last.fm".to_string());
+        let session = login_manager.login(username, password).await?;
+        Ok(Self::from_session_with_config_arc(
+            client_arc,
+            session,
+            retry_config,
+            rate_limit_config,
+        ))
+    }
+
     /// Create a new [`LastFmEditClient`] from a session with a shared broadcaster.
     ///
     /// This allows you to create multiple clients that share the same event broadcasting system.
@@ -133,35 +230,61 @@ impl LastFmEditClientImpl {
         Self::from_session_with_broadcaster_arc(Arc::from(client), session, broadcaster)
     }
 
+    /// Internal helper for creating client with Arc and ClientConfig
+    fn from_session_with_client_config_arc(
+        client: Arc<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+        config: ClientConfig,
+    ) -> Self {
+        Self::from_session_with_client_config_and_broadcaster_arc(
+            client,
+            session,
+            config,
+            Arc::new(SharedEventBroadcaster::new()),
+        )
+    }
+
+    /// Internal helper for creating client with Arc and custom configuration
+    fn from_session_with_config_arc(
+        client: Arc<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+        retry_config: RetryConfig,
+        rate_limit_config: RateLimitConfig,
+    ) -> Self {
+        let config = ClientConfig {
+            retry: retry_config,
+            rate_limit: rate_limit_config,
+        };
+        Self::from_session_with_client_config_arc(client, session, config)
+    }
+
     /// Internal helper for creating client with Arc and broadcaster
     fn from_session_with_broadcaster_arc(
         client: Arc<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
         broadcaster: Arc<SharedEventBroadcaster>,
     ) -> Self {
+        Self::from_session_with_client_config_and_broadcaster_arc(
+            client,
+            session,
+            ClientConfig::default(),
+            broadcaster,
+        )
+    }
+
+    /// Internal helper for creating client with Arc, ClientConfig, and broadcaster
+    fn from_session_with_client_config_and_broadcaster_arc(
+        client: Arc<dyn HttpClient + Send + Sync>,
+        session: LastFmEditSession,
+        config: ClientConfig,
+        broadcaster: Arc<SharedEventBroadcaster>,
+    ) -> Self {
         Self {
             client,
             session: Arc::new(Mutex::new(session)),
-            rate_limit_patterns: vec![
-                "you've tried to log in too many times".to_string(),
-                "you're requesting too many pages".to_string(),
-                "slow down".to_string(),
-                "too fast".to_string(),
-                "rate limit".to_string(),
-                "throttled".to_string(),
-                "temporarily blocked".to_string(),
-                "temporarily restricted".to_string(),
-                "captcha".to_string(),
-                "verify you're human".to_string(),
-                "prove you're not a robot".to_string(),
-                "security check".to_string(),
-                "service temporarily unavailable".to_string(),
-                "quota exceeded".to_string(),
-                "limit exceeded".to_string(),
-                "daily limit".to_string(),
-            ],
             parser: LastFmParser::new(),
             broadcaster,
+            config,
         }
     }
 
@@ -248,6 +371,7 @@ impl LastFmEditClientImpl {
             max_retries: 3,
             base_delay: 5,
             max_delay: 300,
+            enabled: true,
         };
 
         let artist_name = artist_name.to_string();
@@ -572,6 +696,7 @@ impl LastFmEditClientImpl {
             max_retries,
             base_delay: 5,
             max_delay: 300,
+            enabled: true,
         };
 
         let edit_clone = exact_edit.clone();
@@ -1031,16 +1156,12 @@ impl LastFmEditClientImpl {
 
     /// Make an HTTP GET request with authentication and retry logic
     pub async fn get(&self, url: &str) -> Result<Response> {
-        self.get_with_retry(url, 3).await
+        self.get_with_retry(url).await
     }
 
     /// Make an HTTP GET request with retry logic for rate limits
-    async fn get_with_retry(&self, url: &str, max_retries: u32) -> Result<Response> {
-        let config = RetryConfig {
-            max_retries,
-            base_delay: 30, // Longer base delay for GET requests
-            max_delay: 300,
-        };
+    async fn get_with_retry(&self, url: &str) -> Result<Response> {
+        let config = self.config.retry.clone();
 
         let url_string = url.to_string();
         let client = self.clone();
@@ -1180,7 +1301,7 @@ impl LastFmEditClientImpl {
         }
 
         // Handle explicit rate limit responses
-        if response.status() == 429 {
+        if self.config.rate_limit.detect_by_status && response.status() == 429 {
             let retry_after = response
                 .header("retry-after")
                 .and_then(|h| h.get(0))
@@ -1195,7 +1316,7 @@ impl LastFmEditClientImpl {
         }
 
         // Check for 403 responses that might be rate limits
-        if response.status() == 403 {
+        if self.config.rate_limit.detect_by_status && response.status() == 403 {
             log::debug!("Got 403 response, checking if it's a rate limit");
             // For now, treat 403s from authenticated endpoints as potential rate limits
             {
@@ -1217,12 +1338,28 @@ impl LastFmEditClientImpl {
 
     /// Check if a response body indicates rate limiting
     fn is_rate_limit_response(&self, response_body: &str) -> bool {
+        let rate_limit_config = &self.config.rate_limit;
+
+        // If all pattern detection is disabled, return false
+        if !rate_limit_config.detect_by_patterns && rate_limit_config.custom_patterns.is_empty() {
+            return false;
+        }
+
         let body_lower = response_body.to_lowercase();
 
-        // Check against configured rate limit patterns
-        for pattern in &self.rate_limit_patterns {
+        // Check against custom patterns first
+        for pattern in &rate_limit_config.custom_patterns {
             if body_lower.contains(&pattern.to_lowercase()) {
                 return true;
+            }
+        }
+
+        // Check against default rate limit patterns if enabled
+        if rate_limit_config.detect_by_patterns {
+            for pattern in &rate_limit_config.default_patterns {
+                if body_lower.contains(&pattern.to_lowercase()) {
+                    return true;
+                }
             }
         }
 
