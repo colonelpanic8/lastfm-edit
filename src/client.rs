@@ -49,9 +49,8 @@ impl LastFmEditClientImpl {
         session: LastFmEditSession,
         rate_limit_patterns: Vec<String>,
     ) -> Self {
-        let config = ClientConfig::default().with_rate_limit_config(
-            RateLimitConfig::default().with_default_patterns(rate_limit_patterns),
-        );
+        let config = ClientConfig::default()
+            .with_rate_limit_config(RateLimitConfig::default().with_patterns(rate_limit_patterns));
         Self::from_session_with_client_config(client, session, config)
     }
 
@@ -1128,7 +1127,7 @@ impl LastFmEditClientImpl {
         }
 
         if rate_limit_config.detect_by_patterns {
-            for pattern in &rate_limit_config.default_patterns {
+            for pattern in &rate_limit_config.patterns {
                 if body_lower.contains(&pattern.to_lowercase()) {
                     return true;
                 }

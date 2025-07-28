@@ -8,8 +8,8 @@ pub struct RateLimitConfig {
     pub detect_by_status: bool,
     /// Whether to detect rate limits by response body patterns
     pub detect_by_patterns: bool,
-    /// Default patterns to look for in response bodies (used when detect_by_patterns is true)
-    pub default_patterns: Vec<String>,
+    /// Patterns to look for in response bodies (used when detect_by_patterns is true)
+    pub patterns: Vec<String>,
     /// Additional custom patterns to look for in response bodies
     pub custom_patterns: Vec<String>,
 }
@@ -19,7 +19,7 @@ impl Default for RateLimitConfig {
         Self {
             detect_by_status: true,
             detect_by_patterns: true,
-            default_patterns: vec![
+            patterns: vec![
                 "you've tried to log in too many times".to_string(),
                 "you're requesting too many pages".to_string(),
                 "slow down".to_string(),
@@ -48,7 +48,7 @@ impl RateLimitConfig {
         Self {
             detect_by_status: false,
             detect_by_patterns: false,
-            default_patterns: vec![],
+            patterns: vec![],
             custom_patterns: vec![],
         }
     }
@@ -58,7 +58,7 @@ impl RateLimitConfig {
         Self {
             detect_by_status: true,
             detect_by_patterns: false,
-            default_patterns: vec![],
+            patterns: vec![],
             custom_patterns: vec![],
         }
     }
@@ -77,7 +77,7 @@ impl RateLimitConfig {
         Self {
             detect_by_status: false,
             detect_by_patterns: false,
-            default_patterns: vec![],
+            patterns: vec![],
             custom_patterns: patterns,
         }
     }
@@ -88,9 +88,9 @@ impl RateLimitConfig {
         self
     }
 
-    /// Create config with custom default patterns (replaces built-in defaults)
-    pub fn with_default_patterns(mut self, patterns: Vec<String>) -> Self {
-        self.default_patterns = patterns;
+    /// Create config with custom patterns (replaces built-in patterns)
+    pub fn with_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.patterns = patterns;
         self
     }
 }
