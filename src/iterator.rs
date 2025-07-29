@@ -490,11 +490,12 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for AlbumTracksIterator<
     async fn next(&mut self) -> Result<Option<Track>> {
         // Load tracks if not already loaded
         if self.tracks.is_none() {
-            let tracks = self
+            // Use get_album_tracks_page instead of get_album_tracks to avoid infinite recursion
+            let tracks_page = self
                 .client
-                .get_album_tracks(&self.album_name, &self.artist_name)
+                .get_album_tracks_page(&self.album_name, &self.artist_name, 1)
                 .await?;
-            self.tracks = Some(tracks);
+            self.tracks = Some(tracks_page.tracks);
         }
 
         // Return next track

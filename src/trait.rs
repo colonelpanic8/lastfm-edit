@@ -205,6 +205,14 @@ pub trait LastFmEditClient {
     /// Get a page of albums from the user's library for the specified artist.
     async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<crate::AlbumPage>;
 
+    /// Get a page of tracks from a specific album in the user's library.
+    async fn get_album_tracks_page(
+        &self,
+        album_name: &str,
+        artist_name: &str,
+        page: u32,
+    ) -> Result<crate::TrackPage>;
+
     /// Get a page of tracks from the user's recent listening history.
     async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage> {
         let tracks = self.get_recent_scrobbles(page).await?;

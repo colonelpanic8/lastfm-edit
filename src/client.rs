@@ -1180,6 +1180,43 @@ impl LastFmEditClientImpl {
         let document = Html::parse_document(&content);
         self.parser.parse_albums_page(&document, page, artist)
     }
+
+    pub async fn get_album_tracks_page(
+        &self,
+        album_name: &str,
+        artist_name: &str,
+        page: u32,
+    ) -> Result<TrackPage> {
+        let url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library/music/{}/{}/+tracks?page={}&ajax=true",
+                session.base_url,
+                session.username,
+                artist_name.replace(" ", "+"),
+                album_name.replace(" ", "+"),
+                page
+            )
+        };
+
+        log::debug!("Fetching tracks page {page} for album '{album_name}' by '{artist_name}'");
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!(
+            "AJAX response: {} status, {} chars",
+            response.status(),
+            content.len()
+        );
+
+        log::debug!("Parsing HTML response from AJAX endpoint");
+        let document = Html::parse_document(&content);
+        self.parser
+            .parse_tracks_page(&document, page, artist_name, Some(album_name))
+    }
 }
 
 #[async_trait(?Send)]
@@ -1267,6 +1304,16 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
         self.get_artist_albums_page(artist, page).await
+    }
+
+    async fn get_album_tracks_page(
+        &self,
+        album_name: &str,
+        artist_name: &str,
+        page: u32,
+    ) -> Result<TrackPage> {
+        self.get_album_tracks_page(album_name, artist_name, page)
+            .await
     }
 
     fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator {
