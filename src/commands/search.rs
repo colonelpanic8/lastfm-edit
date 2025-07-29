@@ -1,6 +1,9 @@
 use crate::commands::SearchType;
 use crate::{LastFmEditClient, LastFmEditClientImpl};
 
+/// Number of items per page in Last.fm search results
+const ITEMS_PER_PAGE: usize = 30;
+
 /// Handle the search command for tracks or albums in the user's library
 pub async fn handle_search_command(
     client: &LastFmEditClientImpl,
@@ -10,9 +13,6 @@ pub async fn handle_search_command(
     offset: usize,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Assume 50 items per page (common Last.fm page size)
-    const ITEMS_PER_PAGE: usize = 50;
-
     // Calculate starting page and within-page offset
     let starting_page = if offset > 0 {
         (offset / ITEMS_PER_PAGE) + 1
