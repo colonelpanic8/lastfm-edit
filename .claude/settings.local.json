@@ -54,7 +54,10 @@
       "Bash(git rebase:*)",
       "Bash(if grep -q \"use lastfm_edit::\" \"$file\")",
       "Bash(! grep -q \"LastFmEditClient\" \"$file\")",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(RUST_LOG=debug direnv exec . cargo run --example test_album_tracks \"Radiohead\" \"In Rainbows\")",
+      "Bash(RUST_LOG=lastfm_edit=debug direnv exec . cargo run --example debug_album_url)",
+      "Bash(RUST_LOG=lastfm_edit=debug direnv exec . cargo run --example test_album_tracks \"Radiohead\" \"In Rainbows\")"
     ],
     "deny": []
   }

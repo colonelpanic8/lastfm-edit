@@ -1190,7 +1190,7 @@ impl LastFmEditClientImpl {
         let url = {
             let session = self.session.lock().unwrap();
             format!(
-                "{}/user/{}/library/music/{}/{}/+tracks?page={}&ajax=true",
+                "{}/user/{}/library/music/{}/{}?page={}&ajax=true",
                 session.base_url,
                 session.username,
                 artist_name.replace(" ", "+"),
