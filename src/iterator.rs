@@ -109,6 +109,14 @@ pub trait AsyncPaginatedIterator<T> {
     ///
     /// Returns the page number of the most recently fetched page.
     fn current_page(&self) -> u32;
+
+    /// Get the total number of pages, if known.
+    ///
+    /// Returns `Some(n)` if the total page count is known, `None` otherwise.
+    /// This information may not be available until at least one page has been fetched.
+    fn total_pages(&self) -> Option<u32> {
+        None // Default implementation returns None
+    }
 }
 
 /// Iterator for browsing an artist's tracks from a user's library.
@@ -159,6 +167,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for ArtistTracksIterator
 
     fn current_page(&self) -> u32 {
         self.current_page.saturating_sub(1)
+    }
+
+    fn total_pages(&self) -> Option<u32> {
+        self.total_pages
     }
 }
 
@@ -254,6 +266,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for ArtistAlbumsIterator
     fn current_page(&self) -> u32 {
         self.current_page.saturating_sub(1)
     }
+
+    fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
 }
 
 impl<C: LastFmEditClient> ArtistAlbumsIterator<C> {
@@ -323,7 +339,7 @@ impl<C: LastFmEditClient> ArtistAlbumsIterator<C> {
 ///
 /// // Or stop at a specific timestamp to avoid reprocessing
 /// let last_processed = 1640995200;
-/// let mut recent = client.recent_tracks().with_stop_timestamp(last_processed);
+/// let mut recent = lastfm_edit::RecentTracksIterator::new(client).with_stop_timestamp(last_processed);
 /// let new_tracks = recent.collect_all().await?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });
@@ -443,7 +459,7 @@ impl<C: LastFmEditClient> RecentTracksIterator<C> {
     /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
     /// let last_processed = 1640995200; // Some previous timestamp
     ///
-    /// let mut recent = client.recent_tracks().with_stop_timestamp(last_processed);
+    /// let mut recent = lastfm_edit::RecentTracksIterator::new(client).with_stop_timestamp(last_processed);
     /// let new_tracks = recent.collect_all().await?; // Only gets new tracks
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// # });
@@ -581,6 +597,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for SearchTracksIterator
     fn current_page(&self) -> u32 {
         self.current_page.saturating_sub(1)
     }
+
+    fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
 }
 
 impl<C: LastFmEditClient> SearchTracksIterator<C> {
@@ -691,6 +711,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for SearchAlbumsIterator
 
     fn current_page(&self) -> u32 {
         self.current_page.saturating_sub(1)
+    }
+
+    fn total_pages(&self) -> Option<u32> {
+        self.total_pages
     }
 }
 

@@ -1423,36 +1423,58 @@ impl LastFmEditClient for LastFmEditClientImpl {
             .await
     }
 
-    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator {
-        crate::ArtistTracksIterator::new(self.clone(), artist.to_string())
+    fn artist_tracks(&self, artist: &str) -> Box<dyn crate::AsyncPaginatedIterator<Track>> {
+        Box::new(crate::ArtistTracksIterator::new(
+            self.clone(),
+            artist.to_string(),
+        ))
     }
 
-    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator {
-        crate::ArtistAlbumsIterator::new(self.clone(), artist.to_string())
+    fn artist_albums(&self, artist: &str) -> Box<dyn crate::AsyncPaginatedIterator<crate::Album>> {
+        Box::new(crate::ArtistAlbumsIterator::new(
+            self.clone(),
+            artist.to_string(),
+        ))
     }
 
-    fn album_tracks(&self, album_name: &str, artist_name: &str) -> crate::AlbumTracksIterator {
-        crate::AlbumTracksIterator::new(
+    fn album_tracks(
+        &self,
+        album_name: &str,
+        artist_name: &str,
+    ) -> Box<dyn crate::AsyncPaginatedIterator<Track>> {
+        Box::new(crate::AlbumTracksIterator::new(
             self.clone(),
             album_name.to_string(),
             artist_name.to_string(),
-        )
+        ))
     }
 
-    fn recent_tracks(&self) -> crate::RecentTracksIterator {
-        crate::RecentTracksIterator::new(self.clone())
+    fn recent_tracks(&self) -> Box<dyn crate::AsyncPaginatedIterator<Track>> {
+        Box::new(crate::RecentTracksIterator::new(self.clone()))
     }
 
-    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator {
-        crate::RecentTracksIterator::with_starting_page(self.clone(), starting_page)
+    fn recent_tracks_from_page(
+        &self,
+        starting_page: u32,
+    ) -> Box<dyn crate::AsyncPaginatedIterator<Track>> {
+        Box::new(crate::RecentTracksIterator::with_starting_page(
+            self.clone(),
+            starting_page,
+        ))
     }
 
-    fn search_tracks(&self, query: &str) -> crate::SearchTracksIterator {
-        crate::SearchTracksIterator::new(self.clone(), query.to_string())
+    fn search_tracks(&self, query: &str) -> Box<dyn crate::AsyncPaginatedIterator<Track>> {
+        Box::new(crate::SearchTracksIterator::new(
+            self.clone(),
+            query.to_string(),
+        ))
     }
 
-    fn search_albums(&self, query: &str) -> crate::SearchAlbumsIterator {
-        crate::SearchAlbumsIterator::new(self.clone(), query.to_string())
+    fn search_albums(&self, query: &str) -> Box<dyn crate::AsyncPaginatedIterator<crate::Album>> {
+        Box::new(crate::SearchAlbumsIterator::new(
+            self.clone(),
+            query.to_string(),
+        ))
     }
 
     async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage> {

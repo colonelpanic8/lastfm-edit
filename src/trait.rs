@@ -2,7 +2,7 @@ use crate::edit::ExactScrobbleEdit;
 use crate::events::{ClientEvent, ClientEventReceiver};
 use crate::iterator::AsyncPaginatedIterator;
 use crate::session::LastFmEditSession;
-use crate::{EditResponse, LastFmError, Result, ScrobbleEdit, Track};
+use crate::{Album, EditResponse, LastFmError, Result, ScrobbleEdit, Track};
 use async_trait::async_trait;
 
 /// Trait for Last.fm client operations that can be mocked for testing.
@@ -167,19 +167,24 @@ pub trait LastFmEditClient {
     // =============================================================================
 
     /// Create an iterator for browsing an artist's tracks from the user's library.
-    fn artist_tracks(&self, artist: &str) -> crate::ArtistTracksIterator;
+    fn artist_tracks(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
 
     /// Create an iterator for browsing an artist's albums from the user's library.
-    fn artist_albums(&self, artist: &str) -> crate::ArtistAlbumsIterator;
+    fn artist_albums(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Album>>;
 
     /// Create an iterator for browsing tracks from a specific album.
-    fn album_tracks(&self, album_name: &str, artist_name: &str) -> crate::AlbumTracksIterator;
+    fn album_tracks(
+        &self,
+        album_name: &str,
+        artist_name: &str,
+    ) -> Box<dyn AsyncPaginatedIterator<Track>>;
 
     /// Create an iterator for browsing the user's recent tracks/scrobbles.
-    fn recent_tracks(&self) -> crate::RecentTracksIterator;
+    fn recent_tracks(&self) -> Box<dyn AsyncPaginatedIterator<Track>>;
 
     /// Create an iterator for browsing the user's recent tracks starting from a specific page.
-    fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
+    fn recent_tracks_from_page(&self, starting_page: u32)
+        -> Box<dyn AsyncPaginatedIterator<Track>>;
 
     /// Create an iterator for searching tracks in the user's library.
     ///
@@ -194,7 +199,7 @@ pub trait LastFmEditClient {
     /// # Returns
     ///
     /// Returns a `SearchTracksIterator` for streaming search results.
-    fn search_tracks(&self, query: &str) -> crate::SearchTracksIterator;
+    fn search_tracks(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
 
     /// Create an iterator for searching albums in the user's library.
     ///
@@ -209,7 +214,7 @@ pub trait LastFmEditClient {
     /// # Returns
     ///
     /// Returns a `SearchAlbumsIterator` for streaming search results.
-    fn search_albums(&self, query: &str) -> crate::SearchAlbumsIterator;
+    fn search_albums(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Album>>;
 
     // =============================================================================
     // SEARCH METHODS - Library search functionality

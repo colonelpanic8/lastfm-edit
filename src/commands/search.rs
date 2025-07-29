@@ -1,5 +1,5 @@
 use crate::commands::SearchType;
-use crate::{AsyncPaginatedIterator, LastFmEditClient, LastFmEditClientImpl};
+use crate::{LastFmEditClient, LastFmEditClientImpl};
 
 /// Handle the search command for tracks or albums in the user's library
 pub async fn handle_search_command(
@@ -12,7 +12,7 @@ pub async fn handle_search_command(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Assume 50 items per page (common Last.fm page size)
     const ITEMS_PER_PAGE: usize = 50;
-    
+
     // Calculate starting page and within-page offset
     let starting_page = if offset > 0 {
         (offset / ITEMS_PER_PAGE) + 1
@@ -20,7 +20,7 @@ pub async fn handle_search_command(
         1
     };
     let within_page_offset = offset % ITEMS_PER_PAGE;
-    
+
     if offset > 0 {
         println!(
             "🔍 Searching for {} containing '{}' (starting from #{})...",
@@ -46,38 +46,38 @@ pub async fn handle_search_command(
         SearchType::Tracks => {
             // Create iterator starting from the calculated page
             let mut search_iterator = if starting_page > 1 {
-                crate::iterator::SearchTracksIterator::with_starting_page(
+                Box::new(crate::iterator::SearchTracksIterator::with_starting_page(
                     client.clone(),
                     query.to_string(),
                     starting_page as u32,
-                )
+                ))
             } else {
                 client.search_tracks(query)
             };
-            
+
             let mut total_count = 0;
             let mut displayed_count = 0;
             let should_limit = limit > 0;
             let mut found_any = false;
-            
+
             // Process results incrementally
             while let Some(track) = search_iterator.next().await? {
                 total_count += 1;
-                
+
                 // Skip items until we reach the desired within-page offset
                 if total_count <= within_page_offset {
                     continue;
                 }
-                
+
                 // Mark that we found at least one result
                 if !found_any {
                     found_any = true;
                     println!(); // Add blank line before results
                 }
-                
+
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
-                
+
                 if verbose {
                     println!(
                         "{}. {} - {} (played {} time{})",
@@ -87,11 +87,11 @@ pub async fn handle_search_command(
                         track.playcount,
                         if track.playcount == 1 { "" } else { "s" }
                     );
-                    
+
                     if let Some(album) = &track.album {
                         println!("   Album: {album}");
                     }
-                    
+
                     if let Some(album_artist) = &track.album_artist {
                         if album_artist != &track.artist {
                             println!("   Album Artist: {album_artist}");
@@ -101,20 +101,21 @@ pub async fn handle_search_command(
                 } else {
                     println!("{}. {} - {}", display_number, track.artist, track.name);
                 }
-                
+
                 if should_limit && displayed_count >= limit {
                     break;
                 }
             }
-            
+
             if !found_any {
                 println!("❌ No tracks found matching '{query}'");
             } else {
-                println!("✅ Displayed {} track{}", 
+                println!(
+                    "✅ Displayed {} track{}",
                     displayed_count,
                     if displayed_count == 1 { "" } else { "s" }
                 );
-                
+
                 if offset > 0 {
                     println!("   (Starting from result #{})", offset + 1);
                 }
@@ -127,38 +128,38 @@ pub async fn handle_search_command(
         SearchType::Albums => {
             // Create iterator starting from the calculated page
             let mut search_iterator = if starting_page > 1 {
-                crate::iterator::SearchAlbumsIterator::with_starting_page(
+                Box::new(crate::iterator::SearchAlbumsIterator::with_starting_page(
                     client.clone(),
                     query.to_string(),
                     starting_page as u32,
-                )
+                ))
             } else {
                 client.search_albums(query)
             };
-            
+
             let mut total_count = 0;
             let mut displayed_count = 0;
             let should_limit = limit > 0;
             let mut found_any = false;
-            
+
             // Process results incrementally
             while let Some(album) = search_iterator.next().await? {
                 total_count += 1;
-                
+
                 // Skip items until we reach the desired within-page offset
                 if total_count <= within_page_offset {
                     continue;
                 }
-                
+
                 // Mark that we found at least one result
                 if !found_any {
                     found_any = true;
                     println!(); // Add blank line before results
                 }
-                
+
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
-                
+
                 if verbose {
                     println!(
                         "{}. {} - {} (played {} time{})",
@@ -172,20 +173,21 @@ pub async fn handle_search_command(
                 } else {
                     println!("{}. {} - {}", display_number, album.artist, album.name);
                 }
-                
+
                 if should_limit && displayed_count >= limit {
                     break;
                 }
             }
-            
+
             if !found_any {
                 println!("❌ No albums found matching '{query}'");
             } else {
-                println!("✅ Displayed {} album{}", 
+                println!(
+                    "✅ Displayed {} album{}",
                     displayed_count,
                     if displayed_count == 1 { "" } else { "s" }
                 );
-                
+
                 if offset > 0 {
                     println!("   (Starting from result #{})", offset + 1);
                 }
