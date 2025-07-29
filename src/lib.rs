@@ -252,6 +252,8 @@ pub type ArtistTracksIterator = iterator::ArtistTracksIterator<LastFmEditClientI
 pub type ArtistAlbumsIterator = iterator::ArtistAlbumsIterator<LastFmEditClientImpl>;
 pub type AlbumTracksIterator = iterator::AlbumTracksIterator<LastFmEditClientImpl>;
 pub type RecentTracksIterator = iterator::RecentTracksIterator<LastFmEditClientImpl>;
+pub type SearchTracksIterator = iterator::SearchTracksIterator<LastFmEditClientImpl>;
+pub type SearchAlbumsIterator = iterator::SearchAlbumsIterator<LastFmEditClientImpl>;
 #[cfg(feature = "mock")]
 pub use r#trait::MockLastFmEditClient;
 

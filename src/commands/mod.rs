@@ -1,10 +1,19 @@
 pub mod delete;
 pub mod edit;
+pub mod search;
 pub mod show;
 pub mod utils;
 
 use crate::LastFmEditClientImpl;
-use clap::{arg, Subcommand};
+use clap::{arg, Subcommand, ValueEnum};
+
+#[derive(ValueEnum, Clone)]
+pub enum SearchType {
+    /// Search for tracks
+    Tracks,
+    /// Search for albums
+    Albums,
+}
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -111,6 +120,45 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Search tracks and albums in your library
+    ///
+    /// This command allows you to search through your Last.fm library for tracks or albums
+    /// that match a specific query. You can limit the number of results and specify whether
+    /// to search for tracks or albums.
+    ///
+    /// Usage examples:
+    /// # Search for tracks containing "remaster"
+    /// lastfm-edit search tracks "remaster"
+    ///
+    /// # Search for first 20 albums containing "deluxe"
+    /// lastfm-edit search albums "deluxe" --limit 20
+    ///
+    /// # Search for tracks with unlimited results
+    /// lastfm-edit search tracks "live" --limit 0
+    ///
+    /// # Skip first 10 results and show next 20
+    /// lastfm-edit search tracks "live" --offset 10 --limit 20
+    Search {
+        /// Type of search: tracks or albums
+        #[arg(value_enum)]
+        search_type: SearchType,
+
+        /// Search query
+        query: String,
+
+        /// Maximum number of results to show (0 for no limit)
+        #[arg(long, default_value = "50")]
+        limit: usize,
+
+        /// Number of results to skip from the beginning (0-indexed)
+        #[arg(long, default_value = "0")]
+        offset: usize,
+
+        /// Show additional details like play counts
+        #[arg(long)]
+        verbose: bool,
+    },
+
     /// Show scrobble details for specific offsets
     ///
     /// This command displays detailed information for scrobbles at the specified
@@ -189,6 +237,16 @@ pub async fn execute_command(
                         .into(),
                 )
             }
+        }
+
+        Commands::Search {
+            search_type,
+            query,
+            limit,
+            offset,
+            verbose,
+        } => {
+            search::handle_search_command(client, search_type, &query, limit, offset, verbose).await
         }
 
         Commands::Show { offsets } => {

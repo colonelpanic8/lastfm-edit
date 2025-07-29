@@ -1217,6 +1217,113 @@ impl LastFmEditClientImpl {
         self.parser
             .parse_tracks_page(&document, page, artist_name, Some(album_name))
     }
+
+    /// Get a single page of track search results from the user's library
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of tracks that match the provided query string.
+    /// For iterator-based access, use the iterator methods instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "live", artist name, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `TrackPage` containing the search results with pagination information.
+    pub async fn search_tracks_page(&self, query: &str, page: u32) -> Result<TrackPage> {
+        let url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library/tracks/search?page={}&query={}&ajax=1",
+                session.base_url,
+                session.username,
+                page,
+                urlencoding::encode(query)
+            )
+        };
+
+        log::debug!("Searching tracks for query '{query}' on page {page}");
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!(
+            "Track search response: {} status, {} chars",
+            response.status(),
+            content.len()
+        );
+
+        let document = Html::parse_document(&content);
+        let tracks = self.parser.parse_track_search_results(&document)?;
+
+        // For search results, we need to determine pagination differently
+        // since we don't have the same pagination structure as regular library pages
+        let (has_next_page, total_pages) = self.parser.parse_pagination(&document, page)?;
+
+        Ok(TrackPage {
+            tracks,
+            page_number: page,
+            has_next_page,
+            total_pages,
+        })
+    }
+
+    /// Get a single page of album search results from the user's library
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of albums that match the provided query string.
+    /// For iterator-based access, use the iterator methods instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "deluxe", artist name, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns an `AlbumPage` containing the search results with pagination information.
+    pub async fn search_albums_page(&self, query: &str, page: u32) -> Result<AlbumPage> {
+        let url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library/albums/search?page={}&query={}&ajax=1",
+                session.base_url,
+                session.username,
+                page,
+                urlencoding::encode(query)
+            )
+        };
+
+        log::debug!("Searching albums for query '{query}' on page {page}");
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!(
+            "Album search response: {} status, {} chars",
+            response.status(),
+            content.len()
+        );
+
+        let document = Html::parse_document(&content);
+        let albums = self.parser.parse_album_search_results(&document)?;
+
+        // For search results, we need to determine pagination differently
+        let (has_next_page, total_pages) = self.parser.parse_pagination(&document, page)?;
+
+        Ok(AlbumPage {
+            albums,
+            page_number: page,
+            has_next_page,
+            total_pages,
+        })
+    }
 }
 
 #[async_trait(?Send)]
@@ -1338,6 +1445,22 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator {
         crate::RecentTracksIterator::with_starting_page(self.clone(), starting_page)
+    }
+
+    fn search_tracks(&self, query: &str) -> crate::SearchTracksIterator {
+        crate::SearchTracksIterator::new(self.clone(), query.to_string())
+    }
+
+    fn search_albums(&self, query: &str) -> crate::SearchAlbumsIterator {
+        crate::SearchAlbumsIterator::new(self.clone(), query.to_string())
+    }
+
+    async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage> {
+        self.search_tracks_page(query, page).await
+    }
+
+    async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage> {
+        self.search_albums_page(query, page).await
     }
 
     async fn validate_session(&self) -> bool {

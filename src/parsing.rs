@@ -419,6 +419,154 @@ impl LastFmParser {
         })
     }
 
+    // === SEARCH RESULTS PARSING ===
+
+    /// Parse track search results from AJAX response
+    ///
+    /// This parses the HTML returned by `/user/{username}/library/tracks/search?ajax=1&query={query}`
+    /// which contains chartlist tables with track results.
+    pub fn parse_track_search_results(&self, document: &Html) -> Result<Vec<Track>> {
+        let mut tracks = Vec::new();
+
+        // Search results use the same chartlist structure as library pages
+        let table_selector = Selector::parse("table.chartlist").unwrap();
+        let row_selector = Selector::parse("tbody tr").unwrap();
+
+        let tables: Vec<_> = document.select(&table_selector).collect();
+        log::debug!("Found {} chartlist tables in search results", tables.len());
+
+        for table in tables {
+            for row in table.select(&row_selector) {
+                if let Ok(track) = self.parse_search_track_row(&row) {
+                    tracks.push(track);
+                }
+            }
+        }
+
+        log::debug!("Parsed {} tracks from search results", tracks.len());
+        Ok(tracks)
+    }
+
+    /// Parse album search results from AJAX response
+    ///
+    /// This parses the HTML returned by `/user/{username}/library/albums/search?ajax=1&query={query}`
+    /// which contains chartlist tables with album results.
+    pub fn parse_album_search_results(&self, document: &Html) -> Result<Vec<Album>> {
+        let mut albums = Vec::new();
+
+        // Search results use the same chartlist structure as library pages
+        let table_selector = Selector::parse("table.chartlist").unwrap();
+        let row_selector = Selector::parse("tbody tr").unwrap();
+
+        let tables: Vec<_> = document.select(&table_selector).collect();
+        log::debug!(
+            "Found {} chartlist tables in album search results",
+            tables.len()
+        );
+
+        for table in tables {
+            for row in table.select(&row_selector) {
+                if let Ok(album) = self.parse_search_album_row(&row) {
+                    albums.push(album);
+                }
+            }
+        }
+
+        log::debug!("Parsed {} albums from search results", albums.len());
+        Ok(albums)
+    }
+
+    /// Parse a single track row from search results
+    fn parse_search_track_row(&self, row: &scraper::ElementRef) -> Result<Track> {
+        // Extract track name using the standard chartlist structure
+        let name = self.extract_name_from_row(row, "track")?;
+
+        // Extract artist name from chartlist-artist column
+        let artist_selector = Selector::parse(".chartlist-artist a").unwrap();
+        let artist = row
+            .select(&artist_selector)
+            .next()
+            .map(|el| el.text().collect::<String>().trim().to_string())
+            .ok_or_else(|| {
+                LastFmError::Parse("Missing artist name in search results".to_string())
+            })?;
+
+        // Extract playcount from the bar value
+        let playcount = self.extract_playcount_from_row(row);
+
+        // Search results typically don't have timestamps since they're aggregated
+        let timestamp = None;
+
+        // Try to extract album information if available in the search results
+        let album = self.extract_album_from_search_row(row);
+        let album_artist = self.extract_album_artist_from_search_row(row);
+
+        Ok(Track {
+            name,
+            artist,
+            playcount,
+            timestamp,
+            album,
+            album_artist,
+        })
+    }
+
+    /// Parse a single album row from search results
+    fn parse_search_album_row(&self, row: &scraper::ElementRef) -> Result<Album> {
+        // Extract album name using the standard chartlist structure
+        let name = self.extract_name_from_row(row, "album")?;
+
+        // Extract artist name from chartlist-artist column
+        let artist_selector = Selector::parse(".chartlist-artist a").unwrap();
+        let artist = row
+            .select(&artist_selector)
+            .next()
+            .map(|el| el.text().collect::<String>().trim().to_string())
+            .ok_or_else(|| {
+                LastFmError::Parse("Missing artist name in album search results".to_string())
+            })?;
+
+        // Extract playcount from the bar value
+        let playcount = self.extract_playcount_from_row(row);
+
+        Ok(Album {
+            name,
+            artist,
+            playcount,
+            timestamp: None, // Search results don't have timestamps
+        })
+    }
+
+    /// Extract album information from search track row
+    fn extract_album_from_search_row(&self, row: &scraper::ElementRef) -> Option<String> {
+        // Look for album information in hidden form inputs (similar to recent scrobbles)
+        let album_input_selector = Selector::parse("input[name='album']").unwrap();
+        if let Some(input) = row.select(&album_input_selector).next() {
+            if let Some(value) = input.value().attr("value") {
+                let album = value.trim().to_string();
+                if !album.is_empty() {
+                    return Some(album);
+                }
+            }
+        }
+        None
+    }
+
+    /// Extract album artist information from search track row
+    fn extract_album_artist_from_search_row(&self, row: &scraper::ElementRef) -> Option<String> {
+        // Look for album artist information in hidden form inputs
+        let album_artist_input_selector = Selector::parse("input[name='album_artist']").unwrap();
+        if let Some(input) = row.select(&album_artist_input_selector).next() {
+            if let Some(value) = input.value().attr("value") {
+                let album_artist = value.trim().to_string();
+                if !album_artist.is_empty() {
+                    return Some(album_artist);
+                }
+            }
+        }
+        None
+    }
+
     // === SHARED PARSING UTILITIES ===
 
     /// Extract name from chartlist row (works for both tracks and albums)

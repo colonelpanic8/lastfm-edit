@@ -181,6 +181,72 @@ pub trait LastFmEditClient {
     /// Create an iterator for browsing the user's recent tracks starting from a specific page.
     fn recent_tracks_from_page(&self, starting_page: u32) -> crate::RecentTracksIterator;
 
+    /// Create an iterator for searching tracks in the user's library.
+    ///
+    /// This returns an iterator that uses Last.fm's library search functionality
+    /// to find tracks matching the provided query string. The iterator handles
+    /// pagination automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "live", artist name, etc.)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `SearchTracksIterator` for streaming search results.
+    fn search_tracks(&self, query: &str) -> crate::SearchTracksIterator;
+
+    /// Create an iterator for searching albums in the user's library.
+    ///
+    /// This returns an iterator that uses Last.fm's library search functionality
+    /// to find albums matching the provided query string. The iterator handles
+    /// pagination automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "deluxe", artist name, etc.)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `SearchAlbumsIterator` for streaming search results.
+    fn search_albums(&self, query: &str) -> crate::SearchAlbumsIterator;
+
+    // =============================================================================
+    // SEARCH METHODS - Library search functionality
+    // =============================================================================
+
+    /// Get a single page of track search results from the user's library.
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of tracks that match the provided query string.
+    /// For iterator-based access, use [`search_tracks`](Self::search_tracks) instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "live", artist name, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `TrackPage` containing the search results with pagination information.
+    async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage>;
+
+    /// Get a single page of album search results from the user's library.
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of albums that match the provided query string.
+    /// For iterator-based access, use [`search_albums`](Self::search_albums) instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "deluxe", artist name, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns an `AlbumPage` containing the search results with pagination information.
+    async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage>;
+
     // =============================================================================
     // CORE DATA METHODS - Essential data access
     // =============================================================================

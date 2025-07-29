@@ -532,3 +532,224 @@ impl<C: LastFmEditClient> AlbumTracksIterator<C> {
         }
     }
 }
+
+/// Iterator for searching tracks in the user's library.
+///
+/// This iterator provides paginated access to tracks that match a search query
+/// in the authenticated user's Last.fm library, using Last.fm's built-in search functionality.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
+/// # tokio_test::block_on(async {
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
+///
+/// let mut search_results = client.search_tracks("remaster");
+///
+/// // Get first 20 search results
+/// while let Some(track) = search_results.next().await? {
+///     println!("{} - {} (played {} times)", track.artist, track.name, track.playcount);
+/// }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # });
+/// ```
+pub struct SearchTracksIterator<C: LastFmEditClient> {
+    client: C,
+    query: String,
+    current_page: u32,
+    has_more: bool,
+    buffer: Vec<Track>,
+    total_pages: Option<u32>,
+}
+
+#[async_trait(?Send)]
+impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for SearchTracksIterator<C> {
+    async fn next(&mut self) -> Result<Option<Track>> {
+        // If buffer is empty, try to load next page
+        if self.buffer.is_empty() {
+            if let Some(page) = self.next_page().await? {
+                self.buffer = page.tracks;
+                self.buffer.reverse(); // Reverse so we can pop from end efficiently
+            }
+        }
+
+        Ok(self.buffer.pop())
+    }
+
+    fn current_page(&self) -> u32 {
+        self.current_page.saturating_sub(1)
+    }
+}
+
+impl<C: LastFmEditClient> SearchTracksIterator<C> {
+    /// Create a new search tracks iterator.
+    ///
+    /// This is typically called via [`LastFmEditClient::search_tracks`](crate::LastFmEditClient::search_tracks).
+    pub fn new(client: C, query: String) -> Self {
+        Self {
+            client,
+            query,
+            current_page: 1,
+            has_more: true,
+            buffer: Vec::new(),
+            total_pages: None,
+        }
+    }
+
+    /// Create a new search tracks iterator starting from a specific page.
+    ///
+    /// This is useful for implementing offset functionality efficiently by starting
+    /// at the appropriate page rather than iterating through all previous pages.
+    pub fn with_starting_page(client: C, query: String, starting_page: u32) -> Self {
+        let page = std::cmp::max(1, starting_page);
+        Self {
+            client,
+            query,
+            current_page: page,
+            has_more: true,
+            buffer: Vec::new(),
+            total_pages: None,
+        }
+    }
+
+    /// Fetch the next page of search results.
+    ///
+    /// This method handles pagination automatically and includes rate limiting
+    /// to be respectful to Last.fm's servers.
+    pub async fn next_page(&mut self) -> Result<Option<TrackPage>> {
+        if !self.has_more {
+            return Ok(None);
+        }
+
+        let page = self
+            .client
+            .search_tracks_page(&self.query, self.current_page)
+            .await?;
+
+        self.has_more = page.has_next_page;
+        self.current_page += 1;
+        self.total_pages = page.total_pages;
+
+        Ok(Some(page))
+    }
+
+    /// Get the total number of pages, if known.
+    ///
+    /// Returns `None` until at least one page has been fetched.
+    pub fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
+}
+
+/// Iterator for searching albums in the user's library.
+///
+/// This iterator provides paginated access to albums that match a search query
+/// in the authenticated user's Last.fm library, using Last.fm's built-in search functionality.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
+/// # tokio_test::block_on(async {
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
+///
+/// let mut search_results = client.search_albums("deluxe");
+///
+/// // Get first 10 search results
+/// let top_10 = search_results.take(10).await?;
+/// for album in top_10 {
+///     println!("{} - {} (played {} times)", album.artist, album.name, album.playcount);
+/// }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # });
+/// ```
+pub struct SearchAlbumsIterator<C: LastFmEditClient> {
+    client: C,
+    query: String,
+    current_page: u32,
+    has_more: bool,
+    buffer: Vec<Album>,
+    total_pages: Option<u32>,
+}
+
+#[async_trait(?Send)]
+impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for SearchAlbumsIterator<C> {
+    async fn next(&mut self) -> Result<Option<Album>> {
+        // If buffer is empty, try to load next page
+        if self.buffer.is_empty() {
+            if let Some(page) = self.next_page().await? {
+                self.buffer = page.albums;
+                self.buffer.reverse(); // Reverse so we can pop from end efficiently
+            }
+        }
+
+        Ok(self.buffer.pop())
+    }
+
+    fn current_page(&self) -> u32 {
+        self.current_page.saturating_sub(1)
+    }
+}
+
+impl<C: LastFmEditClient> SearchAlbumsIterator<C> {
+    /// Create a new search albums iterator.
+    ///
+    /// This is typically called via [`LastFmEditClient::search_albums`](crate::LastFmEditClient::search_albums).
+    pub fn new(client: C, query: String) -> Self {
+        Self {
+            client,
+            query,
+            current_page: 1,
+            has_more: true,
+            buffer: Vec::new(),
+            total_pages: None,
+        }
+    }
+
+    /// Create a new search albums iterator starting from a specific page.
+    ///
+    /// This is useful for implementing offset functionality efficiently by starting
+    /// at the appropriate page rather than iterating through all previous pages.
+    pub fn with_starting_page(client: C, query: String, starting_page: u32) -> Self {
+        let page = std::cmp::max(1, starting_page);
+        Self {
+            client,
+            query,
+            current_page: page,
+            has_more: true,
+            buffer: Vec::new(),
+            total_pages: None,
+        }
+    }
+
+    /// Fetch the next page of search results.
+    ///
+    /// This method handles pagination automatically and includes rate limiting
+    /// to be respectful to Last.fm's servers.
+    pub async fn next_page(&mut self) -> Result<Option<AlbumPage>> {
+        if !self.has_more {
+            return Ok(None);
+        }
+
+        let page = self
+            .client
+            .search_albums_page(&self.query, self.current_page)
+            .await?;
+
+        self.has_more = page.has_next_page;
+        self.current_page += 1;
+        self.total_pages = page.total_pages;
+
+        Ok(Some(page))
+    }
+
+    /// Get the total number of pages, if known.
+    ///
+    /// Returns `None` until at least one page has been fetched.
+    pub fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
+}
