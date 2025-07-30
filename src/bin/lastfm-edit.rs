@@ -1,4 +1,5 @@
 use clap::Parser;
+use log::LevelFilter;
 
 mod commands;
 use commands::{execute_command, utils::get_credentials, utils::load_or_create_client, Commands};
@@ -11,9 +12,11 @@ use commands::{execute_command, utils::get_credentials, utils::load_or_create_cl
     long_about = None
 )]
 struct Cli {
-    /// Show detailed debug information
-    #[arg(long, global = true)]
-    verbose: bool,
+    /// Increase verbosity level (use multiple times for more verbose output)
+    /// -v: info for lastfm-edit, -vv: debug for lastfm-edit, -vvv: trace for lastfm-edit
+    /// -vvvv: trace for lastfm-edit + info for all, -vvvvv: trace for lastfm-edit + debug for all, -vvvvvv: trace for all
+    #[arg(short, long, action = clap::ArgAction::Count, global = true)]
+    verbose: u8,
 
     /// Last.fm username (overrides LASTFM_EDIT_USERNAME environment variable)
     #[arg(short, long, global = true)]
@@ -31,9 +34,47 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
 
-    // Enable debug logging if verbose flag is set
-    if args.verbose {
-        println!("🔍 Verbose mode enabled");
+    // Configure logging based on verbosity level (cumulative)
+    let mut builder = env_logger::Builder::from_default_env();
+    builder.filter_level(LevelFilter::Off); // Start with everything off
+
+    match args.verbose {
+        0 => {
+            // Default: only warnings and errors for all
+            builder.filter_level(LevelFilter::Warn);
+        }
+        1 => {
+            // Info for lastfm-edit
+            builder.filter_module("lastfm_edit", LevelFilter::Info);
+        }
+        2 => {
+            // Info + Debug for lastfm-edit
+            builder.filter_module("lastfm_edit", LevelFilter::Debug);
+        }
+        3 => {
+            // Info + Debug + Trace for lastfm-edit
+            builder.filter_module("lastfm_edit", LevelFilter::Trace);
+        }
+        4 => {
+            // Trace for lastfm-edit + Info for all others
+            builder.filter_module("lastfm_edit", LevelFilter::Trace);
+            builder.filter_level(LevelFilter::Info);
+        }
+        5 => {
+            // Trace for lastfm-edit + Debug for all others
+            builder.filter_module("lastfm_edit", LevelFilter::Trace);
+            builder.filter_level(LevelFilter::Debug);
+        }
+        _ => {
+            // Trace for everything (6+)
+            builder.filter_level(LevelFilter::Trace);
+        }
+    }
+
+    builder.init();
+
+    if args.verbose > 0 {
+        log::info!("🔍 Verbose mode enabled (level {})", args.verbose);
     }
 
     // Get credentials from command line args or environment
@@ -63,9 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if args.verbose {
-        println!("🔐 Using username: {username}");
-    }
+    log::info!("🔐 Using username: {username}");
 
     // Load or create client with session management
     let client = match load_or_create_client(&username, &password).await {
@@ -76,9 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if args.verbose {
-        println!("✅ Client ready");
-    }
+    log::info!("✅ Client ready");
 
     // Execute the command
     if let Err(e) = execute_command(args.command, &client).await {
