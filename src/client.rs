@@ -1218,20 +1218,6 @@ impl LastFmEditClientImpl {
             .parse_tracks_page(&document, page, artist_name, Some(album_name))
     }
 
-    /// Get a single page of track search results from the user's library
-    ///
-    /// This performs a search using Last.fm's library search functionality,
-    /// returning one page of tracks that match the provided query string.
-    /// For iterator-based access, use the iterator methods instead.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The search query (e.g., "remaster", "live", artist name, etc.)
-    /// * `page` - The page number to retrieve (1-based)
-    ///
-    /// # Returns
-    ///
-    /// Returns a `TrackPage` containing the search results with pagination information.
     pub async fn search_tracks_page(&self, query: &str, page: u32) -> Result<TrackPage> {
         let url = {
             let session = self.session.lock().unwrap();
@@ -1272,20 +1258,6 @@ impl LastFmEditClientImpl {
         })
     }
 
-    /// Get a single page of album search results from the user's library
-    ///
-    /// This performs a search using Last.fm's library search functionality,
-    /// returning one page of albums that match the provided query string.
-    /// For iterator-based access, use the iterator methods instead.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The search query (e.g., "remaster", "deluxe", artist name, etc.)
-    /// * `page` - The page number to retrieve (1-based)
-    ///
-    /// # Returns
-    ///
-    /// Returns an `AlbumPage` containing the search results with pagination information.
     pub async fn search_albums_page(&self, query: &str, page: u32) -> Result<AlbumPage> {
         let url = {
             let session = self.session.lock().unwrap();
