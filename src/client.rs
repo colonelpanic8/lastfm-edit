@@ -1,15 +1,15 @@
-use crate::edit::{ExactScrobbleEdit, SingleEditResponse};
 use crate::edit_analysis;
-use crate::events::{
-    ClientEvent, ClientEventReceiver, RateLimitType, RequestInfo, SharedEventBroadcaster,
-};
 use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
-use crate::retry::{self, ClientConfig, RateLimitConfig, RetryConfig};
-use crate::session::LastFmEditSession;
-use crate::{AlbumPage, EditResponse, LastFmError, Result, ScrobbleEdit, Track, TrackPage};
+use crate::retry;
+use crate::types::{
+    AlbumPage, ClientConfig, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit,
+    LastFmEditSession, LastFmError, RateLimitConfig, RateLimitType, RequestInfo, RetryConfig,
+    ScrobbleEdit, SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
+};
+use crate::Result;
 use async_trait::async_trait;
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};

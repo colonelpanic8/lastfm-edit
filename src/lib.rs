@@ -211,40 +211,34 @@
 //!
 //! MIT
 
-pub mod album;
 pub mod client;
 pub mod discovery;
-pub mod edit;
 pub mod edit_analysis;
-pub mod error;
-pub mod events;
 pub mod headers;
 pub mod iterator;
 pub mod login;
 pub mod parsing;
 pub mod retry;
-pub mod session;
 pub mod session_persistence;
-pub mod track;
 pub mod r#trait;
+pub mod types;
 
-pub use album::{Album, AlbumPage};
 pub use client::LastFmEditClientImpl;
 pub use discovery::{
     AlbumTracksDiscovery, ArtistTracksDiscovery, AsyncDiscoveryIterator, ExactMatchDiscovery,
     TrackVariationsDiscovery,
 };
-pub use events::{
-    ClientEvent, ClientEventReceiver, ClientEventWatcher, RateLimitType, RequestInfo,
-};
 pub use login::LoginManager;
 pub use r#trait::LastFmEditClient;
 
-// Re-export the mock when the mock feature is enabled
-pub use edit::{EditResponse, ExactScrobbleEdit, ScrobbleEdit, SingleEditResponse};
-pub use error::LastFmError;
+// Re-export all types from the consolidated types module
 pub use iterator::AsyncPaginatedIterator;
-pub use retry::{ClientConfig, RateLimitConfig, RetryConfig};
+pub use types::{
+    Album, AlbumPage, ClientConfig, ClientEvent, ClientEventReceiver, ClientEventWatcher,
+    EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, RateLimitConfig,
+    RateLimitType, RequestInfo, RetryConfig, RetryResult, ScrobbleEdit, SharedEventBroadcaster,
+    SingleEditResponse, Track, TrackPage,
+};
 
 // Type aliases for iterators with the concrete client type
 pub type ArtistTracksIterator = iterator::ArtistTracksIterator<LastFmEditClientImpl>;
@@ -259,9 +253,7 @@ pub use r#trait::MockLastFmEditClient;
 // Re-export the mock iterator when the mock feature is enabled
 #[cfg(feature = "mock")]
 pub use iterator::MockAsyncPaginatedIterator;
-pub use session::LastFmEditSession;
 pub use session_persistence::{SessionManager, SessionPersistence};
-pub use track::{Track, TrackPage};
 
 // Re-export scraper types for testing
 pub use scraper::Html;

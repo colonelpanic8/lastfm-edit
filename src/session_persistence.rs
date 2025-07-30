@@ -1,5 +1,5 @@
-use crate::session::LastFmEditSession;
-use crate::{LastFmError, Result};
+use crate::types::{LastFmEditSession, LastFmError};
+use crate::Result;
 use std::fs;
 use std::path::PathBuf;
 

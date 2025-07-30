@@ -1,5 +1,5 @@
-use crate::session::LastFmEditSession;
-use crate::{LastFmError, Result};
+use crate::types::{LastFmEditSession, LastFmError};
+use crate::Result;
 use http_client::{HttpClient, Request};
 use http_types::{Method, Url};
 use scraper::{Html, Selector};

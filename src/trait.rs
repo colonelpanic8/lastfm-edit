@@ -1,8 +1,9 @@
-use crate::edit::ExactScrobbleEdit;
-use crate::events::{ClientEvent, ClientEventReceiver};
 use crate::iterator::AsyncPaginatedIterator;
-use crate::session::LastFmEditSession;
-use crate::{Album, EditResponse, LastFmError, Result, ScrobbleEdit, Track};
+use crate::types::{
+    Album, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit, LastFmEditSession,
+    LastFmError, ScrobbleEdit, Track,
+};
+use crate::Result;
 use async_trait::async_trait;
 
 /// Trait for Last.fm client operations that can be mocked for testing.
