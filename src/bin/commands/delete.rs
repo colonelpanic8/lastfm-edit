@@ -1,5 +1,5 @@
 use super::utils::parse_range;
-use crate::LastFmEditClientImpl;
+use lastfm_edit::LastFmEditClientImpl;
 
 /// Handle deletion of scrobbles from recent pages
 pub async fn handle_delete_recent_pages(

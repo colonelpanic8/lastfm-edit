@@ -1,5 +1,5 @@
-use crate::commands::SearchType;
-use crate::{LastFmEditClient, LastFmEditClientImpl};
+use super::SearchType;
+use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl};
 
 /// Number of items per page in Last.fm search results
 const ITEMS_PER_PAGE: usize = 30;
@@ -46,7 +46,7 @@ pub async fn handle_search_command(
         SearchType::Tracks => {
             // Create iterator starting from the calculated page
             let mut search_iterator = if starting_page > 1 {
-                Box::new(crate::iterator::SearchTracksIterator::with_starting_page(
+                Box::new(lastfm_edit::SearchTracksIterator::with_starting_page(
                     client.clone(),
                     query.to_string(),
                     starting_page as u32,
@@ -128,7 +128,7 @@ pub async fn handle_search_command(
         SearchType::Albums => {
             // Create iterator starting from the calculated page
             let mut search_iterator = if starting_page > 1 {
-                Box::new(crate::iterator::SearchAlbumsIterator::with_starting_page(
+                Box::new(lastfm_edit::SearchAlbumsIterator::with_starting_page(
                     client.clone(),
                     query.to_string(),
                     starting_page as u32,

@@ -1,4 +1,4 @@
-use crate::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
+use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
 
 /// Create a ScrobbleEdit from command line arguments
 #[allow(clippy::too_many_arguments)]

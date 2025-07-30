@@ -4,8 +4,8 @@ pub mod search;
 pub mod show;
 pub mod utils;
 
-use crate::LastFmEditClientImpl;
 use clap::{arg, Subcommand, ValueEnum};
+use lastfm_edit::LastFmEditClientImpl;
 
 #[derive(ValueEnum, Clone)]
 pub enum SearchType {

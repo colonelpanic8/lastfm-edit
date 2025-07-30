@@ -1,5 +1,5 @@
 use super::utils::format_timestamp;
-use crate::LastFmEditClientImpl;
+use lastfm_edit::LastFmEditClientImpl;
 
 /// Handle showing details for specific scrobbles by offset
 pub async fn handle_show_scrobbles(

@@ -1,4 +1,4 @@
-use crate::{LastFmEditClientImpl, SessionPersistence};
+use lastfm_edit::{LastFmEditClientImpl, SessionPersistence};
 use std::env;
 
 /// Load existing session or create a new client with fresh login.
