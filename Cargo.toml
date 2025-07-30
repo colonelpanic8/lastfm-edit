@@ -1,6 +1,6 @@
 [package]
 name = "lastfm-edit"
-version = "3.5.1"
+version = "3.6.0"
 edition = "2021"
 description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
 license = "MIT"
