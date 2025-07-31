@@ -121,8 +121,13 @@ pub trait AsyncPaginatedIterator<T> {
 
 /// Iterator for browsing an artist's tracks from a user's library.
 ///
-/// This iterator provides paginated access to all tracks by a specific artist
-/// in the authenticated user's Last.fm library, ordered by play count.
+/// This iterator provides access to all tracks by a specific artist
+/// in the authenticated user's Last.fm library. Unlike the basic track listing,
+/// this iterator fetches tracks by iterating through the artist's albums first,
+/// which provides complete album information for each track.
+///
+/// The iterator loads albums and their tracks as needed and handles rate limiting
+/// automatically to be respectful to Last.fm's servers.
 ///
 /// # Examples
 ///
@@ -134,10 +139,11 @@ pub trait AsyncPaginatedIterator<T> {
 ///
 /// let mut tracks = client.artist_tracks("The Beatles");
 ///
-/// // Get the top 5 most played tracks
+/// // Get the top 5 tracks with album information
 /// let top_tracks = tracks.take(5).await?;
 /// for track in top_tracks {
-///     println!("{} (played {} times)", track.name, track.playcount);
+///     let album = track.album.as_deref().unwrap_or("Unknown Album");
+///     println!("{} [{}] (played {} times)", track.name, album, track.playcount);
 /// }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # });
@@ -145,36 +151,90 @@ pub trait AsyncPaginatedIterator<T> {
 pub struct ArtistTracksIterator<C: LastFmEditClient> {
     client: C,
     artist: String,
-    current_page: u32,
-    has_more: bool,
-    buffer: Vec<Track>,
-    total_pages: Option<u32>,
+    album_iterator: Option<ArtistAlbumsIterator<C>>,
+    current_album_tracks: Option<AlbumTracksIterator<C>>,
+    track_buffer: Vec<Track>,
+    finished: bool,
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for ArtistTracksIterator<C> {
+impl<C: LastFmEditClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
-        // If buffer is empty, try to load next page
-        if self.buffer.is_empty() {
-            if let Some(page) = self.next_page().await? {
-                self.buffer = page.tracks;
-                self.buffer.reverse(); // Reverse so we can pop from end efficiently
+        // If we're finished, return None
+        if self.finished {
+            return Ok(None);
+        }
+
+        // If track buffer is empty, try to get more tracks
+        while self.track_buffer.is_empty() {
+            // If we don't have a current album tracks iterator, get the next album
+            if self.current_album_tracks.is_none() {
+                // Initialize album iterator if needed
+                if self.album_iterator.is_none() {
+                    self.album_iterator = Some(ArtistAlbumsIterator::new(
+                        self.client.clone(),
+                        self.artist.clone(),
+                    ));
+                }
+
+                // Get next album
+                if let Some(ref mut album_iter) = self.album_iterator {
+                    if let Some(album) = album_iter.next().await? {
+                        // Create album tracks iterator for this album
+                        self.current_album_tracks = Some(AlbumTracksIterator::new(
+                            self.client.clone(),
+                            album.name.clone(),
+                            self.artist.clone(),
+                        ));
+                    } else {
+                        // No more albums, we're done
+                        self.finished = true;
+                        return Ok(None);
+                    }
+                }
+            }
+
+            // Get tracks from current album
+            if let Some(ref mut album_tracks) = self.current_album_tracks {
+                if let Some(track) = album_tracks.next().await? {
+                    self.track_buffer.push(track);
+                } else {
+                    // This album is exhausted, move to next album
+                    self.current_album_tracks = None;
+                }
+            }
+
+            // If we still have no tracks after trying to get an album, we're done
+            if self.track_buffer.is_empty() && self.current_album_tracks.is_none() {
+                self.finished = true;
+                return Ok(None);
             }
         }
 
-        Ok(self.buffer.pop())
+        // Return the next track from our buffer
+        Ok(self.track_buffer.pop())
     }
 
     fn current_page(&self) -> u32 {
-        self.current_page.saturating_sub(1)
+        // Since we're iterating through albums, return the album iterator's current page
+        if let Some(ref album_iter) = self.album_iterator {
+            album_iter.current_page()
+        } else {
+            0
+        }
     }
 
     fn total_pages(&self) -> Option<u32> {
-        self.total_pages
+        // Since we're iterating through albums, return the album iterator's total pages
+        if let Some(ref album_iter) = self.album_iterator {
+            album_iter.total_pages()
+        } else {
+            None
+        }
     }
 }
 
-impl<C: LastFmEditClient> ArtistTracksIterator<C> {
+impl<C: LastFmEditClient + Clone> ArtistTracksIterator<C> {
     /// Create a new artist tracks iterator.
     ///
     /// This is typically called via [`LastFmEditClient::artist_tracks`](crate::LastFmEditClient::artist_tracks).
@@ -182,39 +242,11 @@ impl<C: LastFmEditClient> ArtistTracksIterator<C> {
         Self {
             client,
             artist,
-            current_page: 1,
-            has_more: true,
-            buffer: Vec::new(),
-            total_pages: None,
+            album_iterator: None,
+            current_album_tracks: None,
+            track_buffer: Vec::new(),
+            finished: false,
         }
-    }
-
-    /// Fetch the next page of tracks.
-    ///
-    /// This method handles pagination automatically and includes rate limiting
-    /// to be respectful to Last.fm's servers.
-    pub async fn next_page(&mut self) -> Result<Option<TrackPage>> {
-        if !self.has_more {
-            return Ok(None);
-        }
-
-        let page = self
-            .client
-            .get_artist_tracks_page(&self.artist, self.current_page)
-            .await?;
-
-        self.has_more = page.has_next_page;
-        self.current_page += 1;
-        self.total_pages = page.total_pages;
-
-        Ok(Some(page))
-    }
-
-    /// Get the total number of pages, if known.
-    ///
-    /// Returns `None` until at least one page has been fetched.
-    pub fn total_pages(&self) -> Option<u32> {
-        self.total_pages
     }
 }
 
