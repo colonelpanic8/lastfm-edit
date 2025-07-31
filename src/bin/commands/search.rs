@@ -11,7 +11,7 @@ pub async fn handle_search_command(
     query: &str,
     limit: usize,
     offset: usize,
-    verbose: bool,
+    details: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Calculate starting page and within-page offset
     let starting_page = if offset > 0 {
@@ -78,7 +78,7 @@ pub async fn handle_search_command(
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
 
-                if verbose {
+                if details {
                     println!(
                         "{}. {} - {} (played {} time{})",
                         display_number,
@@ -160,7 +160,7 @@ pub async fn handle_search_command(
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
 
-                if verbose {
+                if details {
                     println!(
                         "{}. {} - {} (played {} time{})",
                         display_number,

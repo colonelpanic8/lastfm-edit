@@ -254,7 +254,7 @@ pub enum Commands {
 
         /// Show additional details like play counts
         #[arg(long)]
-        verbose: bool,
+        details: bool,
     },
 
     /// Show scrobble details for specific offsets
@@ -361,9 +361,9 @@ pub async fn execute_command(
             query,
             limit,
             offset,
-            verbose,
+            details,
         } => {
-            search::handle_search_command(client, search_type, &query, limit, offset, verbose).await
+            search::handle_search_command(client, search_type, &query, limit, offset, details).await
         }
 
         Commands::Show { offsets } => {
