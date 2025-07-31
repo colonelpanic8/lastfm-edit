@@ -1,5 +1,6 @@
 pub mod delete;
 pub mod edit;
+pub mod list;
 pub mod search;
 pub mod show;
 pub mod utils;
@@ -13,6 +14,57 @@ pub enum SearchType {
     Tracks,
     /// Search for albums
     Albums,
+}
+
+#[derive(Subcommand)]
+pub enum ListCommands {
+    /// List albums for an artist
+    ///
+    /// This command lists all albums in your library for a specified artist.
+    /// The albums are sorted by play count (highest first).
+    ///
+    /// Usage examples:
+    /// # List all albums for The Beatles
+    /// lastfm-edit list albums "The Beatles"
+    ///
+    /// # List first 10 albums with play counts
+    /// lastfm-edit list albums "Radiohead" --limit 10 --details
+    Albums {
+        /// Artist name
+        artist: String,
+
+        /// Maximum number of albums to show (0 for no limit)
+        #[arg(long, default_value = "0")]
+        limit: usize,
+
+        /// Show additional details like play counts
+        #[arg(long)]
+        details: bool,
+    },
+
+    /// List tracks organized by album for an artist
+    ///
+    /// This command lists all tracks in your library for a specified artist,
+    /// organized by album. For each album, it shows all tracks from that album.
+    ///
+    /// Usage examples:
+    /// # List all tracks by album for The Beatles
+    /// lastfm-edit list tracks-by-album "The Beatles"
+    ///
+    /// # List tracks for first 5 albums with play counts
+    /// lastfm-edit list tracks-by-album "Pink Floyd" --limit 5 --details
+    TracksByAlbum {
+        /// Artist name
+        artist: String,
+
+        /// Maximum number of albums to show (0 for no limit)
+        #[arg(long, default_value = "0")]
+        limit: usize,
+
+        /// Show additional details like play counts
+        #[arg(long)]
+        details: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -174,6 +226,22 @@ pub enum Commands {
         /// Offsets of scrobbles to show (0-indexed, 0 = most recent)
         offsets: Vec<u64>,
     },
+
+    /// List artist albums and tracks from your library
+    ///
+    /// This command allows you to browse your Last.fm library by listing albums
+    /// and tracks for specific artists.
+    ///
+    /// Usage examples:
+    /// # List all albums for The Beatles
+    /// lastfm-edit list albums "The Beatles"
+    ///
+    /// # List tracks organized by album
+    /// lastfm-edit list tracks-by-album "Pink Floyd" --limit 5 --details
+    List {
+        #[command(subcommand)]
+        command: ListCommands,
+    },
 }
 
 /// Execute the appropriate command handler based on the parsed command
@@ -255,6 +323,15 @@ pub async fn execute_command(
             }
 
             show::handle_show_scrobbles(client, &offsets).await
+        }
+
+        Commands::List { command } => match command {
+            ListCommands::Albums { artist, limit, details } => {
+                list::handle_list_albums(client, &artist, limit, details).await
+            }
+            ListCommands::TracksByAlbum { artist, limit, details } => {
+                list::handle_list_tracks_by_album(client, &artist, limit, details).await
+            }
         }
     }
 }
