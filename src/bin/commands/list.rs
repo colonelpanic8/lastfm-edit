@@ -6,6 +6,7 @@ pub async fn handle_list_albums(
     artist: &str,
     limit: usize,
     verbose: bool,
+    format: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("🎵 Listing albums for artist: '{artist}'");
 
@@ -15,10 +16,16 @@ pub async fn handle_list_albums(
     while let Some(album) = albums_iterator.next().await? {
         count += 1;
 
-        if verbose {
-            println!("  [{:3}] {} ({} plays)", count, album.name, album.playcount);
+        if format {
+            if verbose {
+                println!("  [{count:3}] {album} ({} plays)", album.playcount);
+            } else {
+                println!("  [{count:3}] {album}");
+            }
+        } else if verbose {
+            println!("  [{count:3}] {} ({} plays)", album.name, album.playcount);
         } else {
-            println!("  [{:3}] {}", count, album.name);
+            println!("  [{count:3}] {}", album.name);
         }
 
         if limit > 0 && count >= limit {
@@ -45,6 +52,7 @@ pub async fn handle_list_tracks_by_album(
     artist: &str,
     limit: usize,
     verbose: bool,
+    format: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("🎵 Listing tracks by album for artist: '{artist}'");
 
@@ -72,7 +80,17 @@ pub async fn handle_list_tracks_by_album(
                 } else {
                     for (track_idx, track) in tracks.iter().enumerate() {
                         total_track_count += 1;
-                        if verbose {
+                        if format {
+                            if verbose {
+                                println!(
+                                    "    [{:2}] {track} ({} plays)",
+                                    track_idx + 1,
+                                    track.playcount
+                                );
+                            } else {
+                                println!("    [{:2}] {track}", track_idx + 1);
+                            }
+                        } else if verbose {
                             println!(
                                 "    [{:2}] {} ({} plays)",
                                 track_idx + 1,
@@ -86,7 +104,7 @@ pub async fn handle_list_tracks_by_album(
                 }
             }
             Err(e) => {
-                println!("    ❌ Error getting tracks: {}", e);
+                println!("    ❌ Error getting tracks: {e}");
             }
         }
 

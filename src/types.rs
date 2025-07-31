@@ -7,6 +7,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use thiserror::Error;
 use tokio::sync::{broadcast, watch};
 
@@ -46,6 +47,17 @@ pub struct Track {
     pub album_artist: Option<String>,
 }
 
+impl fmt::Display for Track {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let album_part = if let Some(ref album) = self.album {
+            format!(" [{album}]")
+        } else {
+            String::new()
+        };
+        write!(f, "{} - {}{}", self.artist, self.name, album_part)
+    }
+}
+
 /// Represents a paginated collection of tracks.
 ///
 /// This structure is returned by track listing methods and provides
@@ -82,6 +94,12 @@ pub struct Album {
     /// This field is populated when albums are retrieved from recent scrobbles
     /// or individual scrobble data, but may be `None` for aggregate album listings.
     pub timestamp: Option<u64>,
+}
+
+impl fmt::Display for Album {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} - {}", self.artist, self.name)
+    }
 }
 
 /// Represents a paginated collection of albums.
