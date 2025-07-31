@@ -470,7 +470,7 @@ impl ScrobbleEdit {
             original_artist.to_string(),
             Some(original_artist.to_string()), // album_artist defaults to artist
             Some(timestamp),
-            false, // edit_all defaults to false
+            true, // edit_all defaults to true
         )
     }
 
@@ -531,7 +531,7 @@ impl ScrobbleEdit {
             artist_name.to_string(),
             Some(artist_name.to_string()),
             Some(timestamp),
-            false,
+            true,
         )
     }
     /// Create an edit request with just track and artist information.
@@ -555,7 +555,7 @@ impl ScrobbleEdit {
             artist_name.to_string(),
             Some(artist_name.to_string()), // album_artist defaults to artist
             None,                          // Client will find representative timestamp
-            false,
+            true,
         )
     }
 
