@@ -172,6 +172,70 @@ pub struct ScrobbleEdit {
     pub edit_all: bool,
 }
 
+impl fmt::Display for ScrobbleEdit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut changes = Vec::new();
+
+        // Check if artist is being changed
+        if self.artist_name != self.artist_name_original {
+            changes.push(format!(
+                "Artist: {} → {}",
+                self.artist_name_original, self.artist_name
+            ));
+        }
+
+        // Check if track name is being changed
+        if let Some(ref new_track) = self.track_name {
+            if let Some(ref original_track) = self.track_name_original {
+                if new_track != original_track {
+                    changes.push(format!("Track: {original_track} → {new_track}"));
+                }
+            } else {
+                changes.push(format!("Track: → {new_track}"));
+            }
+        }
+
+        // Check if album name is being changed
+        if let Some(ref new_album) = self.album_name {
+            match &self.album_name_original {
+                Some(ref original_album) if new_album != original_album => {
+                    changes.push(format!("Album: {original_album} → {new_album}"));
+                }
+                None => {
+                    changes.push(format!("Album: → {new_album}"));
+                }
+                _ => {} // No change
+            }
+        }
+
+        // Check if album artist is being changed
+        if let Some(ref new_album_artist) = self.album_artist_name {
+            match &self.album_artist_name_original {
+                Some(ref original_album_artist) if new_album_artist != original_album_artist => {
+                    changes.push(format!(
+                        "Album Artist: {original_album_artist} → {new_album_artist}"
+                    ));
+                }
+                None => {
+                    changes.push(format!("Album Artist: → {new_album_artist}"));
+                }
+                _ => {} // No change
+            }
+        }
+
+        if changes.is_empty() {
+            write!(f, "No changes")
+        } else {
+            let scope = if self.edit_all {
+                " (all instances)"
+            } else {
+                ""
+            };
+            write!(f, "{}{}", changes.join(", "), scope)
+        }
+    }
+}
+
 /// Response from a single scrobble edit operation.
 ///
 /// This structure contains the result of attempting to edit a specific scrobble instance,
@@ -229,6 +293,55 @@ pub struct ExactScrobbleEdit {
     pub timestamp: u64,
     /// Whether to edit all instances or just this specific scrobble
     pub edit_all: bool,
+}
+
+impl fmt::Display for ExactScrobbleEdit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut changes = Vec::new();
+
+        // Check if artist is being changed
+        if self.artist_name != self.artist_name_original {
+            changes.push(format!(
+                "Artist: {} → {}",
+                self.artist_name_original, self.artist_name
+            ));
+        }
+
+        // Check if track name is being changed
+        if self.track_name != self.track_name_original {
+            changes.push(format!(
+                "Track: {} → {}",
+                self.track_name_original, self.track_name
+            ));
+        }
+
+        // Check if album name is being changed
+        if self.album_name != self.album_name_original {
+            changes.push(format!(
+                "Album: {} → {}",
+                self.album_name_original, self.album_name
+            ));
+        }
+
+        // Check if album artist is being changed
+        if self.album_artist_name != self.album_artist_name_original {
+            changes.push(format!(
+                "Album Artist: {} → {}",
+                self.album_artist_name_original, self.album_artist_name
+            ));
+        }
+
+        if changes.is_empty() {
+            write!(f, "No changes")
+        } else {
+            let scope = if self.edit_all {
+                " (all instances)"
+            } else {
+                ""
+            };
+            write!(f, "{}{}", changes.join(", "), scope)
+        }
+    }
 }
 
 impl ScrobbleEdit {
