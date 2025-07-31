@@ -18,26 +18,6 @@ use tokio::sync::{broadcast, watch};
 ///
 /// This structure contains track information as parsed from Last.fm pages,
 /// including play count and optional timestamp data for scrobbles.
-///
-/// # Examples
-///
-/// ```rust
-/// use lastfm_edit::Track;
-///
-/// let track = Track {
-///     name: "Paranoid Android".to_string(),
-///     artist: "Radiohead".to_string(),
-///     playcount: 42,
-///     timestamp: Some(1640995200), // Unix timestamp
-///     album: Some("OK Computer".to_string()),
-///     album_artist: Some("Radiohead".to_string()),
-/// };
-///
-/// println!("{} by {} (played {} times)", track.name, track.artist, track.playcount);
-/// if let Some(album) = &track.album {
-///     println!("From album: {}", album);
-/// }
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Track {
     /// The track name/title
@@ -70,33 +50,6 @@ pub struct Track {
 ///
 /// This structure is returned by track listing methods and provides
 /// information about the current page and pagination state.
-///
-/// # Examples
-///
-/// ```rust
-/// use lastfm_edit::{Track, TrackPage};
-///
-/// let page = TrackPage {
-///     tracks: vec![
-///         Track {
-///             name: "Song 1".to_string(),
-///             artist: "Artist".to_string(),
-///             playcount: 10,
-///             timestamp: None,
-///             album: None,
-///             album_artist: None,
-///         }
-///     ],
-///     page_number: 1,
-///     has_next_page: true,
-///     total_pages: Some(5),
-/// };
-///
-/// println!("Page {} of {:?}, {} tracks",
-///          page.page_number,
-///          page.total_pages,
-///          page.tracks.len());
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TrackPage {
     /// The tracks on this page
@@ -116,26 +69,6 @@ pub struct TrackPage {
 ///
 /// This structure contains album information as parsed from Last.fm pages,
 /// including play count and optional timestamp data for scrobbles.
-///
-/// # Examples
-///
-/// ```rust
-/// use lastfm_edit::Album;
-///
-/// let album = Album {
-///     name: "OK Computer".to_string(),
-///     artist: "Radiohead".to_string(),
-///     playcount: 156,
-///     timestamp: Some(1640995200), // Unix timestamp
-/// };
-///
-/// println!("{} by {} (played {} times)", album.name, album.artist, album.playcount);
-///
-/// // Convert timestamp to human-readable date
-/// if let Some(date) = album.scrobbled_at() {
-///     println!("Last scrobbled: {}", date.format("%Y-%m-%d %H:%M:%S UTC"));
-/// }
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Album {
     /// The album name/title
@@ -155,31 +88,6 @@ pub struct Album {
 ///
 /// This structure is returned by album listing methods and provides
 /// information about the current page and pagination state.
-///
-/// # Examples
-///
-/// ```rust
-/// use lastfm_edit::{Album, AlbumPage};
-///
-/// let page = AlbumPage {
-///     albums: vec![
-///         Album {
-///             name: "Album 1".to_string(),
-///             artist: "Artist".to_string(),
-///             playcount: 25,
-///             timestamp: None,
-///         }
-///     ],
-///     page_number: 1,
-///     has_next_page: false,
-///     total_pages: Some(1),
-/// };
-///
-/// println!("Page {} of {:?}, {} albums",
-///          page.page_number,
-///          page.total_pages,
-///          page.albums.len());
-/// ```
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AlbumPage {
     /// The albums on this page
@@ -199,23 +107,6 @@ impl Album {
     /// Convert the Unix timestamp to a human-readable datetime.
     ///
     /// Returns `None` if no timestamp is available or if the timestamp is invalid.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use lastfm_edit::Album;
-    ///
-    /// let album = Album {
-    ///     name: "Abbey Road".to_string(),
-    ///     artist: "The Beatles".to_string(),
-    ///     playcount: 42,
-    ///     timestamp: Some(1640995200),
-    /// };
-    ///
-    /// if let Some(datetime) = album.scrobbled_at() {
-    ///     println!("Last played: {}", datetime.format("%Y-%m-%d %H:%M:%S UTC"));
-    /// }
-    /// ```
     #[must_use]
     pub fn scrobbled_at(&self) -> Option<DateTime<Utc>> {
         self.timestamp
@@ -749,49 +640,6 @@ impl EditResponse {
 ///
 /// This enum covers all possible errors that can occur when interacting with Last.fm,
 /// including network issues, authentication failures, parsing errors, and rate limiting.
-///
-/// # Error Handling Examples
-///
-/// ```rust,no_run
-/// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmError};
-///
-/// #[tokio::main]
-/// async fn main() {
-///     let http_client = http_client::native::NativeClient::new();
-///
-///     match LastFmEditClientImpl::login_with_credentials(Box::new(http_client), "username", "password").await {
-///         Ok(client) => println!("Login successful"),
-///         Err(LastFmError::Auth(msg)) => eprintln!("Authentication failed: {}", msg),
-///         Err(LastFmError::RateLimit { retry_after }) => {
-///             eprintln!("Rate limited, retry in {} seconds", retry_after);
-///         }
-///         Err(LastFmError::Http(msg)) => eprintln!("Network error: {}", msg),
-///         Err(e) => eprintln!("Other error: {}", e),
-///     }
-/// }
-/// ```
-///
-/// # Automatic Retry
-///
-/// Some operations like [`LastFmEditClient::edit_scrobble_single`](crate::LastFmEditClient::edit_scrobble_single)
-/// automatically handle rate limiting errors by waiting and retrying:
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, ScrobbleEdit};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let edit = ScrobbleEdit::from_track_info("Track", "Album", "Artist", 1640995200);
-///
-/// // Standard edit operation
-/// match client.edit_scrobble(&edit).await {
-///     Ok(response) => println!("Edit completed: {:?}", response),
-///     Err(e) => eprintln!("Edit failed: {}", e),
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 #[derive(Error, Debug)]
 pub enum LastFmError {
     /// HTTP/network related errors.
