@@ -126,3 +126,73 @@ pub async fn handle_list_tracks_by_album(
 
     Ok(())
 }
+
+/// Handle the list tracks command
+pub async fn handle_list_tracks(
+    client: &LastFmEditClientImpl,
+    artist: &str,
+    limit: usize,
+    verbose: bool,
+    format: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("🎵 Listing tracks for artist: '{artist}'");
+    println!("   (with complete album information)");
+
+    let mut tracks_iterator = client.artist_tracks(artist);
+    let mut count = 0;
+
+    while let Some(track) = tracks_iterator.next().await? {
+        count += 1;
+
+        if format {
+            if verbose {
+                let album_artist_info = track
+                    .album_artist
+                    .as_deref()
+                    .unwrap_or("Same as track artist");
+                println!("  [{count:3}] {track} ({} plays)", track.playcount);
+                println!("       Album Artist: {album_artist_info}");
+                if let Some(timestamp) = track.timestamp {
+                    println!("       Last Played: {timestamp}");
+                }
+            } else {
+                println!("  [{count:3}] {track}");
+            }
+        } else if verbose {
+            let album_info = track.album.as_deref().unwrap_or("Unknown Album");
+            let album_artist_info = track
+                .album_artist
+                .as_deref()
+                .unwrap_or("Same as track artist");
+            println!("  [{count:3}] {} ({} plays)", track.name, track.playcount);
+            println!("       Album: {album_info}");
+            println!("       Album Artist: {album_artist_info}");
+            if let Some(timestamp) = track.timestamp {
+                println!("       Last Played: {timestamp}");
+            }
+        } else {
+            let album_info = track.album.as_deref().unwrap_or("Unknown Album");
+            println!("  [{count:3}] {} [{}]", track.name, album_info);
+        }
+
+        if verbose {
+            println!();
+        }
+
+        if limit > 0 && count >= limit {
+            break;
+        }
+    }
+
+    if count == 0 {
+        println!("  No tracks found for this artist.");
+    } else {
+        println!(
+            "\nFound {} track{} for '{artist}'",
+            count,
+            if count == 1 { "" } else { "s" }
+        );
+    }
+
+    Ok(())
+}

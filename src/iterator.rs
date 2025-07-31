@@ -201,13 +201,8 @@ impl<C: LastFmEditClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracks
                 } else {
                     // This album is exhausted, move to next album
                     self.current_album_tracks = None;
+                    // Continue the loop to try getting the next album
                 }
-            }
-
-            // If we still have no tracks after trying to get an album, we're done
-            if self.track_buffer.is_empty() && self.current_album_tracks.is_none() {
-                self.finished = true;
-                return Ok(None);
             }
         }
 

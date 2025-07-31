@@ -49,6 +49,38 @@ pub enum ListCommands {
         format: bool,
     },
 
+    /// List all tracks for an artist with album information
+    ///
+    /// This command lists all tracks in your library for a specified artist,
+    /// with complete album information included. Unlike tracks-by-album, this
+    /// shows tracks in a flat list with album details for each track.
+    ///
+    /// Usage examples:
+    /// # List all tracks for The Beatles with album info
+    /// lastfm-edit list tracks "The Beatles"
+    ///
+    /// # List first 20 tracks with play counts and details
+    /// lastfm-edit list tracks "Radiohead" --limit 20 --details
+    ///
+    /// # List tracks with formatted display (Artist - Track Name [Album Name])
+    /// lastfm-edit list tracks "The Beatles" --format
+    Tracks {
+        /// Artist name
+        artist: String,
+
+        /// Maximum number of tracks to show (0 for no limit)
+        #[arg(long, default_value = "0")]
+        limit: usize,
+
+        /// Show additional details like play counts and album artist
+        #[arg(long)]
+        details: bool,
+
+        /// Show formatted output (Artist - Track Name [Album Name])
+        #[arg(long)]
+        format: bool,
+    },
+
     /// List tracks organized by album for an artist
     ///
     /// This command lists all tracks in your library for a specified artist,
@@ -250,6 +282,9 @@ pub enum Commands {
     /// # List all albums for The Beatles
     /// lastfm-edit list albums "The Beatles"
     ///
+    /// # List all tracks with album information
+    /// lastfm-edit list tracks "Radiohead" --limit 20 --details
+    ///
     /// # List tracks organized by album
     /// lastfm-edit list tracks-by-album "Pink Floyd" --limit 5 --details
     List {
@@ -346,6 +381,12 @@ pub async fn execute_command(
                 details,
                 format,
             } => list::handle_list_albums(client, &artist, limit, details, format).await,
+            ListCommands::Tracks {
+                artist,
+                limit,
+                details,
+                format,
+            } => list::handle_list_tracks(client, &artist, limit, details, format).await,
             ListCommands::TracksByAlbum {
                 artist,
                 limit,
