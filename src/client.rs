@@ -258,13 +258,24 @@ impl LastFmEditClientImpl {
             config,
             "Delete scrobble",
             || client.delete_scrobble_impl(&artist_name, &track_name, timestamp),
-            |delay, operation_name| {
+            |delay, rate_limit_timestamp, operation_name| {
                 self.broadcast_event(ClientEvent::RateLimited {
                     delay_seconds: delay,
                     request: None,
                     rate_limit_type: RateLimitType::ResponsePattern,
+                    rate_limit_timestamp,
                 });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
+            },
+            |total_duration, _operation_name| {
+                self.broadcast_event(ClientEvent::RateLimitEnded {
+                    request: crate::types::RequestInfo::from_url_and_method(
+                        &format!("delete_scrobble/{artist_name}/{track_name}/{timestamp}"),
+                        "POST",
+                    ),
+                    rate_limit_type: RateLimitType::ResponsePattern,
+                    total_rate_limit_duration_seconds: total_duration,
+                });
             },
         )
         .await
@@ -544,13 +555,27 @@ impl LastFmEditClientImpl {
             config,
             "Edit scrobble",
             || client.edit_scrobble_impl(&edit_clone),
-            |delay, operation_name| {
+            |delay, rate_limit_timestamp, operation_name| {
                 self.broadcast_event(ClientEvent::RateLimited {
                     delay_seconds: delay,
                     request: None, // No specific request context in retry callback
                     rate_limit_type: RateLimitType::ResponsePattern,
+                    rate_limit_timestamp,
                 });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
+            },
+            |total_duration, _operation_name| {
+                self.broadcast_event(ClientEvent::RateLimitEnded {
+                    request: crate::types::RequestInfo::from_url_and_method(
+                        &format!(
+                            "edit_scrobble/{}/{}",
+                            edit_clone.artist_name, edit_clone.track_name
+                        ),
+                        "POST",
+                    ),
+                    rate_limit_type: RateLimitType::ResponsePattern,
+                    total_rate_limit_duration_seconds: total_duration,
+                });
             },
         )
         .await
@@ -979,13 +1004,21 @@ impl LastFmEditClientImpl {
 
                 Ok(new_response)
             },
-            |delay, operation_name| {
+            |delay, rate_limit_timestamp, operation_name| {
                 self.broadcast_event(ClientEvent::RateLimited {
                     delay_seconds: delay,
                     request: None, // No specific request context in retry callback
                     rate_limit_type: RateLimitType::ResponsePattern,
+                    rate_limit_timestamp,
                 });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
+            },
+            |total_duration, _operation_name| {
+                self.broadcast_event(ClientEvent::RateLimitEnded {
+                    request: crate::types::RequestInfo::from_url_and_method(&url_string, "GET"),
+                    rate_limit_type: RateLimitType::ResponsePattern,
+                    total_rate_limit_duration_seconds: total_duration,
+                });
             },
         )
         .await?;
@@ -1088,6 +1121,10 @@ impl LastFmEditClientImpl {
                 delay_seconds: retry_after,
                 request: Some(request_info.clone()),
                 rate_limit_type: RateLimitType::Http429,
+                rate_limit_timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
             });
             return Err(LastFmError::RateLimit { retry_after });
         }
@@ -1102,6 +1139,10 @@ impl LastFmEditClientImpl {
                         delay_seconds: 60,
                         request: Some(request_info.clone()),
                         rate_limit_type: RateLimitType::Http403,
+                        rate_limit_timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
                     });
                     return Err(LastFmError::RateLimit { retry_after: 60 });
                 }

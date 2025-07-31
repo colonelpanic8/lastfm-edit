@@ -1,6 +1,7 @@
 use crate::types::{LastFmError, RetryConfig, RetryResult};
 use crate::Result;
 use std::future::Future;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// Execute an async operation with retry logic for rate limiting
 ///
@@ -11,27 +12,37 @@ use std::future::Future;
 /// * `config` - Retry configuration
 /// * `operation_name` - Name of the operation for logging
 /// * `operation` - Async function that returns a Result
-/// * `on_rate_limit` - Callback for rate limit events (delay in seconds)
+/// * `on_rate_limit` - Callback for rate limit events (delay in seconds, timestamp)
+/// * `on_rate_limit_end` - Optional callback for when rate limiting ends (total duration in seconds)
 ///
 /// # Returns
 /// A `RetryResult` containing the successful result and retry statistics
-pub async fn retry_with_backoff<T, F, Fut, OnRateLimit>(
+pub async fn retry_with_backoff<T, F, Fut, OnRateLimit, OnRateLimitEnd>(
     config: RetryConfig,
     operation_name: &str,
     mut operation: F,
     mut on_rate_limit: OnRateLimit,
+    mut on_rate_limit_end: OnRateLimitEnd,
 ) -> Result<RetryResult<T>>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T>>,
-    OnRateLimit: FnMut(u64, &str),
+    OnRateLimit: FnMut(u64, u64, &str),
+    OnRateLimitEnd: FnMut(u64, &str),
 {
     let mut retries = 0;
     let mut total_retry_time = 0;
+    let mut rate_limit_start_time: Option<Instant> = None;
 
     loop {
         match operation().await {
             Ok(result) => {
+                // If we had rate limiting and now succeeded, emit rate limit end event
+                if let Some(start_time) = rate_limit_start_time {
+                    let total_duration = start_time.elapsed().as_secs();
+                    on_rate_limit_end(total_duration, operation_name);
+                }
+
                 return Ok(RetryResult {
                     result,
                     attempts_made: retries,
@@ -39,6 +50,11 @@ where
                 });
             }
             Err(LastFmError::RateLimit { retry_after }) => {
+                // Track when rate limiting first occurs
+                if rate_limit_start_time.is_none() {
+                    rate_limit_start_time = Some(Instant::now());
+                }
+
                 if !config.enabled || retries >= config.max_retries {
                     if !config.enabled {
                         log::debug!("Retries disabled for {operation_name} operation");
@@ -67,7 +83,11 @@ where
                 );
 
                 // Notify caller about rate limit
-                on_rate_limit(delay, operation_name);
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                on_rate_limit(delay, timestamp, operation_name);
 
                 tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
                 retries += 1;
@@ -90,9 +110,19 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T>>,
 {
-    retry_with_backoff(config, operation_name, operation, |delay, op_name| {
-        log::debug!("Rate limited during {op_name}: waiting {delay} seconds");
-    })
+    retry_with_backoff(
+        config,
+        operation_name,
+        operation,
+        |delay, timestamp, op_name| {
+            log::debug!(
+                "Rate limited during {op_name}: waiting {delay} seconds (at timestamp {timestamp})"
+            );
+        },
+        |duration, op_name| {
+            log::debug!("Rate limiting ended for {op_name} after {duration} seconds");
+        },
+    )
     .await
 }
 

@@ -1130,6 +1130,17 @@ pub enum ClientEvent {
         request: Option<RequestInfo>,
         /// Type of rate limiting detected
         rate_limit_type: RateLimitType,
+        /// Timestamp when the rate limit was detected (seconds since Unix epoch)
+        rate_limit_timestamp: u64,
+    },
+    /// Rate limiting period has ended and normal operation resumed
+    RateLimitEnded {
+        /// Request that successfully completed after rate limiting
+        request: RequestInfo,
+        /// Type of rate limiting that ended
+        rate_limit_type: RateLimitType,
+        /// Total duration the rate limiting was active in seconds
+        total_rate_limit_duration_seconds: u64,
     },
     /// Scrobble edit attempt completed
     EditAttempted {

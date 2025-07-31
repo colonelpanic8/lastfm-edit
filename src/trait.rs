@@ -470,6 +470,9 @@ pub trait LastFmEditClient {
     ///             ClientEvent::RateLimited { delay_seconds, .. } => {
     ///                 println!("Rate limited! Waiting {} seconds", delay_seconds);
     ///             }
+    ///             ClientEvent::RateLimitEnded { total_rate_limit_duration_seconds, .. } => {
+    ///                 println!("Rate limiting ended after {} seconds", total_rate_limit_duration_seconds);
+    ///             }
     ///             ClientEvent::EditAttempted { edit, success, .. } => {
     ///                 println!("Edit attempt: '{}' -> '{}' - {}",
     ///                          edit.track_name_original, edit.track_name,

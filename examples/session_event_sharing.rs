@@ -57,13 +57,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     delay_seconds,
                     request,
                     rate_limit_type,
+                    rate_limit_timestamp,
                 } => {
                     let req_desc = request
                         .as_ref()
                         .map(|r| r.short_description())
                         .unwrap_or_else(|| "unknown request".to_string());
                     println!(
-                        "⏳ Client1 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
+                        "⏳ Client1 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc} (at timestamp {rate_limit_timestamp})"
+                    );
+                }
+                ClientEvent::RateLimitEnded {
+                    request,
+                    rate_limit_type,
+                    total_rate_limit_duration_seconds,
+                } => {
+                    println!(
+                        "🎉 Client1 monitor: Rate limiting ended ({rate_limit_type:?}) after {total_rate_limit_duration_seconds} seconds - {}",
+                        request.short_description()
                     );
                 }
                 ClientEvent::EditAttempted {
@@ -118,13 +129,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     delay_seconds,
                     request,
                     rate_limit_type,
+                    rate_limit_timestamp,
                 } => {
                     let req_desc = request
                         .as_ref()
                         .map(|r| r.short_description())
                         .unwrap_or_else(|| "unknown request".to_string());
                     println!(
-                        "⏳ Client2 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc}"
+                        "⏳ Client2 monitor: Rate limited ({rate_limit_type:?}) for {delay_seconds} seconds - {req_desc} (at timestamp {rate_limit_timestamp})"
+                    );
+                }
+                ClientEvent::RateLimitEnded {
+                    request,
+                    rate_limit_type,
+                    total_rate_limit_duration_seconds,
+                } => {
+                    println!(
+                        "🎉 Client2 monitor: Rate limiting ended ({rate_limit_type:?}) after {total_rate_limit_duration_seconds} seconds - {}",
+                        request.short_description()
                     );
                 }
                 ClientEvent::EditAttempted {
