@@ -804,3 +804,117 @@ impl<C: LastFmEditClient> SearchAlbumsIterator<C> {
         self.total_pages
     }
 }
+
+// =============================================================================
+// ARTISTS ITERATOR
+// =============================================================================
+
+/// Iterator for browsing all artists in the user's library.
+///
+/// This iterator provides access to all artists in the authenticated user's Last.fm library,
+/// sorted by play count (highest first). The iterator loads artists as needed and handles
+/// rate limiting automatically to be respectful to Last.fm's servers.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
+/// # tokio_test::block_on(async {
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
+///
+/// let mut artists = client.artists();
+///
+/// // Get the top 10 artists
+/// let top_artists = artists.take(10).await?;
+/// for artist in top_artists {
+///     println!("{} ({} plays)", artist.name, artist.playcount);
+/// }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # });
+/// ```
+pub struct ArtistsIterator<C: LastFmEditClient> {
+    client: C,
+    current_page: u32,
+    has_more: bool,
+    buffer: Vec<crate::Artist>,
+    total_pages: Option<u32>,
+}
+
+#[async_trait(?Send)]
+impl<C: LastFmEditClient> AsyncPaginatedIterator<crate::Artist> for ArtistsIterator<C> {
+    async fn next(&mut self) -> Result<Option<crate::Artist>> {
+        // If buffer is empty, try to load next page
+        if self.buffer.is_empty() {
+            if let Some(page) = self.next_page().await? {
+                self.buffer = page.artists;
+                self.buffer.reverse(); // Reverse so we can pop from end efficiently
+            }
+        }
+
+        Ok(self.buffer.pop())
+    }
+
+    fn current_page(&self) -> u32 {
+        self.current_page.saturating_sub(1)
+    }
+
+    fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
+}
+
+impl<C: LastFmEditClient> ArtistsIterator<C> {
+    /// Create a new artists iterator.
+    ///
+    /// This iterator will start from page 1 and load all artists in the user's library.
+    pub fn new(client: C) -> Self {
+        Self {
+            client,
+            current_page: 1,
+            has_more: true,
+            buffer: Vec::new(),
+            total_pages: None,
+        }
+    }
+
+    /// Create a new artists iterator starting from a specific page.
+    ///
+    /// This is useful for implementing offset functionality efficiently by starting
+    /// at the appropriate page rather than iterating through all previous pages.
+    pub fn with_starting_page(client: C, starting_page: u32) -> Self {
+        let page = std::cmp::max(1, starting_page);
+        Self {
+            client,
+            current_page: page,
+            has_more: true,
+            buffer: Vec::new(),
+            total_pages: None,
+        }
+    }
+
+    /// Fetch the next page of artists.
+    ///
+    /// This method handles pagination automatically and includes rate limiting
+    /// to be respectful to Last.fm's servers.
+    pub async fn next_page(&mut self) -> Result<Option<crate::ArtistPage>> {
+        if !self.has_more {
+            return Ok(None);
+        }
+
+        let page = self.client.get_artists_page(self.current_page).await?;
+
+        self.has_more = page.has_next_page;
+        self.current_page += 1;
+        self.total_pages = page.total_pages;
+
+        Ok(Some(page))
+    }
+
+    /// Get the total number of pages, if known.
+    ///
+    /// Returns `None` until at least one page has been fetched.
+    pub fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
+}

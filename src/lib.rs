@@ -234,13 +234,14 @@ pub use r#trait::LastFmEditClient;
 // Re-export all types from the consolidated types module
 pub use iterator::AsyncPaginatedIterator;
 pub use types::{
-    Album, AlbumPage, ClientConfig, ClientEvent, ClientEventReceiver, ClientEventWatcher,
-    EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, RateLimitConfig,
-    RateLimitType, RequestInfo, RetryConfig, RetryResult, ScrobbleEdit, SharedEventBroadcaster,
-    SingleEditResponse, Track, TrackPage,
+    Album, AlbumPage, Artist, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver,
+    ClientEventWatcher, EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError,
+    RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, RetryResult, ScrobbleEdit,
+    SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
 };
 
 // Type aliases for iterators with the concrete client type
+pub type ArtistsIterator = iterator::ArtistsIterator<LastFmEditClientImpl>;
 pub type ArtistTracksIterator = iterator::ArtistTracksIterator<LastFmEditClientImpl>;
 pub type ArtistAlbumsIterator = iterator::ArtistAlbumsIterator<LastFmEditClientImpl>;
 pub type AlbumTracksIterator = iterator::AlbumTracksIterator<LastFmEditClientImpl>;

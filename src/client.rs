@@ -1192,6 +1192,33 @@ impl LastFmEditClientImpl {
         Ok(body)
     }
 
+    pub async fn get_artists_page(&self, page: u32) -> Result<crate::ArtistPage> {
+        let url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library/artists?page={}",
+                session.base_url, session.username, page
+            )
+        };
+
+        log::debug!("Fetching artists page {page}");
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!(
+            "Artist library response: {} status, {} chars",
+            response.status(),
+            content.len()
+        );
+
+        log::debug!("Parsing HTML response from artist library endpoint");
+        let document = Html::parse_document(&content);
+        self.parser.parse_artists_page(&document, page)
+    }
+
     pub async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
         let url = {
             let session = self.session.lock().unwrap();
@@ -1418,6 +1445,10 @@ impl LastFmEditClient for LastFmEditClientImpl {
         }
     }
 
+    async fn get_artists_page(&self, page: u32) -> Result<crate::ArtistPage> {
+        self.get_artists_page(page).await
+    }
+
     async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
         self.get_artist_tracks_page(artist, page).await
     }
@@ -1434,6 +1465,10 @@ impl LastFmEditClient for LastFmEditClientImpl {
     ) -> Result<TrackPage> {
         self.get_album_tracks_page(album_name, artist_name, page)
             .await
+    }
+
+    fn artists(&self) -> Box<dyn crate::AsyncPaginatedIterator<crate::Artist>> {
+        Box::new(crate::iterator::ArtistsIterator::new(self.clone()))
     }
 
     fn artist_tracks(&self, artist: &str) -> Box<dyn crate::AsyncPaginatedIterator<Track>> {

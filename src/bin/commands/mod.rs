@@ -18,6 +18,34 @@ pub enum SearchType {
 
 #[derive(Subcommand)]
 pub enum ListCommands {
+    /// List all artists in your library
+    ///
+    /// This command lists all artists in your Last.fm library, sorted by play count
+    /// (highest first). Shows artist names and scrobble counts.
+    ///
+    /// Usage examples:
+    /// # List all artists
+    /// lastfm-edit list artists
+    ///
+    /// # List first 20 artists with play counts
+    /// lastfm-edit list artists --limit 20 --details
+    ///
+    /// # List artists with formatted display
+    /// lastfm-edit list artists --format
+    Artists {
+        /// Maximum number of artists to show (0 for no limit)
+        #[arg(long, default_value = "0")]
+        limit: usize,
+
+        /// Show additional details like play counts
+        #[arg(long)]
+        details: bool,
+
+        /// Show formatted output
+        #[arg(long)]
+        format: bool,
+    },
+
     /// List albums for an artist
     ///
     /// This command lists all albums in your library for a specified artist.
@@ -273,12 +301,15 @@ pub enum Commands {
         offsets: Vec<u64>,
     },
 
-    /// List artist albums and tracks from your library
+    /// List artists, albums, and tracks from your library
     ///
-    /// This command allows you to browse your Last.fm library by listing albums
-    /// and tracks for specific artists.
+    /// This command allows you to browse your Last.fm library by listing artists,
+    /// albums, and tracks.
     ///
     /// Usage examples:
+    /// # List all artists in your library
+    /// lastfm-edit list artists --limit 20 --details
+    ///
     /// # List all albums for The Beatles
     /// lastfm-edit list albums "The Beatles"
     ///
@@ -375,6 +406,11 @@ pub async fn execute_command(
         }
 
         Commands::List { command } => match command {
+            ListCommands::Artists {
+                limit,
+                details,
+                format,
+            } => list::handle_list_artists(client, limit, details, format).await,
             ListCommands::Albums {
                 artist,
                 limit,

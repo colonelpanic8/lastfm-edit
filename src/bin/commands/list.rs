@@ -1,5 +1,50 @@
 use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl};
 
+/// Handle the list artists command
+pub async fn handle_list_artists(
+    client: &LastFmEditClientImpl,
+    limit: usize,
+    verbose: bool,
+    format: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("🎵 Listing artists in your library");
+
+    let mut artists_iterator = client.artists();
+    let mut count = 0;
+
+    while let Some(artist) = artists_iterator.next().await? {
+        count += 1;
+
+        if format {
+            if verbose {
+                println!("  [{count:3}] {artist} ({} plays)", artist.playcount);
+            } else {
+                println!("  [{count:3}] {artist}");
+            }
+        } else if verbose {
+            println!("  [{count:3}] {} ({} plays)", artist.name, artist.playcount);
+        } else {
+            println!("  [{count:3}] {}", artist.name);
+        }
+
+        if limit > 0 && count >= limit {
+            break;
+        }
+    }
+
+    if count == 0 {
+        println!("  No artists found in your library.");
+    } else {
+        println!(
+            "\nFound {} artist{} in your library",
+            count,
+            if count == 1 { "" } else { "s" }
+        );
+    }
+
+    Ok(())
+}
+
 /// Handle the list albums command
 pub async fn handle_list_albums(
     client: &LastFmEditClientImpl,

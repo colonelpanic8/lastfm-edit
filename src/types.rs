@@ -132,6 +132,59 @@ impl Album {
     }
 }
 
+/// Represents a music artist with associated metadata.
+///
+/// This structure contains artist information as parsed from Last.fm pages,
+/// including the total number of scrobbles for this artist.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Artist {
+    /// The artist name
+    pub name: String,
+    /// Number of times this artist has been played/scrobbled
+    pub playcount: u32,
+    /// Unix timestamp of when this artist was last scrobbled (if available)
+    ///
+    /// This field is populated when artists are retrieved from recent scrobbles
+    /// or individual scrobble data, but may be `None` for aggregate artist listings.
+    pub timestamp: Option<u64>,
+}
+
+impl fmt::Display for Artist {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+/// Represents a paginated collection of artists.
+///
+/// This structure is returned by artist listing methods and provides
+/// information about the current page and pagination state.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ArtistPage {
+    /// The artists on this page
+    pub artists: Vec<Artist>,
+    /// Current page number (1-indexed)
+    pub page_number: u32,
+    /// Whether there are more pages available
+    pub has_next_page: bool,
+    /// Total number of pages, if known
+    ///
+    /// This may be `None` if the total page count cannot be determined
+    /// from the Last.fm response.
+    pub total_pages: Option<u32>,
+}
+
+impl Artist {
+    /// Convert the Unix timestamp to a human-readable datetime.
+    ///
+    /// Returns `None` if no timestamp is available or if the timestamp is invalid.
+    #[must_use]
+    pub fn scrobbled_at(&self) -> Option<DateTime<Utc>> {
+        self.timestamp
+            .and_then(|ts| DateTime::from_timestamp(i64::try_from(ts).ok()?, 0))
+    }
+}
+
 // ================================================================================================
 // EDIT OPERATIONS
 // ================================================================================================

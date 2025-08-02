@@ -1,7 +1,7 @@
 use crate::iterator::AsyncPaginatedIterator;
 use crate::types::{
-    Album, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit, LastFmEditSession,
-    LastFmError, ScrobbleEdit, Track,
+    Album, Artist, ArtistPage, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit,
+    LastFmEditSession, LastFmError, ScrobbleEdit, Track,
 };
 use crate::Result;
 use async_trait::async_trait;
@@ -167,6 +167,9 @@ pub trait LastFmEditClient {
     // ITERATOR METHODS - Core library browsing functionality
     // =============================================================================
 
+    /// Create an iterator for browsing all artists in the user's library.
+    fn artists(&self) -> Box<dyn AsyncPaginatedIterator<Artist>>;
+
     /// Create an iterator for browsing an artist's tracks from the user's library.
     fn artist_tracks(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
 
@@ -270,6 +273,9 @@ pub trait LastFmEditClient {
         artist_name: &str,
         max_pages: u32,
     ) -> Result<Option<Track>>;
+
+    /// Get a page of artists from the user's library.
+    async fn get_artists_page(&self, page: u32) -> Result<ArtistPage>;
 
     /// Get a page of tracks from the user's library for the specified artist.
     async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<crate::TrackPage>;

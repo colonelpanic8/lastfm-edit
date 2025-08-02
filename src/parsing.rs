@@ -4,7 +4,7 @@
 //! and other data from Last.fm web pages. These functions are primarily pure
 //! functions that take HTML documents and return structured data.
 
-use crate::{Album, AlbumPage, LastFmError, Result, Track, TrackPage};
+use crate::{Album, AlbumPage, Artist, ArtistPage, LastFmError, Result, Track, TrackPage};
 use scraper::{Html, Selector};
 
 /// Parser struct containing parsing methods for Last.fm HTML pages.
@@ -746,6 +746,77 @@ impl LastFmParser {
             }
         }
         None
+    }
+
+    /// Parse artists page from user's library
+    pub fn parse_artists_page(&self, document: &Html, page_number: u32) -> Result<ArtistPage> {
+        let mut artists = Vec::new();
+
+        // Parse artists from chartlist table rows
+        let table_selector = Selector::parse("table.chartlist").unwrap();
+        let row_selector = Selector::parse("tr.js-link-block").unwrap();
+
+        let tables: Vec<_> = document.select(&table_selector).collect();
+        log::debug!("Found {} chartlist tables for artists", tables.len());
+
+        for table in tables {
+            for row in table.select(&row_selector) {
+                if let Ok(artist) = self.parse_artist_row(&row) {
+                    artists.push(artist);
+                }
+            }
+        }
+
+        log::debug!("Parsed {} artists from page {}", artists.len(), page_number);
+
+        let (has_next_page, total_pages) = self.parse_pagination(document, page_number)?;
+
+        Ok(ArtistPage {
+            artists,
+            page_number,
+            has_next_page,
+            total_pages,
+        })
+    }
+
+    /// Parse a single artist row from the artist library table
+    fn parse_artist_row(&self, row: &scraper::ElementRef) -> Result<Artist> {
+        // Extract artist name from the name column
+        let name_selector = Selector::parse("td.chartlist-name a").unwrap();
+        let name = row
+            .select(&name_selector)
+            .next()
+            .ok_or(LastFmError::Parse("Missing artist name".to_string()))?
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_string();
+
+        // Extract playcount from the count bar
+        let count_selector = Selector::parse(".chartlist-count-bar").unwrap();
+        let playcount = if let Some(count_element) = row.select(&count_selector).next() {
+            let count_text = count_element.text().collect::<String>();
+            self.extract_number_from_count_text(&count_text)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        // Artists in library listings typically don't have individual timestamps
+        let timestamp = None;
+
+        Ok(Artist {
+            name,
+            playcount,
+            timestamp,
+        })
+    }
+
+    /// Extract numeric value from count text like "3,395 scrobbles"
+    fn extract_number_from_count_text(&self, text: &str) -> Option<u32> {
+        // Remove commas and extract the first numeric part
+        let cleaned = text.replace(',', "");
+        cleaned.split_whitespace().next()?.parse::<u32>().ok()
     }
 }
 
