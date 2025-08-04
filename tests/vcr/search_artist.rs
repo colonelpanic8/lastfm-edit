@@ -1,4 +1,4 @@
-#[path = "../common/mod.rs"] mod common;
+use super::common;
 
 /// Test artist search using our test utilities
 #[test_log::test(tokio::test)]

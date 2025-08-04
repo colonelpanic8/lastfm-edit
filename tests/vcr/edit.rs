@@ -1,4 +1,4 @@
-#[path = "../common/mod.rs"] mod common;
+use super::common;
 
 use lastfm_edit::ScrobbleEdit;
 

@@ -1,4 +1,4 @@
-#[path = "../common/mod.rs"] mod common;
+use super::common;
 
 /// Test getting recent tracks using our test utilities
 #[test_log::test(tokio::test)]

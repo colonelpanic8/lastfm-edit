@@ -14,7 +14,7 @@ struct VcrTestSetup {
 
 impl VcrTestSetup {
     fn new(test_name: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let cassette_path = format!("tests/fixtures/{test_name}.yaml");
+        let cassette_path = format!("tests/vcr/fixtures/{test_name}.yaml");
 
         // Ensure fixtures directory exists
         if let Some(parent_dir) = std::path::Path::new(&cassette_path).parent() {

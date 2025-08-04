@@ -1,4 +1,4 @@
-#[path = "../common/mod.rs"] mod common;
+use super::common;
 
 /// Test getting album tracks
 #[test_log::test(tokio::test)]

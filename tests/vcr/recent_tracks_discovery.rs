@@ -1,4 +1,4 @@
-#[path = "../common/mod.rs"] mod common;
+use super::common;
 
 #[test_log::test(tokio::test)]
 async fn recent_tracks_discovery() {
