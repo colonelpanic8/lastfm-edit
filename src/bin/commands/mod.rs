@@ -198,9 +198,9 @@ pub enum Commands {
         #[arg(long)]
         timestamp: Option<u64>,
 
-        /// Whether to edit all instances (optional, defaults to false)
+        /// Disable editing all instances (edit only specific scrobble, defaults to editing all)
         #[arg(long)]
-        edit_all: bool,
+        no_edit_all: bool,
 
         /// Actually apply the edits (default is dry-run mode)
         #[arg(long)]
@@ -340,7 +340,7 @@ pub async fn execute_command(
             new_artist,
             new_album_artist,
             timestamp,
-            edit_all,
+            no_edit_all,
             apply,
             dry_run,
         } => {
@@ -357,7 +357,7 @@ pub async fn execute_command(
                 new_artist.as_deref(),
                 new_album_artist.as_deref(),
                 timestamp,
-                edit_all,
+                !no_edit_all, // edit_all is true by default, false only if --no-edit-all is provided
             );
 
             edit::handle_edit_command(client, &edit, is_dry_run).await
