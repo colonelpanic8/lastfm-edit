@@ -1,4 +1,4 @@
-use http_client::native::NativeClient;
+use http_client_vcr::NoOpClient;
 use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession};
 
 fn create_test_session() -> LastFmEditSession {
@@ -12,11 +12,11 @@ fn create_test_session() -> LastFmEditSession {
 
 /// Test that futures from client operations are Send.
 /// This ensures they can be used across await boundaries in async contexts.
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_client_futures_are_send() {
     fn assert_send<T: Send>(_: T) {}
 
-    let client = Box::new(NativeClient::new());
+    let client = Box::new(NoOpClient::new());
     let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // Test that client get_recent_scrobbles future is Send
@@ -32,7 +32,7 @@ async fn test_client_futures_are_send() {
 /// This ensures they can be used across await boundaries.
 /// Note: Current iterator implementation holds references to the client,
 /// so they are not Send. This is intentional for lifetime safety.
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_iterator_futures_are_send() {
     // This test is commented out because iterators now hold references
     // to the client, making them not Send. This is expected behavior.
@@ -44,9 +44,9 @@ async fn test_iterator_futures_are_send() {
 
 /// Test that we can spawn tasks with these futures.
 /// This is the most important practical test - futures must be Send to use with tokio::spawn.
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_futures_can_be_spawned() {
-    let client = Box::new(NativeClient::new());
+    let client = Box::new(NoOpClient::new());
     let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // This should compile if futures are Send
@@ -62,9 +62,9 @@ async fn test_futures_can_be_spawned() {
 /// Test that pagination methods work across await boundaries.
 /// Note: Iterators are not Send due to holding client references.
 /// Use pagination methods directly for Send behavior.
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_pagination_methods_across_await_boundaries() {
-    let client = Box::new(NativeClient::new());
+    let client = Box::new(NoOpClient::new());
     let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // This demonstrates using the underlying pagination methods which are Send

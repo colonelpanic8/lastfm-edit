@@ -6,7 +6,7 @@ mod mock_tests {
     };
     use mockall::predicate::*; // for eq(), any(), etc.
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_mock_basic_functionality() -> Result<()> {
         let mut mock_client = MockLastFmEditClient::new();
 
@@ -24,7 +24,7 @@ mod mock_tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_mock_edit_scrobble() -> Result<()> {
         let mut mock_client = MockLastFmEditClient::new();
 
@@ -78,7 +78,7 @@ mod mock_tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_mock_get_recent_scrobbles() -> Result<()> {
         let mut mock_client = MockLastFmEditClient::new();
 
@@ -119,7 +119,7 @@ mod mock_tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_mock_iterator_concept() -> Result<()> {
         // Note: Due to Rust's lifetime system, mocking iterators that borrow from
         // the client is complex. In practice, you would typically mock the underlying
@@ -157,7 +157,7 @@ mod mock_tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_mock_iterator_trait_objects() -> Result<()> {
         // This test demonstrates that iterator methods return trait objects
         // that can be used polymorphically, even though mocking the iterators

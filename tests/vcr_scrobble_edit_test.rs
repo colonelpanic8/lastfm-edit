@@ -1,27 +1,87 @@
 mod common;
 
-#[tokio::test]
-async fn edit_scrobble_works() {
-    let client = common::create_lastfm_vcr_test_client("edit_scrobble_works")
+use lastfm_edit::ScrobbleEdit;
+
+#[test_log::test(tokio::test)]
+async fn edit_album_remove_deluxe_edition() {
+    let client = common::create_lastfm_vcr_test_client("edit_album_remove_deluxe_edition")
         .await
         .expect("Failed to setup VCR client");
 
-    // Just test that we can browse tracks after login - no editing yet
-    let mut wilco_tracks = client.artist_tracks("Wilco");
-    let mut track_count = 0;
+    // Create an edit to change "Who's Next (Deluxe Edition)" to "Who's Next"
+    let edit = ScrobbleEdit::for_album(
+        "Who's Next (Deluxe Edition)", // Original album name
+        "The Who",                     // Artist name
+        "The Who",                     // Album artist (same as artist)
+    )
+    .with_album_name("Who's Next") // New album name without (Deluxe Edition)
+    .with_edit_all(true); // Edit all matching scrobbles
 
-    // Sample a few tracks to verify the connection works
-    while let Some(_track) = wilco_tracks.next().await.expect("Failed to get next track") {
-        track_count += 1;
+    // Execute the edit
+    let response = client
+        .edit_scrobble(&edit)
+        .await
+        .expect("Edit should succeed");
 
-        // Just sample the first 5 tracks for now
-        if track_count >= 5 {
-            break;
-        }
-    }
+    // Verify the edit was successful
+    assert!(response.success(), "Edit should be successful");
 
+    // Check that we got some edits back
     assert!(
-        track_count > 0,
-        "Should have found at least one Wilco track"
+        !response.individual_results.is_empty(),
+        "Should have found at least one scrobble to edit"
     );
+
+    // Verify the edit details
+    for result in &response.individual_results {
+        let exact_edit = &result.exact_scrobble_edit;
+        assert_eq!(
+            exact_edit.album_name_original,
+            "Who's Next (Deluxe Edition)"
+        );
+        assert_eq!(exact_edit.album_name, "Who's Next");
+        assert_eq!(exact_edit.artist_name_original, "The Who");
+        assert_eq!(exact_edit.artist_name, "The Who");
+    }
+}
+
+#[test_log::test(tokio::test)]
+async fn edit_single_track_correction() {
+    let client = common::create_lastfm_vcr_test_client("edit_single_track_correction")
+        .await
+        .expect("Failed to setup VCR client");
+
+    // Create an edit to fix a single track (example: fix a typo or incorrect track name)
+    let edit = ScrobbleEdit::from_track_and_artist(
+        "Won't Get Fooled Again - Original Album Version",
+        "The Who",
+    )
+    .with_track_name("Won't Get Fooled Again");
+
+    // Execute the edit
+    let response = client
+        .edit_scrobble(&edit)
+        .await
+        .expect("Edit should succeed");
+
+    // Verify the edit was successful
+    assert!(response.success(), "Edit should be successful");
+
+    // Check that we got exactly one edit back (since edit_all is false)
+    assert_eq!(
+        response.individual_results.len(),
+        1,
+        "Should have found exactly one scrobble to edit"
+    );
+
+    // Verify the edit details
+    let result = &response.individual_results[0];
+    let exact_edit = &result.exact_scrobble_edit;
+    assert_eq!(
+        exact_edit.track_name_original,
+        "Won't Get Fooled Again - Original Album Version"
+    );
+    assert_eq!(exact_edit.track_name, "Won't Get Fooled Again");
+    assert_eq!(exact_edit.artist_name_original, "The Who");
+    assert_eq!(exact_edit.artist_name, "The Who");
 }

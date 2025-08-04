@@ -1,3 +1,4 @@
+use http_client_vcr::NoOpClient;
 use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -11,18 +12,18 @@ fn create_test_session() -> LastFmEditSession {
     )
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_shared_broadcaster_across_clients() {
     // Create the first client
-    let http_client1 = http_client::native::NativeClient::new();
+    let http_client1 = NoOpClient::new();
     let client1 = LastFmEditClientImpl::from_session(Box::new(http_client1), create_test_session());
 
     // Create second client that shares the broadcaster with client1
-    let http_client2 = http_client::native::NativeClient::new();
+    let http_client2 = NoOpClient::new();
     let client2 = client1.with_shared_broadcaster(Box::new(http_client2));
 
     // Create third client with independent broadcaster
-    let http_client3 = http_client::native::NativeClient::new();
+    let http_client3 = NoOpClient::new();
     let session = client1.get_session();
     let client3 = LastFmEditClientImpl::from_session(Box::new(http_client3), session);
 
@@ -57,19 +58,19 @@ async fn test_shared_broadcaster_across_clients() {
     assert!(no_event_3.is_err());
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_session_sharing_vs_broadcaster_sharing() {
     // Create first client
-    let http_client1 = http_client::native::NativeClient::new();
+    let http_client1 = NoOpClient::new();
     let client1 = LastFmEditClientImpl::from_session(Box::new(http_client1), create_test_session());
 
     // Client2: shares session but NOT broadcaster
-    let http_client2 = http_client::native::NativeClient::new();
+    let http_client2 = NoOpClient::new();
     let session = client1.get_session();
     let client2 = LastFmEditClientImpl::from_session(Box::new(http_client2), session);
 
     // Client3: shares BOTH session and broadcaster
-    let http_client3 = http_client::native::NativeClient::new();
+    let http_client3 = NoOpClient::new();
     let client3 = client1.with_shared_broadcaster(Box::new(http_client3));
 
     // Verify session sharing
@@ -97,13 +98,13 @@ async fn test_session_sharing_vs_broadcaster_sharing() {
     // while client2 would not (since it has an independent broadcaster)
 }
 
-#[test]
+#[test_log::test]
 fn test_client_creation_patterns() {
     // Pattern 1: Independent clients
-    let http_client1 = http_client::native::NativeClient::new();
+    let http_client1 = NoOpClient::new();
     let client1 = LastFmEditClientImpl::from_session(Box::new(http_client1), create_test_session());
 
-    let http_client2 = http_client::native::NativeClient::new();
+    let http_client2 = NoOpClient::new();
     let session = client1.get_session();
     let client2 = LastFmEditClientImpl::from_session(Box::new(http_client2), session);
 
@@ -114,7 +115,7 @@ fn test_client_creation_patterns() {
     );
 
     // Pattern 2: Shared broadcaster
-    let http_client3 = http_client::native::NativeClient::new();
+    let http_client3 = NoOpClient::new();
     let client3 = client1.with_shared_broadcaster(Box::new(http_client3));
 
     // These should share both session and broadcaster

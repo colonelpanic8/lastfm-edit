@@ -1,4 +1,4 @@
-use http_client::native::NativeClient;
+use http_client_vcr::NoOpClient;
 use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession};
 
 fn create_test_session() -> LastFmEditSession {
@@ -11,11 +11,11 @@ fn create_test_session() -> LastFmEditSession {
 }
 
 /// Test to check if the parsing methods (non-async) are Send + Sync
-#[test]
+#[test_log::test]
 fn test_parsing_methods_are_send_sync() {
     fn assert_send_sync<T: Send + Sync>(_: T) {}
 
-    let client = Box::new(NativeClient::new());
+    let client = Box::new(NoOpClient::new());
     let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // Test that the client itself is Send + Sync (should be now that parsing is separate)
@@ -23,9 +23,9 @@ fn test_parsing_methods_are_send_sync() {
 }
 
 /// Test just the iterator creation without calling next() to isolate HTTP client issues
-#[test]
+#[test_log::test]
 fn test_iterator_creation_is_send_sync() {
-    let client = Box::new(NativeClient::new());
+    let client = Box::new(NoOpClient::new());
     let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // Create iterators one at a time to avoid borrowing issues
@@ -40,11 +40,11 @@ fn test_iterator_creation_is_send_sync() {
 }
 
 /// Test that the client itself is Send + Sync (structure-wise)
-#[test]
+#[test_log::test]
 fn test_client_is_send_sync() {
     fn assert_send_sync<T: Send + Sync + 'static>(_: T) {}
 
-    let client = Box::new(NativeClient::new());
+    let client = Box::new(NoOpClient::new());
     let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
     // The client should be Send + Sync at the structural level
