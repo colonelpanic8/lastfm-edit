@@ -63,7 +63,15 @@
       "Bash(LASTFM_EDIT_USERNAME=test LASTFM_EDIT_PASSWORD=test cargo test test_login_and_discover_queen_scrobbles -- --nocapture)",
       "Bash(VCR_RECORD=true LASTFM_EDIT_USERNAME=test LASTFM_EDIT_PASSWORD=test cargo test test_login_and_discover_queen_scrobbles -- --nocapture)",
       "Bash(awk:*)",
-      "Bash(diff:*)"
+      "Bash(diff:*)",
+      "Bash(VCR_RECORD=true cargo test --features vcr test_login_and_get_recent_tracks -- --nocapture)",
+      "Bash(python3:*)",
+      "Bash(VCR_RECORD=true cargo test --features vcr vcr_lastfm_auth_tests::test_login_and_get_recent_tracks -- --nocapture)",
+      "Bash(RUST_LOG=debug cargo test --test compare_csrf_tokens --features vcr -- --nocapture)",
+      "Bash(RUST_LOG=lastfm_edit=trace cargo test --test vcr_login_test -- --nocapture)",
+      "Bash(RUST_LOG=lastfm_edit=debug cargo test --test vcr_login_test -- --nocapture)",
+      "Bash(RUST_LOG=lastfm_edit=debug cargo test --test vcr_login_test vcr_login_test -- --nocapture)",
+      "Bash(RUST_LOG=lastfm_edit=debug cargo test --test vcr_login_test direct_login_test -- --nocapture)"
     ],
     "deny": []
   }

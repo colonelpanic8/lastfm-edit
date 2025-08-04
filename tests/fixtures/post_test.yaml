@@ -1,0 +1,28 @@
+interactions:
+- request:
+    method: POST
+    url: https://httpbin.org/post
+    headers:
+      content-type:
+      - application/x-www-form-urlencoded
+      user-agent:
+      - test-agent
+    body: test_field=test_value&another_field=another_value
+    version: None
+  response:
+    status: 200
+    headers:
+      access-control-allow-origin:
+      - '*'
+      access-control-allow-credentials:
+      - 'true'
+      server:
+      - gunicorn/19.9.0
+      content-length:
+      - '445'
+      date:
+      - Mon, 04 Aug 2025 08:41:10 GMT
+      content-type:
+      - application/json
+    body: "{\n  \"args\": {}, \n  \"data\": \"\", \n  \"files\": {}, \n  \"form\": {}, \n  \"headers\": {\n    \"Accept\": \"*/*\", \n    \"Accept-Encoding\": \"deflate, gzip\", \n    \"Content-Length\": \"0\", \n    \"Content-Type\": \"application/x-www-form-urlencoded\", \n    \"Host\": \"httpbin.org\", \n    \"User-Agent\": \"test-agent\", \n    \"X-Amzn-Trace-Id\": \"Root=1-68907225-37e0bb5a227de8677ac7255d\"\n  }, \n  \"json\": null, \n  \"origin\": \"67.173.240.41\", \n  \"url\": \"https://httpbin.org/post\"\n}\n"
+    version: None

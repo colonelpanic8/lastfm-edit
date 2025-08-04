@@ -1,6 +1,5 @@
 use http_client_vcr::{VcrClient, VcrMode};
-use lastfm_edit::vcr_matcher::LastFmMatcher;
-use lastfm_edit::vcr_test_utils::{create_lastfm_test_filter_chain, prepare_lastfm_test_cassette};
+use lastfm_edit::vcr_test_utils::create_lastfm_test_filter_chain;
 use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl};
 use std::env;
 use std::fs;
@@ -47,17 +46,13 @@ pub async fn create_lastfm_test_client(
         ("test_user".to_string(), "test_password".to_string())
     };
 
-    // Create VCR client with Last.fm test filtering and Last.fm-specific matching
+    // Create VCR client with default matching and no filters
     let inner_client = Box::new(http_client::native::NativeClient::new());
-    let filter_chain = create_lastfm_test_filter_chain()?;
-    let lastfm_matcher = Box::new(LastFmMatcher::new());
 
     let vcr_client = VcrClient::builder()
         .inner_client(inner_client)
         .mode(mode.clone())
         .cassette_path(&cassette_path)
-        .filter_chain(filter_chain)
-        .matcher(lastfm_matcher)
         .build()
         .await?;
 
@@ -72,11 +67,12 @@ pub async fn create_lastfm_test_client(
         Ok(client) => {
             println!("✅ Last.fm login successful!");
 
-            // If we just recorded, prepare the cassette for future test runs
+            // If we just recorded, apply filters to the cassette for future test runs
             if matches!(mode, VcrMode::Record | VcrMode::Once) {
-                println!("🧹 Preparing cassette for future test runs...");
-                prepare_lastfm_test_cassette(&cassette_path).await?;
-                println!("✅ Cassette prepared: username preserved, credentials filtered");
+                println!("🧹 Applying filters to recorded cassette...");
+                let filter_chain = create_lastfm_test_filter_chain()?;
+                http_client_vcr::filter_cassette_file(&cassette_path, filter_chain).await?;
+                println!("✅ Cassette filtered: credentials filtered for security");
             }
 
             Ok(Box::new(client))

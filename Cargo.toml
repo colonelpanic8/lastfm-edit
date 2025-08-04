@@ -34,7 +34,7 @@ dirs = "5.0"
 mockall = { version = "0.13", optional = true }
 
 # VCR testing utilities
-http-client-vcr = { git = "https://github.com/colonelpanic8/http-client-vcr", optional = true }
+http-client-vcr = { path = "/home/imalison/Projects/http-client-vcr" }
 
 
 [features]
@@ -42,12 +42,12 @@ default = ["curl"]
 wasm = ["http-client/wasm_client"]
 curl = ["http-client/curl_client"]
 mock = ["mockall"]
-vcr = ["http-client-vcr"]
 
 [dev-dependencies]
 tokio-test = "0.4"
 mockall = "0.13"
-http-client-vcr = { git = "https://github.com/colonelpanic8/http-client-vcr" }
+http-client-vcr = { path = "/home/imalison/Projects/http-client-vcr" }
+test-log = "0.2"
 
 [[bin]]
 name = "lastfm-edit"
