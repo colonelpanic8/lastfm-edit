@@ -19,6 +19,6 @@ async fn get_recent_tracks() {
         count += 1;
     }
 
-    println!("Total recent tracks found: {}", count);
+    log::debug!("Total recent tracks found: {count}");
     assert!(count > 0, "Should have found at least one recent track");
 }

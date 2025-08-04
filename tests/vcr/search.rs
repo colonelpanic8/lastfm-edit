@@ -2,13 +2,12 @@ use super::common;
 
 /// Test artist search using our test utilities
 #[test_log::test(tokio::test)]
-async fn search_artist() {
-    let client = common::create_lastfm_vcr_test_client("search_artist")
+async fn search_iterator() {
+    let client = common::create_lastfm_vcr_test_client("search")
         .await
         .expect("Failed to setup VCR client");
 
-    // Search for Beatles tracks
-    let mut search_tracks = client.search_tracks("Beatles");
+    let mut search_tracks = client.search_tracks("moon");
     let mut count = 0;
 
     while let Some(_track) = search_tracks
@@ -17,10 +16,7 @@ async fn search_artist() {
         .expect("Failed to get next track")
     {
         count += 1;
-        if count >= 5 {
-            break;
-        }
     }
 
-    assert!(count > 0, "Should have found at least one Beatles track");
+    assert!(count == 122);
 }

@@ -244,6 +244,6 @@ mod no_mock_tests {
     #[test]
     fn test_mock_feature_disabled() {
         // This test ensures the code compiles even when the mock feature is disabled
-        println!("Mock feature is disabled - MockLastFmEditClient is not available");
+        log::debug!("Mock feature is disabled - MockLastFmEditClient is not available");
     }
 }
