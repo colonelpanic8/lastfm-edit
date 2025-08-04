@@ -222,13 +222,9 @@ pub mod retry;
 pub mod session_persistence;
 pub mod r#trait;
 pub mod types;
-#[cfg(feature = "vcr")]
 pub mod vcr_filters;
-#[cfg(feature = "vcr")]
 pub mod vcr_form_data;
-#[cfg(feature = "vcr")]
 pub mod vcr_matcher;
-#[cfg(feature = "vcr")]
 pub mod vcr_test_utils;
 
 pub use client::LastFmEditClientImpl;

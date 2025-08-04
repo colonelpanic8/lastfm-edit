@@ -1,11 +1,11 @@
 use http_client::HttpClient;
-use http_client_vcr::{
-    filter_cassette_file, BodyFilter, FilterChain, HeaderFilter, VcrClient, VcrMode,
-};
+use http_client_vcr::{filter_cassette_file, BodyFilter, FilterChain, HeaderFilter, VcrMode};
 use std::fs;
 
+mod common;
+
 #[tokio::test]
-async fn test_vcr_filter_mode() -> Result<(), Box<dyn std::error::Error>> {
+async fn vcr_filter_mode() -> Result<(), Box<dyn std::error::Error>> {
     // Create a test cassette path for filtering
     let original_cassette = "tests/fixtures/queen_discover_scrobbles.yaml";
     let filtered_cassette = "tests/fixtures/queen_discover_scrobbles_filtered.yaml";
@@ -48,7 +48,6 @@ async fn test_vcr_filter_mode() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test 2: Use VcrClient in Filter mode
     println!("Testing VcrClient in Filter mode...");
-    let inner_client = Box::new(http_client::native::NativeClient::new());
 
     // Create another filter chain for the VcrClient (since we can't clone)
     let vcr_filter_chain = FilterChain::new().add_filter(Box::new(
@@ -58,13 +57,9 @@ async fn test_vcr_filter_mode() -> Result<(), Box<dyn std::error::Error>> {
             .replace_header("authorization", "[FILTERED_AUTH]"),
     ));
 
-    let vcr_client = VcrClient::builder()
-        .inner_client(inner_client)
-        .mode(VcrMode::Filter)
-        .cassette_path(filtered_cassette)
-        .filter_chain(vcr_filter_chain)
-        .build()
-        .await?;
+    let vcr_client =
+        common::create_vcr_client(filtered_cassette, VcrMode::Filter, Some(vcr_filter_chain))
+            .await?;
 
     // Try to make a request that should match something in the cassette
     use http_types::{Method, Request, Url};
@@ -118,7 +113,7 @@ async fn test_vcr_filter_mode() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
-async fn test_filter_mode_no_new_requests() -> Result<(), Box<dyn std::error::Error>> {
+async fn filter_mode_no_new_requests() -> Result<(), Box<dyn std::error::Error>> {
     // Test that Filter mode doesn't allow new requests (only replays filtered existing ones)
     let cassette_path = "tests/fixtures/empty_filter_test.yaml";
 
@@ -126,13 +121,12 @@ async fn test_filter_mode_no_new_requests() -> Result<(), Box<dyn std::error::Er
     let empty_cassette_content = "interactions: []";
     fs::write(cassette_path, empty_cassette_content)?;
 
-    let inner_client = Box::new(http_client::native::NativeClient::new());
-    let vcr_client = VcrClient::builder()
-        .inner_client(inner_client)
-        .mode(VcrMode::Filter)
-        .cassette_path(cassette_path)
-        .build()
-        .await?;
+    let vcr_client = common::create_vcr_client(
+        cassette_path,
+        VcrMode::Filter,
+        None, // No filters for this test
+    )
+    .await?;
 
     // Try to make a request to a URL that doesn't exist in the cassette
     use http_types::{Method, Request, Url};

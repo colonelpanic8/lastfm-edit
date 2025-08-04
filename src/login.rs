@@ -34,35 +34,139 @@ impl LoginManager {
     ///
     /// Returns a [`LastFmEditSession`] on successful authentication, or [`LastFmError::Auth`] on failure.
     pub async fn login(&self, username: &str, password: &str) -> Result<LastFmEditSession> {
-        // Get login page to extract CSRF token
-        let login_url = format!("{}/login", self.base_url);
-        let mut response = self.get(&login_url).await?;
+        log::info!("🔐 Starting Last.fm login for username: {username}");
 
-        // Extract any initial cookies from the login page
+        // Step 1: Fetch login page and extract CSRF token and cookies
+        let login_url = format!("{}/login", self.base_url);
+        let (csrf_token, next_field, mut cookies) = self.fetch_login_page(&login_url).await?;
+
+        // Step 2: Submit login form
+        let response = self
+            .submit_login_form(
+                &login_url,
+                username,
+                password,
+                &csrf_token,
+                &next_field,
+                &cookies,
+            )
+            .await?;
+
+        // Step 3: Extract cookies from login response
+        extract_cookies_from_response(&response, &mut cookies);
+        log::debug!("🍪 Cookies after login response: {cookies:?}");
+
+        // Step 4: Validate login response
+        self.validate_login_response(response, username, cookies, csrf_token)
+            .await
+    }
+
+    /// Fetch the login page and extract CSRF token, next field, and cookies
+    async fn fetch_login_page(
+        &self,
+        login_url: &str,
+    ) -> Result<(String, Option<String>, Vec<String>)> {
+        log::debug!("📡 Fetching login page: {login_url}");
+        let mut response = self.get(login_url).await?;
+
+        log::debug!("📋 Login page response status: {}", response.status());
+        log::debug!(
+            "📋 Login page response headers: {:?}",
+            response.iter().collect::<Vec<_>>()
+        );
+
+        // Extract cookies from the login page response
         let mut cookies = Vec::new();
         extract_cookies_from_response(&response, &mut cookies);
+        log::debug!("🍪 Initial cookies from login page: {cookies:?}");
 
+        // Read and parse the HTML response
         let html = response
             .body_string()
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Parse HTML to extract login form data
-        let (csrf_token, next_field) = self.extract_login_form_data(&html)?;
+        log::debug!("📄 Login page HTML length: {} chars", html.len());
+        if html.len() < 500 {
+            log::debug!("📄 Login page HTML content (short): {html}");
+        }
 
-        // Submit login form
+        // Extract CSRF token and next field from form
+        let (csrf_token, next_field) = self.extract_login_form_data(&html)?;
+        log::debug!("🔑 Extracted CSRF token: {csrf_token}",);
+        log::debug!("➡️  Next field: {next_field:?}");
+
+        Ok((csrf_token, next_field, cookies))
+    }
+
+    /// Submit the login form with credentials
+    async fn submit_login_form(
+        &self,
+        login_url: &str,
+        username: &str,
+        password: &str,
+        csrf_token: &str,
+        next_field: &Option<String>,
+        cookies: &[String],
+    ) -> Result<http_types::Response> {
+        // Prepare form data
         let mut form_data = HashMap::new();
-        form_data.insert("csrfmiddlewaretoken", csrf_token.as_str());
+        form_data.insert("csrfmiddlewaretoken", csrf_token);
         form_data.insert("username_or_email", username);
         form_data.insert("password", password);
 
-        // Add 'next' field if present
         if let Some(ref next_value) = next_field {
             form_data.insert("next", next_value);
+            log::debug!("➡️  Including next field in form: {next_value}");
         }
 
+        log::debug!(
+            "📝 Form data fields: {:?}",
+            form_data.keys().collect::<Vec<_>>()
+        );
+        log::debug!("📝 Form username: {username}");
+        log::debug!("📝 Form password length: {} chars", password.len());
+
+        // Create and configure the POST request
+        let mut request = self.create_login_request(login_url, cookies)?;
+
+        // Convert form data to URL-encoded string
+        let form_string: String = form_data
+            .iter()
+            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        log::debug!("📤 Sending POST request to: {login_url}");
+        log::debug!("📤 Form body length: {} chars", form_string.len());
+        log::debug!("📤 Form body (masked): {form_string}");
+        log::debug!("📤 Request headers: Referer={}, Origin={}, Content-Type=application/x-www-form-urlencoded", 
+            login_url, &self.base_url);
+
+        request.set_body(form_string);
+
+        // Send the request
+        let response = self
+            .client
+            .send(request)
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!("📥 Login response status: {}", response.status());
+        log::debug!(
+            "📥 Login response headers: {:?}",
+            response.iter().collect::<Vec<_>>()
+        );
+
+        Ok(response)
+    }
+
+    /// Create and configure the login POST request with all necessary headers
+    fn create_login_request(&self, login_url: &str, cookies: &[String]) -> Result<Request> {
         let mut request = Request::new(Method::Post, login_url.parse::<Url>().unwrap());
-        let _ = request.insert_header("Referer", &login_url);
+
+        // Set all the required headers
+        let _ = request.insert_header("Referer", login_url);
         let _ = request.insert_header("Origin", &self.base_url);
         let _ = request.insert_header("Content-Type", "application/x-www-form-urlencoded");
         let _ = request.insert_header(
@@ -89,69 +193,57 @@ impl LoginManager {
         let _ = request.insert_header("Sec-Fetch-Site", "same-origin");
         let _ = request.insert_header("Sec-Fetch-User", "?1");
 
-        // Add any cookies we already have
+        // Add cookies if we have any
         if !cookies.is_empty() {
             let cookie_header = cookies.join("; ");
             let _ = request.insert_header("Cookie", &cookie_header);
         }
 
-        // Convert form data to URL-encoded string
-        let form_string: String = form_data
-            .iter()
-            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
-            .collect::<Vec<_>>()
-            .join("&");
+        Ok(request)
+    }
 
-        request.set_body(form_string);
-
-        let mut response = self
-            .client
-            .send(request)
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        // Extract session cookies from login response
-        extract_cookies_from_response(&response, &mut cookies);
-
-        log::debug!("Login response status: {}", response.status());
-
-        // If we get a 403, it's likely an auth failure
+    /// Validate the login response and return a session if successful
+    async fn validate_login_response(
+        &self,
+        mut response: http_types::Response,
+        username: &str,
+        cookies: Vec<String>,
+        csrf_token: String,
+    ) -> Result<LastFmEditSession> {
+        // Handle 403 Forbidden responses (likely CSRF failures)
         if response.status() == 403 {
-            let response_html = response
-                .body_string()
-                .await
-                .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-            let login_error = self.parse_login_error(&response_html);
-            return Err(LastFmError::Auth(login_error));
+            return self.handle_403_response(response).await;
         }
 
-        // Check if we got a new sessionid that looks like a real Last.fm session
-        let has_real_session = cookies
-            .iter()
-            .any(|cookie| cookie.starts_with("sessionid=.") && cookie.len() > 50);
-
-        if has_real_session && (response.status() == 302 || response.status() == 200) {
-            // We got a real session ID, login was successful
-            log::debug!("Login successful - authenticated session established");
-            return Ok(LastFmEditSession::new(
-                username.to_string(),
-                cookies,
-                Some(csrf_token),
-                self.base_url.clone(),
-            ));
+        // Check for successful session establishment
+        if let Some(session) =
+            self.check_session_success(&response, username, &cookies, &csrf_token)
+        {
+            return Ok(session);
         }
 
-        // At this point, we didn't get a 403, so read the response body for other cases
+        // For other cases, analyze the response body
         let response_html = response
             .body_string()
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
-        // Check if we were redirected away from login page (success) by parsing
+        log::debug!(
+            "📄 Login response HTML length: {} chars",
+            response_html.len()
+        );
+        if response_html.len() < 500 {
+            log::debug!("📄 Login response HTML content (short): {response_html}");
+        }
+
+        // Check if we were redirected away from login page (success indicator)
         let has_login_form = self.check_for_login_form(&response_html);
+        log::debug!("🔍 Final login validation:");
+        log::debug!("   - Response contains login form: {has_login_form}");
+        log::debug!("   - Response status: {}", response.status());
 
         if !has_login_form && response.status() == 200 {
+            log::info!("✅ Login successful - no login form detected in response");
             Ok(LastFmEditSession::new(
                 username.to_string(),
                 cookies,
@@ -159,9 +251,66 @@ impl LoginManager {
                 self.base_url.clone(),
             ))
         } else {
-            // Parse error messages
+            // Parse and return error message
             let error_msg = self.parse_login_error(&response_html);
+            log::warn!("❌ Login failed: {error_msg}");
             Err(LastFmError::Auth(error_msg))
+        }
+    }
+
+    /// Handle 403 Forbidden responses
+    async fn handle_403_response(
+        &self,
+        mut response: http_types::Response,
+    ) -> Result<LastFmEditSession> {
+        let response_html = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!("📄 403 response HTML length: {} chars", response_html.len());
+        if response_html.len() < 2000 {
+            log::debug!("📄 403 response HTML content: {response_html}");
+        } else {
+            // Log first and last 500 chars for large responses
+            log::debug!("📄 403 response HTML start: {}", &response_html[..500]);
+            log::debug!(
+                "📄 403 response HTML end: {}",
+                &response_html[response_html.len() - 500..]
+            );
+        }
+
+        let login_error = self.parse_login_error(&response_html);
+        Err(LastFmError::Auth(login_error))
+    }
+
+    /// Check if the response indicates successful session establishment
+    fn check_session_success(
+        &self,
+        response: &http_types::Response,
+        username: &str,
+        cookies: &[String],
+        csrf_token: &str,
+    ) -> Option<LastFmEditSession> {
+        let has_real_session = cookies
+            .iter()
+            .any(|cookie| cookie.starts_with("sessionid=.") && cookie.len() > 50);
+
+        log::debug!("🔍 Session validation:");
+        log::debug!("   - Has real session cookie: {has_real_session}");
+        log::debug!("   - Response status: {}", response.status());
+        log::debug!("   - All cookies: {cookies:?}");
+
+        if has_real_session && (response.status() == 302 || response.status() == 200) {
+            log::info!("✅ Login successful - authenticated session established");
+            Some(LastFmEditSession::new(
+                username.to_string(),
+                cookies.to_vec(),
+                Some(csrf_token.to_string()),
+                self.base_url.clone(),
+            ))
+        } else {
+            None
         }
     }
 
@@ -196,12 +345,15 @@ impl LoginManager {
     fn extract_csrf_token(&self, document: &Html) -> Result<String> {
         let csrf_selector = Selector::parse("input[name=\"csrfmiddlewaretoken\"]").unwrap();
 
-        document
+        let csrf_token = document
             .select(&csrf_selector)
             .next()
             .and_then(|input| input.value().attr("value"))
             .map(|token| token.to_string())
-            .ok_or(LastFmError::CsrfNotFound)
+            .ok_or(LastFmError::CsrfNotFound)?;
+
+        log::debug!("🔑 CSRF token extracted from HTML: {csrf_token}");
+        Ok(csrf_token)
     }
 
     /// Parse login error messages from HTML
