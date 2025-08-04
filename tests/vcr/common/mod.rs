@@ -72,7 +72,7 @@ impl VcrTestSetup {
             .matcher(Box::new(LastFmEditVcrMatcher::new()))
             .build()
             .await?;
-        println!("VCR client created successfully");
+        log::debug!("VCR client created successfully");
 
         Ok(vcr_client)
     }

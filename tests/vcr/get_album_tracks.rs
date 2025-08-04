@@ -15,7 +15,7 @@ async fn get_album_tracks() {
         count += 1;
     }
 
-    println!("Total album tracks found: {}", count);
+    log::debug!("Total album tracks found: {count}");
     assert!(
         count > 0,
         "Should have found at least one track from the album"
