@@ -1060,6 +1060,7 @@ dependencies = [
  "async-trait",
  "http-client-2",
  "http-types-2",
+ "log",
  "regex",
  "serde",
  "serde_json",

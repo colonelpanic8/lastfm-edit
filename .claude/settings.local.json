@@ -74,7 +74,11 @@
       "Bash(RUST_LOG=lastfm_edit=debug cargo test --test vcr_login_test direct_login_test -- --nocapture)",
       "Bash(RUST_LOG=lastfm_edit=debug cargo test -- vcr_login_test --nocapture)",
       "Bash(RUST_LOG=lastfm_edit=debug cargo test -- direct_login_test --nocapture)",
-      "Bash(RUST_LOG=lastfm_edit=debug cargo test -- debug_login_vcr_issue --nocapture)"
+      "Bash(RUST_LOG=lastfm_edit=debug cargo test -- debug_login_vcr_issue --nocapture)",
+      "Bash(RUST_LOG=http_client_vcr=debug cargo test vcr::edit::edit_track -- --nocapture)",
+      "Bash(RUST_LOG=lastfm_edit=debug cargo test vcr::edit::edit_track -- --nocapture)",
+      "Bash(RUST_LOG=debug cargo test vcr::edit::edit_track -- --nocapture 2 >& 1)",
+      "Bash(RUST_LOG=lastfm_edit::vcr_matcher=trace cargo test vcr::edit::edit_track -- --nocapture)"
     ],
     "deny": []
   }

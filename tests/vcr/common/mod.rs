@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use http_client_vcr::{FilterChain, NoOpClient, VcrClient, VcrMode};
+use lastfm_edit::vcr_matcher::LastFmEditVcrMatcher;
 use lastfm_edit::vcr_test_utils::create_lastfm_test_filter_chain;
 use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl};
 use std::env;
@@ -21,13 +22,13 @@ impl VcrTestSetup {
             fs::create_dir_all(parent_dir)?;
         }
 
-        let vcr_record = env::var("VCR_RECORD").is_ok();
+        let vcr_record = env::var("LAST_FM_VCR_RECORD").is_ok();
         let cassette_exists = std::path::Path::new(&cassette_path).exists();
 
         // Fail fast if we're not recording and no cassette exists
         if !vcr_record && !cassette_exists {
             return Err(format!(
-                "No cassette found at '{cassette_path}' and VCR_RECORD is not set. Either set VCR_RECORD to record new interactions or ensure the cassette file exists."
+                "No cassette found at '{cassette_path}' and LAST_FM_VCR_RECORD is not set. Either set LAST_FM_VCR_RECORD to record new interactions or ensure the cassette file exists."
             ).into());
         }
 
@@ -48,9 +49,9 @@ impl VcrTestSetup {
         if self.vcr_record {
             // Recording mode: need real credentials
             let username = env::var("LASTFM_EDIT_USERNAME")
-                .expect("LASTFM_EDIT_USERNAME required when VCR_RECORD=true");
+                .expect("LASTFM_EDIT_USERNAME required when LAST_FM_VCR_RECORD is set");
             let password = env::var("LASTFM_EDIT_PASSWORD")
-                .expect("LASTFM_EDIT_PASSWORD required when VCR_RECORD=true");
+                .expect("LASTFM_EDIT_PASSWORD required when LAST_FM_VCR_RECORD is set");
             (username, password)
         } else {
             // Replay mode: use test credentials
@@ -68,8 +69,10 @@ impl VcrTestSetup {
         let vcr_client = VcrClient::builder(&self.cassette_path)
             .inner_client(inner_client)
             .mode(self.mode.clone())
+            .matcher(Box::new(LastFmEditVcrMatcher::new()))
             .build()
             .await?;
+        println!("VCR client created successfully");
 
         Ok(vcr_client)
     }
@@ -104,7 +107,7 @@ pub async fn create_lastfm_vcr_test_client_with_login_recording(
                 }
             })?;
 
-    setup.apply_filters_if_needed().await?;
+    // setup.apply_filters_if_needed().await?;
     Ok(Box::new(client))
 }
 

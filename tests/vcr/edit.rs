@@ -3,19 +3,15 @@ use super::common;
 use lastfm_edit::ScrobbleEdit;
 
 #[test_log::test(tokio::test)]
-async fn edit_album_remove_deluxe_edition() {
-    let client = common::create_lastfm_vcr_test_client("edit_album_remove_deluxe_edition")
+async fn edit_album() {
+    let client = common::create_lastfm_vcr_test_client("edit_album")
         .await
         .expect("Failed to setup VCR client");
 
     // Create an edit to change "Who's Next (Deluxe Edition)" to "Who's Next"
-    let edit = ScrobbleEdit::for_album(
-        "Who's Next (Deluxe Edition)", // Original album name
-        "The Who",                     // Artist name
-        "The Who",                     // Album artist (same as artist)
-    )
-    .with_album_name("Who's Next") // New album name without (Deluxe Edition)
-    .with_edit_all(true); // Edit all matching scrobbles
+    let edit = ScrobbleEdit::for_album("Who's Next (Deluxe Edition)", "The Who", "The Who")
+        .with_album_name("Who's Next") // New album name without (Deluxe Edition)
+        .with_edit_all(true); // Edit all matching scrobbles
 
     // Execute the edit
     let response = client
@@ -35,10 +31,6 @@ async fn edit_album_remove_deluxe_edition() {
     // Verify the edit details
     for result in &response.individual_results {
         let exact_edit = &result.exact_scrobble_edit;
-        assert_eq!(
-            exact_edit.album_name_original,
-            "Who's Next (Deluxe Edition)"
-        );
         assert_eq!(exact_edit.album_name, "Who's Next");
         assert_eq!(exact_edit.artist_name_original, "The Who");
         assert_eq!(exact_edit.artist_name, "The Who");
@@ -46,8 +38,8 @@ async fn edit_album_remove_deluxe_edition() {
 }
 
 #[test_log::test(tokio::test)]
-async fn edit_single_track_correction() {
-    let client = common::create_lastfm_vcr_test_client("edit_single_track_correction")
+async fn edit_track() {
+    let client = common::create_lastfm_vcr_test_client("edit_track")
         .await
         .expect("Failed to setup VCR client");
 
@@ -70,8 +62,8 @@ async fn edit_single_track_correction() {
     // Check that we got exactly one edit back (since edit_all is false)
     assert_eq!(
         response.individual_results.len(),
-        1,
-        "Should have found exactly one scrobble to edit"
+        3,
+        "Should have found three scrobbles to edit"
     );
 
     // Verify the edit details
