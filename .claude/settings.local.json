@@ -57,7 +57,13 @@
       "Bash(git pull:*)",
       "Bash(RUST_LOG=debug direnv exec . cargo run --example test_album_tracks \"Radiohead\" \"In Rainbows\")",
       "Bash(RUST_LOG=lastfm_edit=debug direnv exec . cargo run --example debug_album_url)",
-      "Bash(RUST_LOG=lastfm_edit=debug direnv exec . cargo run --example test_album_tracks \"Radiohead\" \"In Rainbows\")"
+      "Bash(RUST_LOG=lastfm_edit=debug direnv exec . cargo run --example test_album_tracks \"Radiohead\" \"In Rainbows\")",
+      "Bash(VCR_RECORD=true cargo test test_login_and_discover_queen_scrobbles --test vcr_integration_test -- --nocapture)",
+      "Bash(VCR_RECORD=true cargo test test_simple_vcr_functionality --test simple_vcr_test -- --nocapture)",
+      "Bash(LASTFM_EDIT_USERNAME=test LASTFM_EDIT_PASSWORD=test cargo test test_login_and_discover_queen_scrobbles -- --nocapture)",
+      "Bash(VCR_RECORD=true LASTFM_EDIT_USERNAME=test LASTFM_EDIT_PASSWORD=test cargo test test_login_and_discover_queen_scrobbles -- --nocapture)",
+      "Bash(awk:*)",
+      "Bash(diff:*)"
     ],
     "deny": []
   }

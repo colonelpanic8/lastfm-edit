@@ -1364,6 +1364,11 @@ impl LastFmEditClientImpl {
             total_pages,
         })
     }
+
+    /// Expose the inner HTTP client for advanced use cases like VCR cassette management
+    pub fn inner_client(&self) -> Arc<dyn HttpClient + Send + Sync> {
+        self.client.clone()
+    }
 }
 
 #[async_trait(?Send)]

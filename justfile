@@ -24,10 +24,86 @@ readme:
 clippy:
     cargo clippy --all-targets --all-features -- -D warnings
 
+# Safety check cassette files for leaked credentials using ripgrep
+check-cassettes-only:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "🔍 Safety checking cassette files for credential leakage..."
+
+    # Get credentials from environment variables
+    USERNAME="${LASTFM_EDIT_USERNAME:-}"
+    PASSWORD="${LASTFM_EDIT_PASSWORD:-}"
+
+    if [ -z "$USERNAME" ] && [ -z "$PASSWORD" ]; then
+        echo "⚠️  No LASTFM_EDIT_USERNAME or LASTFM_EDIT_PASSWORD set in environment"
+        echo "   This check requires environment variables to be set to detect leaks"
+        echo "   Skipping credential leak check"
+        exit 0
+    fi
+
+    # Find all cassette files
+    cassette_files=$(find tests/fixtures -name "*.yaml" -o -name "*.yml" 2>/dev/null || true)
+
+    if [ -z "$cassette_files" ]; then
+        echo "📭 No cassette files found in tests/fixtures/"
+        exit 0
+    fi
+
+    echo "📂 Found cassette files:"
+    echo "$cassette_files" | sed 's/^/   /'
+    echo
+
+    leak_found=false
+
+
+    # Check for password leakage
+    if [ -n "$PASSWORD" ]; then
+        echo "🔑 Checking for password leakage..."
+
+        if echo "$cassette_files" | xargs rg -l "$PASSWORD" 2>/dev/null; then
+            echo "❌ CRITICAL SECURITY ALERT: Password found in cassette files above!"
+            leak_found=true
+        else
+            echo "✅ Password not found in cassette files"
+        fi
+        echo
+    fi
+
+    # Additional safety checks for common credential patterns
+    echo "🔍 Checking for other potential credential patterns..."
+
+    # Check for unfiltered form data patterns that might contain real credentials
+    if echo "$cassette_files" | xargs rg -l "password=[^&]*[a-zA-Z0-9]{8,}" 2>/dev/null; then
+        echo "⚠️  Found potentially unfiltered password fields in files above"
+        echo "   Review these files to ensure passwords are properly filtered"
+    fi
+
+    if echo "$cassette_files" | xargs rg -l "username_or_email=[^&]*@[^&]*\.[^&]+" 2>/dev/null; then
+        echo "⚠️  Found potentially real email addresses in files above"
+        echo "   Review these files to ensure emails are properly filtered"
+    fi
+
+    if [ "$leak_found" = true ]; then
+        echo "🚨 CREDENTIAL LEAK DETECTED!"
+        echo "   You must re-filter these cassette files before committing"
+        echo "   Run: cargo run --example filter_cassette <file> to clean them"
+        echo "   Or: cargo run --example mutate_cassette_demo <file> replace-username <safe_name>"
+        exit 1
+    else
+        echo "🔒 All cassette files appear to be safely filtered"
+        echo "   No credential leakage detected"
+    fi
+
+# Safety check cassette files for leaked credentials using ripgrep
+check-cassettes:
+    just check-cassettes-only
+
 checks:
     just fmt-check
     just clippy
     cargo test
+    just check-cassettes
 
 # Version bump, build, commit, and tag
 # Usage: just release [patch|minor|major]

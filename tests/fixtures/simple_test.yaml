@@ -1,0 +1,24 @@
+interactions:
+- request:
+    method: GET
+    url: https://httpbin.org/get
+    headers: {}
+    body: ''
+    version: None
+  response:
+    status: 200
+    headers:
+      content-type:
+      - application/json
+      content-length:
+      - '340'
+      access-control-allow-credentials:
+      - 'true'
+      access-control-allow-origin:
+      - '*'
+      date:
+      - Mon, 04 Aug 2025 06:37:19 GMT
+      server:
+      - gunicorn/19.9.0
+    body: ''
+    version: None
