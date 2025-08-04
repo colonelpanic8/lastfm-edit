@@ -1,5 +1,6 @@
 use lastfm_edit::{LastFmEditClientImpl, SessionPersistence};
 use std::env;
+use std::io::{self, Write};
 
 /// Load existing session or create a new client with fresh login.
 ///
@@ -125,4 +126,78 @@ pub fn parse_range(
     }
 
     Ok((start, end))
+}
+
+/// Try to restore the most recent session from available saved sessions.
+///
+/// This function looks for all saved sessions and attempts to restore the most recent valid one.
+/// Returns Some(client) if a valid session was found and restored, None otherwise.
+pub async fn try_restore_most_recent_session() -> Option<LastFmEditClientImpl> {
+    // Get list of all saved users
+    let saved_users = match SessionPersistence::list_saved_users() {
+        Ok(users) => users,
+        Err(_) => return None,
+    };
+
+    if saved_users.is_empty() {
+        return None;
+    }
+
+    // Try each saved user session, starting with the first one found
+    // In a more sophisticated implementation, we could sort by last modified time
+    for username in saved_users {
+        println!("📁 Attempting to restore session for user '{username}'...");
+
+        match SessionPersistence::load_session(&username) {
+            Ok(session) => {
+                println!("📥 Session loaded successfully");
+
+                // Create client with loaded session
+                let http_client = http_client::native::NativeClient::new();
+                let client = LastFmEditClientImpl::from_session(Box::new(http_client), session);
+
+                // Validate the session
+                println!("🔍 Validating session...");
+                if client.validate_session().await {
+                    println!("✅ Session is valid for user '{username}'");
+                    return Some(client);
+                } else {
+                    println!("❌ Session is invalid or expired for user '{username}'");
+                    // Remove invalid session file
+                    let _ = SessionPersistence::remove_session(&username);
+                }
+            }
+            Err(e) => {
+                println!("❌ Failed to load session for user '{username}': {e}");
+                // Remove corrupted session file
+                let _ = SessionPersistence::remove_session(&username);
+            }
+        }
+    }
+
+    None
+}
+
+/// Prompt the user for their Last.fm credentials interactively.
+///
+/// This function prompts for username and password via stdin, hiding password input.
+/// Returns (username, password) tuple.
+pub fn prompt_for_credentials() -> (String, String) {
+    print!("Last.fm username: ");
+    io::stdout().flush().unwrap();
+
+    let mut username = String::new();
+    io::stdin().read_line(&mut username).unwrap();
+    let username = username.trim().to_string();
+
+    // For password, we'll use a simple prompt for now
+    // In a more sophisticated implementation, we could use a crate like `rpassword` to hide input
+    print!("Last.fm password: ");
+    io::stdout().flush().unwrap();
+
+    let mut password = String::new();
+    io::stdin().read_line(&mut password).unwrap();
+    let password = password.trim().to_string();
+
+    (username, password)
 }

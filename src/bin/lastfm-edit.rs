@@ -2,7 +2,10 @@ use clap::Parser;
 use log::LevelFilter;
 
 mod commands;
-use commands::{execute_command, utils::get_credentials, utils::load_or_create_client, Commands};
+use commands::{
+    execute_command, utils::get_credentials, utils::load_or_create_client,
+    utils::prompt_for_credentials, utils::try_restore_most_recent_session, Commands,
+};
 
 /// Last.fm scrobble metadata editor
 #[derive(Parser)]
@@ -77,41 +80,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!("🔍 Verbose mode enabled (level {})", args.verbose);
     }
 
-    // Get credentials from command line args or environment
+    // Try to get credentials from command line args or environment first
     let (username, password) = if let (Some(u), Some(p)) = (&args.username, &args.password) {
-        (u.clone(), p.clone())
+        (Some(u.clone()), Some(p.clone()))
     } else if args.username.is_some() || args.password.is_some() {
         eprintln!("❌ Error: Both username and password must be provided together");
         eprintln!("Either provide both --username and --password, or set environment variables");
         std::process::exit(1);
     } else {
         match get_credentials() {
-            Ok(creds) => creds,
-            Err(e) => {
-                eprintln!("❌ Error: {e}");
-                eprintln!();
-                eprintln!("Please provide credentials via:");
-                eprintln!("  1. Command line: --username USERNAME --password PASSWORD");
-                eprintln!("  2. Environment variables:");
-                eprintln!("     LASTFM_EDIT_USERNAME=your_lastfm_username");
-                eprintln!("     LASTFM_EDIT_PASSWORD=your_lastfm_password");
-                eprintln!();
-                eprintln!("You can set environment variables in your shell profile or use direnv:");
-                eprintln!("  echo 'export LASTFM_EDIT_USERNAME=\"your_username\"' >> ~/.bashrc");
-                eprintln!("  echo 'export LASTFM_EDIT_PASSWORD=\"your_password\"' >> ~/.bashrc");
-                std::process::exit(1);
-            }
+            Ok((u, p)) => (Some(u), Some(p)),
+            Err(_) => (None, None), // No credentials provided
         }
     };
 
-    log::info!("🔐 Using username: {username}");
+    // First, try to restore the most recent session if no credentials were provided
+    let client = if username.is_none() && password.is_none() {
+        match try_restore_most_recent_session().await {
+            Some(client) => {
+                println!("✅ Restored most recent session");
+                client
+            }
+            None => {
+                // No valid session found, prompt for credentials
+                println!("🔐 No valid saved session found. Please provide credentials:");
+                let (prompted_username, prompted_password) = prompt_for_credentials();
+                log::info!("🔐 Using username: {prompted_username}");
 
-    // Load or create client with session management
-    let client = match load_or_create_client(&username, &password).await {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("❌ Failed to create client: {e}");
-            std::process::exit(1);
+                match load_or_create_client(&prompted_username, &prompted_password).await {
+                    Ok(client) => client,
+                    Err(e) => {
+                        eprintln!("❌ Failed to create client: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+    } else {
+        // Credentials were provided, use them directly
+        let username = username.unwrap();
+        let password = password.unwrap();
+        log::info!("🔐 Using username: {username}");
+
+        match load_or_create_client(&username, &password).await {
+            Ok(client) => client,
+            Err(e) => {
+                eprintln!("❌ Failed to create client: {e}");
+                std::process::exit(1);
+            }
         }
     };
 
