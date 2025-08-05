@@ -2,7 +2,7 @@ use super::common;
 
 /// Test getting album tracks
 #[test_log::test(tokio::test)]
-async fn get_album_tracks() {
+async fn album_tracks() {
     let client = common::create_lastfm_vcr_test_client("album_tracks")
         .await
         .expect("Failed to setup VCR client");

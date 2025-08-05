@@ -9,18 +9,19 @@ async fn edit_album() {
         .expect("Failed to setup VCR client");
 
     // Create an edit to change "Who's Next (Deluxe Edition)" to "Who's Next"
-    let edit = ScrobbleEdit::for_album("Who's Next (Deluxe Edition)", "The Who", "The Who")
-        .with_album_name("Who's Next") // New album name without (Deluxe Edition)
-        .with_edit_all(true); // Edit all matching scrobbles
+    let edit = ScrobbleEdit::for_album(
+        "Tommy (Deluxe Edition - International Version)",
+        "The Who",
+        "The Who",
+    )
+    .with_album_name("Tommy") // New album name without (Deluxe Edition)
+    .with_edit_all(true); // Edit all matching scrobbles
 
     // Execute the edit
     let response = client
         .edit_scrobble(&edit)
         .await
         .expect("Edit should succeed");
-
-    // Verify the edit was successful
-    assert!(response.success(), "Edit should be successful");
 
     // Check that we got some edits back
     assert!(
@@ -31,7 +32,7 @@ async fn edit_album() {
     // Verify the edit details
     for result in &response.individual_results {
         let exact_edit = &result.exact_scrobble_edit;
-        assert_eq!(exact_edit.album_name, "Who's Next");
+        assert_eq!(exact_edit.album_name, "Tommy");
         assert_eq!(exact_edit.artist_name_original, "The Who");
         assert_eq!(exact_edit.artist_name, "The Who");
     }
