@@ -1046,6 +1046,42 @@ impl RateLimitConfig {
     }
 }
 
+/// Configuration for operational delays between requests
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperationalDelayConfig {
+    /// Delay between multiple edit operations (in milliseconds)
+    pub edit_delay_ms: u64,
+    /// Delay between delete operations (in milliseconds)
+    pub delete_delay_ms: u64,
+}
+
+impl Default for OperationalDelayConfig {
+    fn default() -> Self {
+        Self {
+            edit_delay_ms: 1000,   // 1 second
+            delete_delay_ms: 1000, // 1 second
+        }
+    }
+}
+
+impl OperationalDelayConfig {
+    /// Create config with no delays (useful for testing)
+    pub fn no_delays() -> Self {
+        Self {
+            edit_delay_ms: 0,
+            delete_delay_ms: 0,
+        }
+    }
+
+    /// Create config with custom delays
+    pub fn with_delays(edit_delay_ms: u64, delete_delay_ms: u64) -> Self {
+        Self {
+            edit_delay_ms,
+            delete_delay_ms,
+        }
+    }
+}
+
 /// Unified configuration for retry behavior and rate limiting
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ClientConfig {
@@ -1053,6 +1089,8 @@ pub struct ClientConfig {
     pub retry: RetryConfig,
     /// Rate limit detection configuration
     pub rate_limit: RateLimitConfig,
+    /// Operational delay configuration
+    pub operational_delays: OperationalDelayConfig,
 }
 
 impl ClientConfig {
@@ -1066,6 +1104,7 @@ impl ClientConfig {
         Self {
             retry: RetryConfig::disabled(),
             rate_limit: RateLimitConfig::default(),
+            operational_delays: OperationalDelayConfig::default(),
         }
     }
 
@@ -1074,6 +1113,7 @@ impl ClientConfig {
         Self {
             retry: RetryConfig::default(),
             rate_limit: RateLimitConfig::disabled(),
+            operational_delays: OperationalDelayConfig::default(),
         }
     }
 
@@ -1082,6 +1122,16 @@ impl ClientConfig {
         Self {
             retry: RetryConfig::disabled(),
             rate_limit: RateLimitConfig::disabled(),
+            operational_delays: OperationalDelayConfig::default(),
+        }
+    }
+
+    /// Create config optimized for testing (no delays, minimal retries, no rate limiting)
+    pub fn for_testing() -> Self {
+        Self {
+            retry: RetryConfig::disabled(),
+            rate_limit: RateLimitConfig::disabled(),
+            operational_delays: OperationalDelayConfig::no_delays(),
         }
     }
 
@@ -1094,6 +1144,12 @@ impl ClientConfig {
     /// Set custom rate limit configuration
     pub fn with_rate_limit_config(mut self, rate_limit_config: RateLimitConfig) -> Self {
         self.rate_limit = rate_limit_config;
+        self
+    }
+
+    /// Set custom operational delay configuration
+    pub fn with_operational_delays(mut self, operational_delays: OperationalDelayConfig) -> Self {
+        self.operational_delays = operational_delays;
         self
     }
 

@@ -241,3 +241,55 @@ pub async fn handle_list_tracks(
 
     Ok(())
 }
+
+/// Handle the list album tracks command
+pub async fn handle_list_album_tracks(
+    client: &LastFmEditClientImpl,
+    album: &str,
+    artist: &str,
+    details: bool,
+    format: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("🎵 Listing tracks for album: '{album}' by '{artist}'");
+
+    let mut tracks_iterator = client.album_tracks(album, artist);
+    let mut count = 0;
+
+    while let Some(track) = tracks_iterator.next().await? {
+        count += 1;
+
+        if format {
+            if details {
+                println!("  [{count:3}] {track} ({} plays)", track.playcount);
+                if let Some(timestamp) = track.timestamp {
+                    println!("       Last Played: {timestamp}");
+                }
+            } else {
+                println!("  [{count:3}] {track}");
+            }
+        } else if details {
+            println!("  [{count:3}] {} ({} plays)", track.name, track.playcount);
+            if let Some(timestamp) = track.timestamp {
+                println!("       Last Played: {timestamp}");
+            }
+        } else {
+            println!("  [{count:3}] {}", track.name);
+        }
+
+        if details {
+            println!();
+        }
+    }
+
+    if count == 0 {
+        println!("  No tracks found for album '{album}' by '{artist}' in your library.");
+    } else {
+        println!(
+            "\nFound {} track{} for album '{album}' by '{artist}'",
+            count,
+            if count == 1 { "" } else { "s" }
+        );
+    }
+
+    Ok(())
+}

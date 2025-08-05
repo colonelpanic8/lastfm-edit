@@ -6,8 +6,9 @@ use crate::r#trait::LastFmEditClient;
 use crate::retry;
 use crate::types::{
     AlbumPage, ClientConfig, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit,
-    LastFmEditSession, LastFmError, RateLimitConfig, RateLimitType, RequestInfo, RetryConfig,
-    ScrobbleEdit, SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
+    LastFmEditSession, LastFmError, OperationalDelayConfig, RateLimitConfig, RateLimitType,
+    RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster, SingleEditResponse, Track,
+    TrackPage,
 };
 use crate::Result;
 use async_trait::async_trait;
@@ -152,6 +153,7 @@ impl LastFmEditClientImpl {
         let config = ClientConfig {
             retry: retry_config,
             rate_limit: rate_limit_config,
+            operational_delays: OperationalDelayConfig::default(),
         };
         Self::from_session_with_client_config_arc(client, session, config)
     }
@@ -528,8 +530,13 @@ impl LastFmEditClientImpl {
                 exact_scrobble_edit: modified_exact_edit.clone(),
             });
 
-            if index < discovered_edits.len() - 1 {
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            if index < discovered_edits.len() - 1
+                && self.config.operational_delays.edit_delay_ms > 0
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    self.config.operational_delays.edit_delay_ms,
+                ))
+                .await;
             }
         }
 
@@ -910,7 +917,7 @@ impl LastFmEditClientImpl {
                 "{}/user/{}/library/music/{}/+tracks?page={}&ajax=true",
                 session.base_url,
                 session.username,
-                artist.replace(" ", "+"),
+                urlencoding::encode(artist),
                 page
             )
         };
@@ -1226,7 +1233,7 @@ impl LastFmEditClientImpl {
                 "{}/user/{}/library/music/{}/+albums?page={}&ajax=true",
                 session.base_url,
                 session.username,
-                artist.replace(" ", "+"),
+                urlencoding::encode(artist),
                 page
             )
         };
@@ -1261,8 +1268,8 @@ impl LastFmEditClientImpl {
                 "{}/user/{}/library/music/{}/{}?page={}&ajax=true",
                 session.base_url,
                 session.username,
-                artist_name.replace(" ", "+"),
-                album_name.replace(" ", "+"),
+                urlencoding::encode(artist_name),
+                urlencoding::encode(album_name),
                 page
             )
         };

@@ -239,8 +239,8 @@ pub use iterator::AsyncPaginatedIterator;
 pub use types::{
     Album, AlbumPage, Artist, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver,
     ClientEventWatcher, EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError,
-    RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, RetryResult, ScrobbleEdit,
-    SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
+    OperationalDelayConfig, RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, RetryResult,
+    ScrobbleEdit, SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
 };
 
 // Type aliases for iterators with the concrete client type

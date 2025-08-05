@@ -1,0 +1,5 @@
+# VCR test fixtures - these are recorded HTTP interactions and not source code
+tests/vcr/fixtures/
+
+# Build artifacts and dependencies  
+target/

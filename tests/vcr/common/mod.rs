@@ -116,17 +116,22 @@ pub async fn create_lastfm_vcr_test_client_with_login_recording(
     let (username, password) = setup.get_credentials();
     let vcr_client = setup.create_vcr_client().await?;
 
-    // Login with VCR recording the interaction
-    let client =
-        LastFmEditClientImpl::login_with_credentials(Box::new(vcr_client), &username, &password)
-            .await
-            .map_err(|e| {
-                if setup.vcr_record {
-                    format!("Recording mode login failed: {e}")
-                } else {
-                    format!("Replay mode login failed: {e}")
-                }
-            })?;
+    // Login with VCR recording the interaction using testing config
+    let config = lastfm_edit::ClientConfig::for_testing();
+    let client = LastFmEditClientImpl::login_with_credentials_and_client_config(
+        Box::new(vcr_client),
+        &username,
+        &password,
+        config,
+    )
+    .await
+    .map_err(|e| {
+        if setup.vcr_record {
+            format!("Recording mode login failed: {e}")
+        } else {
+            format!("Replay mode login failed: {e}")
+        }
+    })?;
 
     Ok(Box::new(client))
 }
@@ -143,12 +148,17 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
         // Recording mode: do real login outside VCR, then create VCR client with session
         let (username, password) = setup.get_credentials();
 
-        // Do login outside VCR to get session
+        // Do login outside VCR to get session using testing config
         let login_client = Box::new(http_client::native::NativeClient::new());
-        let logged_in_client =
-            LastFmEditClientImpl::login_with_credentials(login_client, &username, &password)
-                .await
-                .map_err(|e| format!("Login failed: {e}"))?;
+        let config = lastfm_edit::ClientConfig::for_testing();
+        let logged_in_client = LastFmEditClientImpl::login_with_credentials_and_client_config(
+            login_client,
+            &username,
+            &password,
+            config,
+        )
+        .await
+        .map_err(|e| format!("Login failed: {e}"))?;
 
         // Extract session from the logged-in client
         let session = logged_in_client.get_session().clone();
@@ -165,8 +175,13 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
 
         let vcr_client = builder.build().await?;
 
-        // Create client with existing session and VCR http client
-        let client = LastFmEditClientImpl::from_session(Box::new(vcr_client), session);
+        // Create client with existing session and VCR http client using testing config
+        let config = lastfm_edit::ClientConfig::for_testing();
+        let client = LastFmEditClientImpl::from_session_with_client_config(
+            Box::new(vcr_client),
+            session,
+            config,
+        );
 
         Ok(Box::new(client))
     } else {
@@ -181,7 +196,13 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
             "https://www.last.fm".to_string(),
         );
 
-        let client = LastFmEditClientImpl::from_session(Box::new(vcr_client), session);
+        // Create client with testing config for replay/filter mode too
+        let config = lastfm_edit::ClientConfig::for_testing();
+        let client = LastFmEditClientImpl::from_session_with_client_config(
+            Box::new(vcr_client),
+            session,
+            config,
+        );
         Ok(Box::new(client))
     }
 }

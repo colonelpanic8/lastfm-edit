@@ -139,6 +139,33 @@ pub enum ListCommands {
         #[arg(long)]
         format: bool,
     },
+
+    /// List tracks for a specific album
+    ///
+    /// This command lists all tracks for a specific album by a specific artist.
+    /// This is useful for albums with special characters like slashes in their names.
+    ///
+    /// Usage examples:
+    /// # List all tracks for AC/DC's "Back in Black" album
+    /// lastfm-edit list album-tracks "Back in Black" "AC/DC"
+    ///
+    /// # List tracks with details and formatted output
+    /// lastfm-edit list album-tracks "The Dark Side of the Moon" "Pink Floyd" --details --format
+    AlbumTracks {
+        /// Album name
+        album: String,
+
+        /// Artist name
+        artist: String,
+
+        /// Show additional details like play counts
+        #[arg(long)]
+        details: bool,
+
+        /// Show formatted output (Artist - Track Name [Album Name])
+        #[arg(long)]
+        format: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -429,6 +456,12 @@ pub async fn execute_command(
                 details,
                 format,
             } => list::handle_list_tracks_by_album(client, &artist, limit, details, format).await,
+            ListCommands::AlbumTracks {
+                album,
+                artist,
+                details,
+                format,
+            } => list::handle_list_album_tracks(client, &album, &artist, details, format).await,
         },
     }
 }

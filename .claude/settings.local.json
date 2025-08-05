@@ -90,7 +90,9 @@
       "Bash(RUST_LOG=lastfm_edit=debug cargo test vcr::album_tracks -- --nocapture)",
       "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::album_tracks -- --nocapture)",
       "Bash(LAST_FM_VCR_RECORD=filter cargo test vcr::login -- --nocapture)",
-      "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::login -- --nocapture)"
+      "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::login -- --nocapture)",
+      "Bash(LAST_FM_VCR_RECORD=true cargo test vcr::discovery -- --nocapture)",
+      "Bash(true)"
     ],
     "deny": []
   }
