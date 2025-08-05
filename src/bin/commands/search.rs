@@ -1,3 +1,6 @@
+use super::search_output::{
+    HumanReadableSearchHandler, JsonSearchHandler, SearchEvent, SearchOutputHandler,
+};
 use super::SearchType;
 use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl};
 
@@ -12,7 +15,28 @@ pub async fn handle_search_command(
     limit: usize,
     offset: usize,
     details: bool,
+    json_output: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Create appropriate handler based on output format
+    let mut handler: Box<dyn SearchOutputHandler> = if json_output {
+        Box::new(JsonSearchHandler::new())
+    } else {
+        Box::new(HumanReadableSearchHandler::new(details))
+    };
+
+    let search_type_str = match search_type {
+        SearchType::Tracks => "tracks",
+        SearchType::Albums => "albums",
+    };
+
+    // Emit start event
+    handler.handle_event(SearchEvent::Started {
+        search_type: search_type_str.to_string(),
+        query: query.to_string(),
+        offset,
+        limit,
+    });
+
     // Calculate starting page and within-page offset
     let starting_page = if offset > 0 {
         (offset / ITEMS_PER_PAGE) + 1
@@ -20,27 +44,6 @@ pub async fn handle_search_command(
         1
     };
     let within_page_offset = offset % ITEMS_PER_PAGE;
-
-    if offset > 0 {
-        println!(
-            "🔍 Searching for {} containing '{}' (starting from #{})...",
-            match search_type {
-                SearchType::Tracks => "tracks",
-                SearchType::Albums => "albums",
-            },
-            query,
-            offset + 1
-        );
-    } else {
-        println!(
-            "🔍 Searching for {} containing '{}'...",
-            match search_type {
-                SearchType::Tracks => "tracks",
-                SearchType::Albums => "albums",
-            },
-            query
-        );
-    }
 
     match search_type {
         SearchType::Tracks => {
@@ -58,7 +61,6 @@ pub async fn handle_search_command(
             let mut total_count = 0;
             let mut displayed_count = 0;
             let should_limit = limit > 0;
-            let mut found_any = false;
 
             // Process results incrementally
             while let Some(track) = search_iterator.next().await? {
@@ -69,59 +71,33 @@ pub async fn handle_search_command(
                     continue;
                 }
 
-                // Mark that we found at least one result
-                if !found_any {
-                    found_any = true;
-                    println!(); // Add blank line before results
-                }
-
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
 
-                if details {
-                    println!(
-                        "{}. {} - {} (played {} time{})",
-                        display_number,
-                        track.artist,
-                        track.name,
-                        track.playcount,
-                        if track.playcount == 1 { "" } else { "s" }
-                    );
-
-                    if let Some(album) = &track.album {
-                        println!("   Album: {album}");
-                    }
-
-                    if let Some(album_artist) = &track.album_artist {
-                        if album_artist != &track.artist {
-                            println!("   Album Artist: {album_artist}");
-                        }
-                    }
-                    println!(); // Blank line between verbose entries
-                } else {
-                    println!("{}. {} - {}", display_number, track.artist, track.name);
-                }
+                // Emit track found event
+                handler.handle_event(SearchEvent::TrackFound {
+                    index: display_number,
+                    track,
+                });
 
                 if should_limit && displayed_count >= limit {
                     break;
                 }
             }
 
-            if !found_any {
-                println!("❌ No tracks found matching '{query}'");
+            if displayed_count == 0 {
+                handler.handle_event(SearchEvent::NoResults {
+                    search_type: search_type_str.to_string(),
+                    query: query.to_string(),
+                });
             } else {
-                println!(
-                    "✅ Displayed {} track{}",
-                    displayed_count,
-                    if displayed_count == 1 { "" } else { "s" }
-                );
-
-                if offset > 0 {
-                    println!("   (Starting from result #{})", offset + 1);
-                }
-                if should_limit && displayed_count >= limit {
-                    println!("   (Limited to {limit} results)");
-                }
+                handler.handle_event(SearchEvent::Summary {
+                    search_type: search_type_str.to_string(),
+                    query: query.to_string(),
+                    total_displayed: displayed_count,
+                    offset,
+                    limit,
+                });
             }
         }
 
@@ -140,7 +116,6 @@ pub async fn handle_search_command(
             let mut total_count = 0;
             let mut displayed_count = 0;
             let should_limit = limit > 0;
-            let mut found_any = false;
 
             // Process results incrementally
             while let Some(album) = search_iterator.next().await? {
@@ -151,52 +126,42 @@ pub async fn handle_search_command(
                     continue;
                 }
 
-                // Mark that we found at least one result
-                if !found_any {
-                    found_any = true;
-                    println!(); // Add blank line before results
-                }
-
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
 
-                if details {
-                    println!(
-                        "{}. {} - {} (played {} time{})",
-                        display_number,
-                        album.artist,
-                        album.name,
-                        album.playcount,
-                        if album.playcount == 1 { "" } else { "s" }
-                    );
-                    println!(); // Blank line between verbose entries
-                } else {
-                    println!("{}. {} - {}", display_number, album.artist, album.name);
-                }
+                // Emit album found event
+                handler.handle_event(SearchEvent::AlbumFound {
+                    index: display_number,
+                    album,
+                });
 
                 if should_limit && displayed_count >= limit {
                     break;
                 }
             }
 
-            if !found_any {
-                println!("❌ No albums found matching '{query}'");
+            if displayed_count == 0 {
+                handler.handle_event(SearchEvent::NoResults {
+                    search_type: search_type_str.to_string(),
+                    query: query.to_string(),
+                });
             } else {
-                println!(
-                    "✅ Displayed {} album{}",
-                    displayed_count,
-                    if displayed_count == 1 { "" } else { "s" }
-                );
-
-                if offset > 0 {
-                    println!("   (Starting from result #{})", offset + 1);
-                }
-                if should_limit && displayed_count >= limit {
-                    println!("   (Limited to {limit} results)");
-                }
+                handler.handle_event(SearchEvent::Summary {
+                    search_type: search_type_str.to_string(),
+                    query: query.to_string(),
+                    total_displayed: displayed_count,
+                    offset,
+                    limit,
+                });
             }
         }
     }
+
+    // Emit finished event
+    handler.handle_event(SearchEvent::Finished {
+        search_type: search_type_str.to_string(),
+        query: query.to_string(),
+    });
 
     Ok(())
 }

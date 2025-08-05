@@ -29,6 +29,10 @@ struct Cli {
     #[arg(short, long, global = true)]
     password: Option<String>,
 
+    /// Output results in JSON format instead of human-readable text
+    #[arg(long, global = true)]
+    json: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -96,18 +100,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // First, try to restore the most recent session if no credentials were provided
     let client = if username.is_none() && password.is_none() {
-        match try_restore_most_recent_session().await {
+        match try_restore_most_recent_session(args.json).await {
             Some(client) => {
-                println!("✅ Restored most recent session");
+                if !args.json {
+                    println!("✅ Restored most recent session");
+                }
                 client
             }
             None => {
                 // No valid session found, prompt for credentials
-                println!("🔐 No valid saved session found. Please provide credentials:");
+                if !args.json {
+                    println!("🔐 No valid saved session found. Please provide credentials:");
+                }
                 let (prompted_username, prompted_password) = prompt_for_credentials();
                 log::info!("🔐 Using username: {prompted_username}");
 
-                match load_or_create_client(&prompted_username, &prompted_password).await {
+                match load_or_create_client(&prompted_username, &prompted_password, args.json).await
+                {
                     Ok(client) => client,
                     Err(e) => {
                         eprintln!("❌ Failed to create client: {e}");
@@ -122,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let password = password.unwrap();
         log::info!("🔐 Using username: {username}");
 
-        match load_or_create_client(&username, &password).await {
+        match load_or_create_client(&username, &password, args.json).await {
             Ok(client) => client,
             Err(e) => {
                 eprintln!("❌ Failed to create client: {e}");
@@ -134,7 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("✅ Client ready");
 
     // Execute the command
-    if let Err(e) = execute_command(args.command, &client).await {
+    if let Err(e) = execute_command(args.command, &client, args.json).await {
         eprintln!("❌ Command failed: {e}");
         std::process::exit(1);
     }

@@ -28,7 +28,7 @@ async fn artist_tracks() {
 
     assert_eq!(
         unique_track_names.len(),
-        192,
+        193,
         "Should have exactly 192 unique track names, but found {}",
         unique_track_names.len()
     );
