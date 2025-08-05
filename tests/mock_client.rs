@@ -56,7 +56,7 @@ mod mock_tests {
 
         let expected_response = EditResponse::single(
             true,
-            Some("Edit successful".to_string()),
+            Some("Edit completed successfully".to_string()),
             None,
             expected_exact_edit,
         );
@@ -73,7 +73,10 @@ mod mock_tests {
         let response = client.edit_scrobble(&edit).await?;
 
         assert!(response.success());
-        assert_eq!(response.message(), Some("Edit successful".to_string()));
+        assert_eq!(
+            response.message(),
+            Some("Edit completed successfully".to_string())
+        );
 
         Ok(())
     }

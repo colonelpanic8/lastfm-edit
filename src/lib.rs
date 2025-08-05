@@ -222,7 +222,6 @@ pub mod retry;
 pub mod session_persistence;
 pub mod r#trait;
 pub mod types;
-pub mod vcr_filters;
 pub mod vcr_form_data;
 pub mod vcr_matcher;
 pub mod vcr_test_utils;

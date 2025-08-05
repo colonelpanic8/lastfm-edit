@@ -22,20 +22,21 @@ impl VcrTestSetup {
             fs::create_dir_all(parent_dir)?;
         }
 
-        let vcr_record = env::var("LAST_FM_VCR_RECORD").is_ok();
+        let vcr_record_env = env::var("LAST_FM_VCR_RECORD").unwrap_or_default();
+        let vcr_record = !vcr_record_env.is_empty();
         let cassette_exists = std::path::Path::new(&cassette_path).exists();
 
-        // Fail fast if we're not recording and no cassette exists
+        // Fail fast if we're not recording/filtering and no cassette exists
         if !vcr_record && !cassette_exists {
             return Err(format!(
                 "No cassette found at '{cassette_path}' and LAST_FM_VCR_RECORD is not set. Either set LAST_FM_VCR_RECORD to record new interactions or ensure the cassette file exists."
             ).into());
         }
 
-        let mode = if vcr_record {
-            VcrMode::Record
-        } else {
-            VcrMode::Replay
+        let mode = match vcr_record_env.as_str() {
+            "filter" => VcrMode::Filter,
+            "" => VcrMode::Replay,
+            _ => VcrMode::Record,
         };
 
         Ok(Self {
@@ -46,43 +47,63 @@ impl VcrTestSetup {
     }
 
     fn get_credentials(&self) -> (String, String) {
-        if self.vcr_record {
-            // Recording mode: need real credentials
-            let username = env::var("LASTFM_EDIT_USERNAME")
-                .expect("LASTFM_EDIT_USERNAME required when LAST_FM_VCR_RECORD is set");
-            let password = env::var("LASTFM_EDIT_PASSWORD")
-                .expect("LASTFM_EDIT_PASSWORD required when LAST_FM_VCR_RECORD is set");
-            (username, password)
-        } else {
-            // Replay mode: use test credentials
-            ("IvanMalison".to_string(), "test_password".to_string())
+        match self.mode {
+            VcrMode::Record => {
+                // Recording mode: need real credentials
+                let username = env::var("LASTFM_EDIT_USERNAME").expect(
+                    "LASTFM_EDIT_USERNAME required when LAST_FM_VCR_RECORD is set to record",
+                );
+                let password = env::var("LASTFM_EDIT_PASSWORD").expect(
+                    "LASTFM_EDIT_PASSWORD required when LAST_FM_VCR_RECORD is set to record",
+                );
+                (username, password)
+            }
+            _ => {
+                // Default to test credentials for other modes
+                ("IvanMalison".to_string(), "test_password".to_string())
+            }
         }
     }
 
     async fn create_vcr_client(&self) -> Result<VcrClient, Box<dyn std::error::Error>> {
-        let inner_client: Box<dyn http_client::HttpClient + Send + Sync> = if self.vcr_record {
-            Box::new(http_client::native::NativeClient::new())
-        } else {
-            Box::new(NoOpClient::new())
+        // Handle Filter mode by applying filters and saving the cassette
+        if matches!(self.mode, VcrMode::Filter) {
+            log::debug!("Filter mode: applying filters to existing cassette");
+            let filter_chain = create_lastfm_test_filter_chain()?;
+            http_client_vcr::filter_cassette_file(&self.cassette_path, filter_chain).await?;
+            log::debug!("Filters applied and cassette saved");
+
+            // After filtering, switch to Replay mode for the actual test
+            let inner_client = Box::new(NoOpClient::new());
+            let vcr_client = VcrClient::builder(&self.cassette_path)
+                .inner_client(inner_client)
+                .mode(VcrMode::Replay)
+                .matcher(Box::new(LastFmEditVcrMatcher::new()))
+                .build()
+                .await?;
+            return Ok(vcr_client);
+        }
+
+        let inner_client: Box<dyn http_client::HttpClient + Send + Sync> = match self.mode {
+            VcrMode::Record => Box::new(http_client::native::NativeClient::new()),
+            _ => Box::new(NoOpClient::new()),
         };
 
-        let vcr_client = VcrClient::builder(&self.cassette_path)
+        let mut builder = VcrClient::builder(&self.cassette_path)
             .inner_client(inner_client)
             .mode(self.mode.clone())
-            .matcher(Box::new(LastFmEditVcrMatcher::new()))
-            .build()
-            .await?;
+            .matcher(Box::new(LastFmEditVcrMatcher::new()));
+
+        // Add filter chain for Record mode only (Filter mode is handled above)
+        if matches!(self.mode, VcrMode::Record) {
+            let filter_chain = create_lastfm_test_filter_chain()?;
+            builder = builder.filter_chain(filter_chain);
+        }
+
+        let vcr_client = builder.build().await?;
         log::debug!("VCR client created successfully");
 
         Ok(vcr_client)
-    }
-
-    async fn apply_filters_if_needed(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if matches!(self.mode, VcrMode::Record | VcrMode::Once) {
-            let filter_chain = create_lastfm_test_filter_chain()?;
-            http_client_vcr::filter_cassette_file(&self.cassette_path, filter_chain).await?;
-        }
-        Ok(())
     }
 }
 
@@ -107,7 +128,6 @@ pub async fn create_lastfm_vcr_test_client_with_login_recording(
                 }
             })?;
 
-    // setup.apply_filters_if_needed().await?;
     Ok(Box::new(client))
 }
 
@@ -119,7 +139,7 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
 ) -> Result<Box<dyn LastFmEditClient>, Box<dyn std::error::Error>> {
     let setup = VcrTestSetup::new(test_name)?;
 
-    if setup.vcr_record {
+    if matches!(setup.mode, VcrMode::Record) {
         // Recording mode: do real login outside VCR, then create VCR client with session
         let (username, password) = setup.get_credentials();
 
@@ -134,22 +154,26 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
         let session = logged_in_client.get_session().clone();
 
         // Now create VCR client for actual test interactions (using special method for recording)
-        let vcr_client = VcrClient::builder(&setup.cassette_path)
+        let mut builder = VcrClient::builder(&setup.cassette_path)
             .inner_client(Box::new(http_client::native::NativeClient::new()))
             .mode(setup.mode.clone())
-            .build()
-            .await?;
+            .matcher(Box::new(LastFmEditVcrMatcher::new()));
+
+        // Add filter chain for recording mode
+        let filter_chain = create_lastfm_test_filter_chain()?;
+        builder = builder.filter_chain(filter_chain);
+
+        let vcr_client = builder.build().await?;
 
         // Create client with existing session and VCR http client
         let client = LastFmEditClientImpl::from_session(Box::new(vcr_client), session);
 
-        setup.apply_filters_if_needed().await?;
         Ok(Box::new(client))
     } else {
-        // Replay mode: create dummy session and VCR client that will replay interactions
+        // Replay/Filter mode: create dummy session and VCR client that will replay/filter interactions
         let vcr_client = setup.create_vcr_client().await?;
 
-        // Create a dummy session for replay mode
+        // Create a dummy session for replay/filter mode
         let session = lastfm_edit::LastFmEditSession::new(
             "IvanMalison".to_string(),
             vec!["dummy_cookie".to_string()],

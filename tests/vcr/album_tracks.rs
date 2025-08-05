@@ -1,0 +1,22 @@
+use super::common;
+
+/// Test getting album tracks
+#[test_log::test(tokio::test)]
+async fn get_album_tracks() {
+    let client = common::create_lastfm_vcr_test_client("album_tracks")
+        .await
+        .expect("Failed to setup VCR client");
+
+    let mut album_tracks = client.album_tracks("In Rainbows", "Radiohead");
+    let mut count = 0;
+
+    while let Some(_track) = album_tracks.next().await.expect("Failed to get next track") {
+        count += 1;
+    }
+
+    log::debug!("Total album tracks found: {count}");
+    assert!(
+        count > 0,
+        "Should have found at least one track from the album"
+    );
+}

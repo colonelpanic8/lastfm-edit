@@ -1056,8 +1056,10 @@ dependencies = [
 [[package]]
 name = "http-client-vcr"
 version = "0.1.0"
+source = "git+https://github.com/colonelpanic8/http-client-vcr#7fb1bb3902bfb66edf9a5615e9795eaaf7e15ebb"
 dependencies = [
  "async-trait",
+ "base64",
  "http-client-2",
  "http-types-2",
  "log",

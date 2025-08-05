@@ -1,7 +1,6 @@
+mod album_tracks;
 mod common;
 mod edit;
-mod get_album_tracks;
-mod get_recent_tracks;
 mod login;
-mod recent_tracks_discovery;
+mod recent_tracks;
 mod search;

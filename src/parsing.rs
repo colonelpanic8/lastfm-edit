@@ -205,14 +205,21 @@ impl LastFmParser {
         let mut tracks = Vec::new();
         let mut seen_tracks = std::collections::HashSet::new();
 
+        log::debug!("Starting track extraction for artist: {artist}, album: {album:?}");
+
         // Try JSON-embedded data first
         if let Ok(json_tracks) = self.parse_json_tracks_page(document, 1, artist, album) {
+            log::debug!("Found {} tracks from JSON data", json_tracks.tracks.len());
             return Ok(json_tracks.tracks);
         }
 
         // Strategy 1: Try parsing track data from data-track-name attributes (AJAX response)
         let track_selector = Selector::parse("[data-track-name]").unwrap();
         let track_elements: Vec<_> = document.select(&track_selector).collect();
+        log::debug!(
+            "Strategy 1: Found {} elements with data-track-name",
+            track_elements.len()
+        );
 
         if !track_elements.is_empty() {
             for element in track_elements {
@@ -231,6 +238,13 @@ impl LastFmParser {
                             album_artist: None, // Not available in aggregate track listings
                         };
                         tracks.push(track);
+                        log::debug!(
+                            "Strategy 1: Added track '{track_name}' with {playcount} plays"
+                        );
+                    } else {
+                        log::debug!(
+                            "Strategy 1: Skipped track '{track_name}' - no playcount found"
+                        );
                     }
                     if tracks.len() >= 50 {
                         break;
@@ -242,8 +256,15 @@ impl LastFmParser {
         // Strategy 2: Parse tracks from hidden form inputs (for tracks like "Comes a Time - 2016")
         if tracks.len() < 50 {
             let form_input_selector = Selector::parse("input[name='track']").unwrap();
-            for input in document.select(&form_input_selector) {
+            let form_inputs: Vec<_> = document.select(&form_input_selector).collect();
+            log::debug!(
+                "Strategy 2: Found {} input[name='track'] elements",
+                form_inputs.len()
+            );
+
+            for input in form_inputs {
                 if let Some(track_name) = input.value().attr("value") {
+                    log::debug!("Strategy 2: Found input with track name: '{track_name}'");
                     if !track_name.is_empty() && !seen_tracks.contains(track_name) {
                         seen_tracks.insert(track_name.to_string());
 
@@ -260,9 +281,16 @@ impl LastFmParser {
                             album_artist: None, // Not available in form input parsing
                         };
                         tracks.push(track);
+                        log::debug!(
+                            "Strategy 2: Added track '{track_name}' with {playcount} plays"
+                        );
                         if tracks.len() >= 50 {
                             break;
                         }
+                    } else {
+                        log::debug!(
+                            "Strategy 2: Skipped track '{track_name}' - empty or duplicate"
+                        );
                     }
                 }
             }
@@ -270,7 +298,15 @@ impl LastFmParser {
 
         // Strategy 3: Fallback to table parsing method if we didn't find enough tracks
         if tracks.len() < 10 {
+            log::debug!(
+                "Strategy 3: Falling back to table parsing (found {} tracks so far)",
+                tracks.len()
+            );
             let table_tracks = self.parse_tracks_from_rows(document, artist, album)?;
+            log::debug!(
+                "Strategy 3: Table parsing found {} tracks",
+                table_tracks.len()
+            );
             for track in table_tracks {
                 if !seen_tracks.contains(&track.name) && tracks.len() < 50 {
                     seen_tracks.insert(track.name.clone());

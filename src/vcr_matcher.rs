@@ -165,9 +165,7 @@ impl RequestMatcher for LastFmEditVcrMatcher {
                 continue;
             }
 
-            log::debug!(
-                "Checking stable header: {header_name} = {recorded_values:?}"
-            );
+            log::debug!("Checking stable header: {header_name} = {recorded_values:?}");
 
             let request_header = request.headers.get(header_name);
 
