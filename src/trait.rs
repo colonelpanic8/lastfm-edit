@@ -173,6 +173,16 @@ pub trait LastFmEditClient {
     /// Create an iterator for browsing an artist's tracks from the user's library.
     fn artist_tracks(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
 
+    /// Create an iterator for browsing an artist's tracks directly using the paginated endpoint.
+    ///
+    /// This alternative approach uses
+    /// `/user/{username}/library/music/{artist}/+tracks` directly with
+    /// pagination, which is more efficient than the album-based approach since
+    /// it doesn't need to iterate through albums first. The downside of this
+    /// approach is that the tracks will not come with album information, which
+    /// will need to get looked up eventually in the process of making edits.
+    fn artist_tracks_direct(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
+
     /// Create an iterator for browsing an artist's albums from the user's library.
     fn artist_albums(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Album>>;
 

@@ -92,7 +92,10 @@
       "Bash(LAST_FM_VCR_RECORD=filter cargo test vcr::login -- --nocapture)",
       "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::login -- --nocapture)",
       "Bash(LAST_FM_VCR_RECORD=true cargo test vcr::discovery -- --nocapture)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test vcr::beatles_page4::beatles_page4_tracks -- --nocapture)",
+      "Bash(RUST_LOG=lastfm_edit::iterator=debug cargo test vcr::beatles_page4 -- --nocapture)",
+      "Bash(RUST_LOG=lastfm_edit::parsing=debug cargo test vcr::beatles_page4 -- --nocapture)"
     ],
     "deny": []
   }

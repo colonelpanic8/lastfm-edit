@@ -1490,6 +1490,13 @@ impl LastFmEditClient for LastFmEditClientImpl {
         ))
     }
 
+    fn artist_tracks_direct(&self, artist: &str) -> Box<dyn crate::AsyncPaginatedIterator<Track>> {
+        Box::new(crate::iterator::ArtistTracksDirectIterator::new(
+            self.clone(),
+            artist.to_string(),
+        ))
+    }
+
     fn artist_albums(&self, artist: &str) -> Box<dyn crate::AsyncPaginatedIterator<crate::Album>> {
         Box::new(crate::ArtistAlbumsIterator::new(
             self.clone(),

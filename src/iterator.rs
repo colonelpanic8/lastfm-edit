@@ -245,6 +245,121 @@ impl<C: LastFmEditClient + Clone> ArtistTracksIterator<C> {
     }
 }
 
+/// Iterator for browsing an artist's tracks directly using the paginated artist tracks endpoint.
+///
+/// This iterator provides access to all tracks by a specific artist
+/// in the authenticated user's Last.fm library by directly using the
+/// `/user/{username}/library/music/{artist}/+tracks` endpoint with pagination.
+/// This is more efficient than the album-based approach as it doesn't need to
+/// iterate through albums first.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
+/// # tokio_test::block_on(async {
+/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
+///
+/// let mut tracks = client.artist_tracks_direct("The Beatles");
+///
+/// // Get the first 10 tracks directly from the paginated endpoint
+/// let first_10_tracks = tracks.take(10).await?;
+/// for track in first_10_tracks {
+///     println!("{} (played {} times)", track.name, track.playcount);
+/// }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # });
+/// ```
+pub struct ArtistTracksDirectIterator<C: LastFmEditClient> {
+    client: C,
+    artist: String,
+    current_page: u32,
+    has_more: bool,
+    buffer: Vec<Track>,
+    total_pages: Option<u32>,
+    tracks_yielded: u32,
+}
+
+#[async_trait(?Send)]
+impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for ArtistTracksDirectIterator<C> {
+    async fn next(&mut self) -> Result<Option<Track>> {
+        // If buffer is empty, try to load next page
+        if self.buffer.is_empty() {
+            if let Some(page) = self.next_page().await? {
+                self.buffer = page.tracks;
+                self.buffer.reverse(); // Reverse so we can pop from end efficiently
+            }
+        }
+
+        if let Some(track) = self.buffer.pop() {
+            self.tracks_yielded += 1;
+            Ok(Some(track))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn current_page(&self) -> u32 {
+        self.current_page.saturating_sub(1)
+    }
+
+    fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
+}
+
+impl<C: LastFmEditClient> ArtistTracksDirectIterator<C> {
+    /// Create a new direct artist tracks iterator.
+    ///
+    /// This is typically called via [`LastFmEditClient::artist_tracks_direct`](crate::LastFmEditClient::artist_tracks_direct).
+    pub fn new(client: C, artist: String) -> Self {
+        Self {
+            client,
+            artist,
+            current_page: 1,
+            has_more: true,
+            buffer: Vec::new(),
+            total_pages: None,
+            tracks_yielded: 0,
+        }
+    }
+
+    /// Fetch the next page of tracks.
+    ///
+    /// This method handles pagination automatically and includes rate limiting.
+    pub async fn next_page(&mut self) -> Result<Option<TrackPage>> {
+        if !self.has_more {
+            return Ok(None);
+        }
+
+        log::debug!(
+            "Fetching page {} of {} tracks (yielded {} tracks so far)",
+            self.current_page,
+            self.artist,
+            self.tracks_yielded
+        );
+
+        let page = self
+            .client
+            .get_artist_tracks_page(&self.artist, self.current_page)
+            .await?;
+
+        self.has_more = page.has_next_page;
+        self.current_page += 1;
+        self.total_pages = page.total_pages;
+
+        Ok(Some(page))
+    }
+
+    /// Get the total number of pages, if known.
+    ///
+    /// Returns `None` until at least one page has been fetched.
+    pub fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
+}
+
 /// Iterator for browsing an artist's albums from a user's library.
 ///
 /// This iterator provides paginated access to all albums by a specific artist

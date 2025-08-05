@@ -246,6 +246,7 @@ pub use types::{
 // Type aliases for iterators with the concrete client type
 pub type ArtistsIterator = iterator::ArtistsIterator<LastFmEditClientImpl>;
 pub type ArtistTracksIterator = iterator::ArtistTracksIterator<LastFmEditClientImpl>;
+pub type ArtistTracksDirectIterator = iterator::ArtistTracksDirectIterator<LastFmEditClientImpl>;
 pub type ArtistAlbumsIterator = iterator::ArtistAlbumsIterator<LastFmEditClientImpl>;
 pub type AlbumTracksIterator = iterator::AlbumTracksIterator<LastFmEditClientImpl>;
 pub type RecentTracksIterator = iterator::RecentTracksIterator<LastFmEditClientImpl>;

@@ -126,16 +126,7 @@ impl LastFmParser {
             }
         }
 
-        // 4. Look for time element with datetime attribute
-        let time_selector = Selector::parse("time").unwrap();
-        if let Some(time_elem) = row.select(&time_selector).next() {
-            if let Some(datetime) = time_elem.value().attr("datetime") {
-                // Parse ISO datetime to timestamp
-                if let Ok(parsed_time) = chrono::DateTime::parse_from_rfc3339(datetime) {
-                    return Some(parsed_time.timestamp() as u64);
-                }
-            }
-        }
+        // Removed time element parsing - testing if needed
 
         None
     }
@@ -207,110 +198,67 @@ impl LastFmParser {
 
         log::debug!("Starting track extraction for artist: {artist}, album: {album:?}");
 
-        // Try JSON-embedded data first
-        if let Ok(json_tracks) = self.parse_json_tracks_page(document, 1, artist, album) {
-            log::debug!("Found {} tracks from JSON data", json_tracks.tracks.len());
-            return Ok(json_tracks.tracks);
-        }
+        // JSON parsing removed - was not implemented and always failed
 
-        // Strategy 1: Try parsing track data from data-track-name attributes (AJAX response)
+        // Parse track data from data-track-name attributes (AJAX response)
         let track_selector = Selector::parse("[data-track-name]").unwrap();
         let track_elements: Vec<_> = document.select(&track_selector).collect();
         log::debug!(
-            "Strategy 1: Found {} elements with data-track-name",
+            "Found {} elements with data-track-name",
             track_elements.len()
         );
 
-        if !track_elements.is_empty() {
-            for element in track_elements {
-                let track_name = element.value().attr("data-track-name").unwrap_or("");
-                if !track_name.is_empty() && !seen_tracks.contains(track_name) {
-                    seen_tracks.insert(track_name.to_string());
-
-                    if let Ok(playcount) = self.find_playcount_for_track(document, track_name) {
-                        let timestamp = self.find_timestamp_for_track(document, track_name);
-                        let track = Track {
-                            name: track_name.to_string(),
-                            artist: artist.to_string(),
-                            playcount,
-                            timestamp,
-                            album: album.map(|a| a.to_string()),
-                            album_artist: None, // Not available in aggregate track listings
-                        };
-                        tracks.push(track);
-                        log::debug!(
-                            "Strategy 1: Added track '{track_name}' with {playcount} plays"
-                        );
-                    } else {
-                        log::debug!(
-                            "Strategy 1: Skipped track '{track_name}' - no playcount found"
-                        );
-                    }
-                    if tracks.len() >= 50 {
-                        break;
-                    }
-                }
+        for element in track_elements {
+            let track_name = element.value().attr("data-track-name").unwrap_or("");
+            if track_name.is_empty() {
+                continue;
             }
-        }
-
-        // Strategy 2: Parse tracks from hidden form inputs (for tracks like "Comes a Time - 2016")
-        if tracks.len() < 50 {
-            let form_input_selector = Selector::parse("input[name='track']").unwrap();
-            let form_inputs: Vec<_> = document.select(&form_input_selector).collect();
-            log::debug!(
-                "Strategy 2: Found {} input[name='track'] elements",
-                form_inputs.len()
-            );
-
-            for input in form_inputs {
-                if let Some(track_name) = input.value().attr("value") {
-                    log::debug!("Strategy 2: Found input with track name: '{track_name}'");
-                    if !track_name.is_empty() && !seen_tracks.contains(track_name) {
-                        seen_tracks.insert(track_name.to_string());
-
-                        let playcount = self
-                            .find_playcount_for_track(document, track_name)
-                            .unwrap_or(0);
-                        let timestamp = self.find_timestamp_for_track(document, track_name);
-                        let track = Track {
-                            name: track_name.to_string(),
-                            artist: artist.to_string(),
-                            playcount,
-                            timestamp,
-                            album: album.map(|a| a.to_string()),
-                            album_artist: None, // Not available in form input parsing
-                        };
-                        tracks.push(track);
-                        log::debug!(
-                            "Strategy 2: Added track '{track_name}' with {playcount} plays"
-                        );
-                        if tracks.len() >= 50 {
-                            break;
-                        }
-                    } else {
-                        log::debug!(
-                            "Strategy 2: Skipped track '{track_name}' - empty or duplicate"
-                        );
-                    }
-                }
+            if seen_tracks.contains(track_name) {
+                continue;
             }
-        }
+            seen_tracks.insert(track_name.to_string());
 
-        // Strategy 3: Fallback to table parsing method if we didn't find enough tracks
-        if tracks.len() < 10 {
-            log::debug!(
-                "Strategy 3: Falling back to table parsing (found {} tracks so far)",
-                tracks.len()
-            );
-            let table_tracks = self.parse_tracks_from_rows(document, artist, album)?;
-            log::debug!(
-                "Strategy 3: Table parsing found {} tracks",
-                table_tracks.len()
-            );
-            for track in table_tracks {
-                if !seen_tracks.contains(&track.name) && tracks.len() < 50 {
-                    seen_tracks.insert(track.name.clone());
+            match self.find_playcount_for_track(document, track_name) {
+                Ok(playcount) => {
+                    let timestamp = self.find_timestamp_for_track(document, track_name);
+                    let track = Track {
+                        name: track_name.to_string(),
+                        artist: artist.to_string(),
+                        playcount,
+                        timestamp,
+                        album: album.map(|a| a.to_string()),
+                        album_artist: None, // Not available in aggregate track listings
+                    };
                     tracks.push(track);
+                    log::debug!("Added track '{track_name}' with {playcount} plays");
+                }
+                Err(e) => {
+                    log::debug!("FAILED to find playcount for track '{track_name}': {e}");
+                }
+            }
+        }
+
+        // Always try fallback parsing from chartlist tables to catch tracks without data-track-name
+        let table_selector = Selector::parse("table.chartlist").unwrap();
+        let tables: Vec<_> = document.select(&table_selector).collect();
+
+        for table in tables {
+            let row_selector = Selector::parse("tbody tr").unwrap();
+            let rows: Vec<_> = table.select(&row_selector).collect();
+
+            for row in rows.iter() {
+                // Try to parse as track row
+                if let Ok(mut track) = self.parse_track_row(row) {
+                    track.artist = artist.to_string();
+                    if let Some(album_name) = album {
+                        track.album = Some(album_name.to_string());
+                    }
+
+                    // Only add if we don't already have this track
+                    if !seen_tracks.contains(&track.name) {
+                        seen_tracks.insert(track.name.clone());
+                        tracks.push(track);
+                    }
                 }
             }
         }
@@ -319,28 +267,7 @@ impl LastFmParser {
         Ok(tracks)
     }
 
-    /// Parse tracks from chartlist table rows
-    fn parse_tracks_from_rows(
-        &self,
-        document: &Html,
-        artist: &str,
-        album: Option<&str>,
-    ) -> Result<Vec<Track>> {
-        let mut tracks = Vec::new();
-        let table_selector = Selector::parse("table.chartlist").unwrap();
-        let row_selector = Selector::parse("tbody tr").unwrap();
-
-        for table in document.select(&table_selector) {
-            for row in table.select(&row_selector) {
-                if let Ok(mut track) = self.parse_track_row(&row) {
-                    track.artist = artist.to_string(); // Fill in artist name
-                    track.album = album.map(|a| a.to_string()); // Fill in album name
-                    tracks.push(track);
-                }
-            }
-        }
-        Ok(tracks)
-    }
+    // Removed parse_tracks_from_rows - no longer needed
 
     /// Parse a single track row from chartlist table
     pub fn parse_track_row(&self, row: &scraper::ElementRef) -> Result<Track> {
@@ -398,10 +325,6 @@ impl LastFmParser {
                             timestamp,
                         };
                         albums.push(album);
-                    }
-
-                    if albums.len() >= 50 {
-                        break;
                     }
                 }
             }
@@ -688,19 +611,7 @@ impl LastFmParser {
     }
 
     // === JSON PARSING METHODS ===
-
-    fn parse_json_tracks_page(
-        &self,
-        _document: &Html,
-        _page: u32,
-        _artist: &str,
-        _album: Option<&str>,
-    ) -> Result<TrackPage> {
-        // JSON parsing not implemented - return error to trigger fallback
-        Err(crate::LastFmError::Parse(
-            "JSON parsing not implemented".to_string(),
-        ))
-    }
+    // Removed unused JSON parsing method
 
     // === FIND HELPER METHODS ===
 

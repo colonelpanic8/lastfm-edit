@@ -1,0 +1,69 @@
+use super::common;
+use std::collections::HashSet;
+
+#[test_log::test(tokio::test)]
+async fn artist_tracks() {
+    let client = common::create_lastfm_vcr_test_client("artist_tracks")
+        .await
+        .expect("Failed to setup VCR client");
+
+    let mut artist_tracks = client.artist_tracks("The Beatles");
+    let mut unique_track_names = HashSet::new();
+    let mut total_count = 0;
+
+    while let Some(track) = artist_tracks
+        .next()
+        .await
+        .expect("Failed to get next track")
+    {
+        unique_track_names.insert(track.name.clone());
+        total_count += 1;
+    }
+
+    println!(
+        "Total tracks: {}, Unique track names: {}",
+        total_count,
+        unique_track_names.len()
+    );
+
+    assert_eq!(
+        unique_track_names.len(),
+        192,
+        "Should have exactly 192 unique track names, but found {}",
+        unique_track_names.len()
+    );
+}
+
+#[test_log::test(tokio::test)]
+async fn artist_tracks_direct() {
+    let client = common::create_lastfm_vcr_test_client("artist_tracks_direct")
+        .await
+        .expect("Failed to setup VCR client");
+
+    let mut artist_tracks = client.artist_tracks_direct("The Beatles");
+    let mut unique_track_names = HashSet::new();
+    let mut total_count = 0;
+
+    while let Some(track) = artist_tracks
+        .next()
+        .await
+        .expect("Failed to get next track")
+    {
+        println!("{track:?}");
+        unique_track_names.insert(track.name.clone());
+        total_count += 1;
+    }
+
+    println!(
+        "Total tracks: {}, Unique track names: {}",
+        total_count,
+        unique_track_names.len()
+    );
+
+    assert_eq!(
+        unique_track_names.len(),
+        204,
+        "Should have exactly 192 unique track names, but found {}",
+        unique_track_names.len()
+    );
+}

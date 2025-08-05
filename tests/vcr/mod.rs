@@ -1,4 +1,6 @@
 mod album_tracks;
+mod artist_tracks;
+mod beatles_page4;
 mod common;
 mod discovery;
 mod edit;
