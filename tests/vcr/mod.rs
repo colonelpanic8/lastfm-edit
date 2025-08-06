@@ -1,10 +1,17 @@
+mod album_search;
 mod album_tracks;
 mod artist_tracks;
 mod beatles_page4;
 mod common;
+mod delete;
 mod discovery;
 mod edit;
+mod list_artists;
 mod login;
+mod recent_scrobbles_iterator;
 mod recent_tracks;
 mod search;
+mod session_persistence;
 mod special_character_albums;
+mod username;
+mod validate_session;

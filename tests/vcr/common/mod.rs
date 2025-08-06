@@ -29,6 +29,11 @@ impl VcrTestSetup {
             fs::create_dir_all(parent_dir)?;
         }
 
+        // For directory format, ensure the cassette directory itself exists
+        if use_directory_format && !std::path::Path::new(&cassette_path).exists() {
+            fs::create_dir_all(&cassette_path)?;
+        }
+
         let vcr_record_env = env::var("LAST_FM_VCR_RECORD").unwrap_or_default();
         let vcr_record = !vcr_record_env.is_empty();
         let cassette_exists = std::path::Path::new(&cassette_path).exists();

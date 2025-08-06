@@ -1,0 +1,88 @@
+- request:
+    method: GET
+    url: https://www.last.fm/settings/subscription/automatic-edits/tracks
+    headers:
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      content-type:
+      - application/octet-stream
+      upgrade-insecure-requests:
+      - '1'
+      dnt:
+      - '1'
+      connection:
+      - keep-alive
+      cookie:
+      - csrftoken=WjJCsrk60H5vB8SK4DX8UnG5iE1voIwq; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      accept-language:
+      - en-US,en;q=0.9
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-mobile:
+      - ?0
+    version: None
+  response:
+    status: 200
+    headers:
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      strict-transport-security:
+      - max-age=300
+      x-pjax-url:
+      - https://www.last.fm/settings/subscription/automatic-edits/tracks
+      accept-ranges:
+      - bytes
+      cache-control:
+      - max-age=0, must-revalidate
+      x-timer:
+      - S1754459879.952783,VS0,VE1055
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-request-category:
+      - page
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 05:58:59 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=WjJCsrk60H5vB8SK4DX8UnG5iE1voIwq; expires=Wed, 05 Aug 2026 05:57:59 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 05:57:59 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-cache-hits:
+      - 0, 0
+      x-lfm-upstream-type:
+      - PASS
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-cache:
+      - MISS, MISS
+      server:
+      - nginx
+      date:
+      - Wed, 06 Aug 2025 05:58:00 GMT
+      x-frame-options:
+      - DENY
+      content-encoding:
+      - gzip
+      x-lfm-cacheable-page:
+      - '0'
+      etag:
+      - W/"fd6bc440eb51200bd9956662a31bba6c"
+      x-lfm-upstream:
+      - /settings/subscription/automatic-edits/tracks
+      content-language:
+      - en
+      x-served-by:
+      - cache-chi-klot8100037-CHI, cache-chi-klot8100037-CHI
+      content-type:
+      - text/html; charset=utf-8
+    body_file: resp_001.txt
+    version: None

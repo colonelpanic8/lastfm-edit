@@ -1,0 +1,636 @@
+
+
+
+
+
+
+
+
+    
+        
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <table
+        
+        class="
+            chartlist
+            
+            
+                chartlist--with-index
+                chartlist--with-index--length-1
+            
+            
+                chartlist--with-play
+            
+            
+            
+            
+                chartlist--with-image
+            
+            
+            
+                chartlist--with-artist
+            
+            
+            
+                chartlist--with-more
+            
+            
+            
+                chartlist--with-bar
+            
+            
+            
+            
+            
+            
+                chartlist--with-buylinks
+            
+            
+            
+            
+        "
+    >
+        <thead class="sr-only">
+            <tr>
+                
+
+                
+                    
+                    <th>Rank</th>
+                
+
+                
+
+                
+                    
+                    <th>Play</th>
+                
+
+                
+
+                
+                    
+                    <th>
+                        
+                            Artwork
+                        
+                    </th>
+                
+
+                
+
+                <th>
+                    
+                    
+                        Album name
+                    
+                </th>
+
+                
+                    
+                    <th>Artist name </th>
+                
+
+                
+
+                
+                    
+                    <th>Buy</th>
+                
+
+                
+                    
+                    <th>Options</th>
+                
+
+                
+
+                
+
+                
+
+                
+                    
+                    <th>Scrobbles</th>
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+            </tr>
+        </thead>
+        <tbody
+                data-playlisting-add-entries
+                
+        >
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+                chartlist-row--with-artist
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+                link-block-basic
+                js-link-block
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+            data-album-row
+            data-edit-album-id="cf5cb9d9e59700104511358e059885e3"
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                1
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/f304ba0296794c6fc9d0e1cccd194ed0.jpg"
+            alt="Abbey Road"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+                    
+    <a
+        href="/music/The+Beatles/Abbey+Road"
+        
+        class="
+            js-link-block-cover-link
+            link-block-cover-link
+        "
+        tabindex="-1"
+        aria-hidden="true"
+    ></a>
+
+                
+            </td>
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/The+Beatles/Abbey+Road"
+            
+            
+                title="Abbey Road"
+            
+                class="link-block-target"
+            
+        >Abbey Road</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                    <a
+            href="/music/The+Beatles"
+            
+            
+                title="The Beatles"
+            
+        >The Beatles</a>
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-84b44136-1d47-4848-a4a9-214380ee5c43"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/The+Beatles/Abbey+Road/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-84b44136-1d47-4848-a4a9-214380ee5c43"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-06986ff0-4d1b-48d7-861b-9b3198fcf61c"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/The+Beatles/Abbey+Road/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-06986ff0-4d1b-48d7-861b-9b3198fcf61c"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                            
+
+    <li>
+        
+            <form
+                method="POST"
+                action="/user/IvanMalison/library/edit-album?edited-variation=library-album-scrobble"
+                data-edit-album
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='0BV6iTwgkwJ2A0WsbuSHTrN7Bua24R0ne6zBraEq7hZ7AfJOWXp18bhIhhpc4Daz' />
+
+                <input type="hidden" name="album_name" value="Abbey Road" />
+                <input type="hidden" name="album_artist_name" value="The Beatles" />
+                <input type="hidden" name="album_image" value="None" />
+
+                <input type="hidden" name="album_name_original" value="Abbey Road" />
+                <input type="hidden" name="album_artist_name_original" value="The Beatles" />
+                <input type="hidden" name="count" value="532" />
+
+                <button
+                    type="submit"
+                    class="
+                        mimic-link
+                        dropdown-menu-clickable-item
+                        more-item--edit-old
+                    "
+                    data-analytics-action="EditScrobbleOpen"
+                >
+                    Edit album
+                </button>
+            </form>
+        
+    </li>
+
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/The+Beatles/Abbey+Road"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/The+Beatles/Abbey+Road"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/music/The+Beatles"
+            class="
+                dropdown-menu-clickable-item
+                more-item--artist
+            "
+        >
+            
+                
+                    Go to artist
+                
+            
+        </a>
+    </li>
+
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/The+Beatles"
+            class="
+                dropdown-menu-clickable-item
+                more-item--artist
+            "
+        >
+            
+                
+                    Go to artist in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get album
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/The+Beatles/Abbey+Road"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="532"
+                    data-stat-value="532"
+                    class="chartlist-count-bar-slug"
+                    style="width:100.0%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                532 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+        </tbody>
+    </table>
+
+
+    
+    
+        
+    
+
+    
+    
+    
+        
+    
+

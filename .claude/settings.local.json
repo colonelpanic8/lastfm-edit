@@ -124,7 +124,15 @@
       "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests vcr::discovery::discover_artist_tracks vcr::discovery::discover_exact_match vcr::discovery::discover_album_tracks vcr::discovery::discover_track_variations vcr::search::search_iterator vcr::recent_tracks::get_recent_tracks vcr::beatles_page4::beatles_page4_tracks)",
       "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests -- discover_artist_tracks discover_exact_match discover_album_tracks discover_track_variations search_iterator get_recent_tracks beatles_page4_tracks)",
       "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests discover_album_tracks)",
-      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests beatles_page4_tracks)"
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests beatles_page4_tracks)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::username::test_username)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::album_search::test_album_search)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::list_artists::test_list_artists)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::list_artists::test_artists_pagination)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::recent_scrobbles_iterator)",
+      "Bash(LAST_FM_VCR_RECORD=record timeout 30s cargo test --test vcr_tests vcr::recent_scrobbles_iterator::test_recent_tracks_collect_all)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::recent_scrobbles_iterator::test_recent_tracks_limited_collection)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::validate_session::test_validate_session)"
     ],
     "deny": []
   }
