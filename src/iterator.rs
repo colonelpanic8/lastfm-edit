@@ -513,17 +513,22 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for RecentTracksIterator
                 return Ok(None);
             }
 
-            let tracks = self.client.get_recent_scrobbles(self.current_page).await?;
+            let page = self
+                .client
+                .get_recent_tracks_page(self.current_page)
+                .await?;
 
-            if tracks.is_empty() {
+            if page.tracks.is_empty() {
                 self.has_more = false;
                 return Ok(None);
             }
 
+            self.has_more = page.has_next_page;
+
             // Check if we should stop based on timestamp
             if let Some(stop_timestamp) = self.stop_at_timestamp {
                 let mut filtered_tracks = Vec::new();
-                for track in tracks {
+                for track in page.tracks {
                     if let Some(track_timestamp) = track.timestamp {
                         if track_timestamp <= stop_timestamp {
                             self.has_more = false;
@@ -534,7 +539,7 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for RecentTracksIterator
                 }
                 self.buffer = filtered_tracks;
             } else {
-                self.buffer = tracks;
+                self.buffer = page.tracks;
             }
 
             self.buffer.reverse(); // Reverse so we can pop from end efficiently

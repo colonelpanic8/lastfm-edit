@@ -19,9 +19,9 @@ async fn test_client_futures_are_send() {
     let client = Box::new(NoOpClient::new());
     let lastfm_client = LastFmEditClientImpl::from_session(client, create_test_session());
 
-    // Test that client get_recent_scrobbles future is Send
-    let get_scrobbles_future = lastfm_client.get_recent_scrobbles(1);
-    assert_send(get_scrobbles_future);
+    // Test that client get_recent_tracks_page future is Send
+    let get_recent_tracks_future = lastfm_client.get_recent_tracks_page(1);
+    assert_send(get_recent_tracks_future);
 
     // Test that client get_artist_tracks_page future is Send
     let get_tracks_future = lastfm_client.get_artist_tracks_page("test", 1);
@@ -51,7 +51,7 @@ async fn test_futures_can_be_spawned() {
 
     // This should compile if futures are Send
     let handle = tokio::spawn(async move {
-        let _ = lastfm_client.get_recent_scrobbles(1).await;
+        let _ = lastfm_client.get_recent_tracks_page(1).await;
         let _ = lastfm_client.get_artist_tracks_page("test", 1).await;
     });
 
@@ -73,7 +73,7 @@ async fn test_pagination_methods_across_await_boundaries() {
         tokio::time::sleep(std::time::Duration::from_millis(1)).await;
 
         // Use pagination methods directly - these are Send
-        let _ = lastfm_client.get_recent_scrobbles(1).await;
+        let _ = lastfm_client.get_recent_tracks_page(1).await;
         let _ = lastfm_client.get_artist_tracks_page("test", 1).await;
     });
 

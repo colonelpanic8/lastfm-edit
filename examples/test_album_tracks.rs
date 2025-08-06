@@ -17,24 +17,30 @@ async fn main() -> Result<()> {
     println!("=== Album Tracks Test ===\n");
     println!("🎵 Testing get_album_tracks() with: '{album}' by '{artist}'\n");
 
-    // Test the fixed get_album_tracks method
-    match client.get_album_tracks(&album, &artist).await {
-        Ok(tracks) => {
-            println!("✅ SUCCESS: Got {} tracks", tracks.len());
-            if tracks.is_empty() {
-                println!("   (Album not found in your library, but no crash!)");
-            } else {
-                println!("   Tracks:");
-                for (i, track) in tracks.iter().enumerate().take(10) {
-                    println!("   [{:2}] {}", i + 1, track.name);
-                }
-                if tracks.len() > 10 {
-                    println!("   ... and {} more tracks", tracks.len() - 10);
-                }
+    // Test the album_tracks iterator method
+    let mut tracks_iterator = client.album_tracks(&album, &artist);
+    let mut tracks = Vec::new();
+
+    while let Some(track) = tracks_iterator.next().await.transpose() {
+        match track {
+            Ok(track) => tracks.push(track),
+            Err(e) => {
+                println!("❌ ERROR: Failed to get track: {e}");
+                break;
             }
         }
-        Err(e) => {
-            println!("❌ ERROR: {e}");
+    }
+
+    println!("✅ SUCCESS: Got {} tracks", tracks.len());
+    if tracks.is_empty() {
+        println!("   (Album not found in your library, but no crash!)");
+    } else {
+        println!("   Tracks:");
+        for (i, track) in tracks.iter().enumerate().take(10) {
+            println!("   [{:2}] {}", i + 1, track.name);
+        }
+        if tracks.len() > 10 {
+            println!("   ... and {} more tracks", tracks.len() - 10);
         }
     }
 

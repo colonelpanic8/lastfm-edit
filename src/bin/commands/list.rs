@@ -138,27 +138,34 @@ pub async fn handle_list_tracks_by_album(
         });
 
         // Get tracks for this album
-        match client.get_album_tracks(&album.name, artist).await {
-            Ok(tracks) => {
-                if tracks.is_empty() {
-                    handler.handle_event(ListEvent::Error {
-                        message: "No tracks found in your library for this album".to_string(),
+        let mut tracks_iterator = client.album_tracks(&album.name, artist);
+        let mut track_idx = 0;
+        let mut has_tracks = false;
+
+        while let Some(track) = tracks_iterator.next().await.transpose() {
+            match track {
+                Ok(track) => {
+                    has_tracks = true;
+                    track_idx += 1;
+                    handler.handle_event(ListEvent::AlbumTrackFound {
+                        album_index: album_count,
+                        track_index: track_idx,
+                        track,
                     });
-                } else {
-                    for (track_idx, track) in tracks.iter().enumerate() {
-                        handler.handle_event(ListEvent::AlbumTrackFound {
-                            album_index: album_count,
-                            track_index: track_idx + 1,
-                            track: track.clone(),
-                        });
-                    }
+                }
+                Err(e) => {
+                    handler.handle_event(ListEvent::Error {
+                        message: format!("Error getting tracks: {e}"),
+                    });
+                    break;
                 }
             }
-            Err(e) => {
-                handler.handle_event(ListEvent::Error {
-                    message: format!("Error getting tracks: {e}"),
-                });
-            }
+        }
+
+        if !has_tracks {
+            handler.handle_event(ListEvent::Error {
+                message: "No tracks found in your library for this album".to_string(),
+            });
         }
 
         if limit > 0 && album_count >= limit {

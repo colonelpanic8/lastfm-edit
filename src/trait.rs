@@ -1,7 +1,7 @@
 use crate::iterator::AsyncPaginatedIterator;
 use crate::types::{
     Album, Artist, ArtistPage, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit,
-    LastFmEditSession, LastFmError, ScrobbleEdit, Track,
+    LastFmEditSession, ScrobbleEdit, Track,
 };
 use crate::Result;
 use async_trait::async_trait;
@@ -273,9 +273,6 @@ pub trait LastFmEditClient {
     /// Get the currently authenticated username.
     fn username(&self) -> String;
 
-    /// Fetch recent scrobbles from the user's listening history.
-    async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>>;
-
     /// Find the most recent scrobble for a specific track.
     async fn find_recent_scrobble_for_track(
         &self,
@@ -302,16 +299,7 @@ pub trait LastFmEditClient {
     ) -> Result<crate::TrackPage>;
 
     /// Get a page of tracks from the user's recent listening history.
-    async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage> {
-        let tracks = self.get_recent_scrobbles(page).await?;
-        let has_next_page = !tracks.is_empty();
-        Ok(crate::TrackPage {
-            tracks,
-            page_number: page,
-            has_next_page,
-            total_pages: None,
-        })
-    }
+    async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage>;
 
     // =============================================================================
     // CONVENIENCE METHODS - Higher-level helpers and shortcuts
@@ -334,42 +322,6 @@ pub trait LastFmEditClient {
         // Use the incremental iterator and collect all results
         let mut discovery_iterator = self.discover_scrobbles(edit.clone());
         discovery_iterator.collect_all().await
-    }
-
-    /// Get tracks from a specific album page.
-    async fn get_album_tracks(&self, album_name: &str, artist_name: &str) -> Result<Vec<Track>> {
-        let mut tracks_iterator = self.album_tracks(album_name, artist_name);
-        tracks_iterator.collect_all().await
-    }
-
-    /// Find a scrobble by its timestamp in recent scrobbles.
-    async fn find_scrobble_by_timestamp(&self, timestamp: u64) -> Result<Track> {
-        log::debug!("Searching for scrobble with timestamp {timestamp}");
-
-        // Search through recent scrobbles to find the one with matching timestamp
-        for page in 1..=10 {
-            // Search up to 10 pages of recent scrobbles
-            let scrobbles = self.get_recent_scrobbles(page).await?;
-
-            for scrobble in scrobbles {
-                if let Some(scrobble_timestamp) = scrobble.timestamp {
-                    if scrobble_timestamp == timestamp {
-                        log::debug!(
-                            "Found scrobble: '{}' by '{}' with album: '{:?}', album_artist: '{:?}'",
-                            scrobble.name,
-                            scrobble.artist,
-                            scrobble.album,
-                            scrobble.album_artist
-                        );
-                        return Ok(scrobble);
-                    }
-                }
-            }
-        }
-
-        Err(LastFmError::Parse(format!(
-            "Could not find scrobble with timestamp {timestamp}"
-        )))
     }
 
     /// Edit album metadata by updating scrobbles with new album name.

@@ -6,32 +6,32 @@ async fn test_recent_scrobbles_iterator() {
         .await
         .expect("Failed to setup VCR client");
 
-    // Test getting recent scrobbles (different from recent_tracks)
-    let recent_scrobbles = client
-        .get_recent_scrobbles(2)
+    // Test getting recent tracks page (different from recent_tracks iterator)
+    let recent_tracks_page = client
+        .get_recent_tracks_page(2)
         .await
-        .expect("Getting recent scrobbles should succeed");
+        .expect("Getting recent tracks page should succeed");
 
     assert!(
-        !recent_scrobbles.is_empty(),
-        "Should have some recent scrobbles"
+        !recent_tracks_page.tracks.is_empty(),
+        "Should have some recent tracks"
     );
 
-    // Verify each scrobble has required data
-    for scrobble in &recent_scrobbles {
-        assert!(!scrobble.name.is_empty(), "Track name should not be empty");
-        assert!(
-            !scrobble.artist.is_empty(),
-            "Artist name should not be empty"
-        );
+    // Verify each track has required data
+    for track in &recent_tracks_page.tracks {
+        assert!(!track.name.is_empty(), "Track name should not be empty");
+        assert!(!track.artist.is_empty(), "Artist name should not be empty");
         // Note: album can be empty for some tracks, so we don't assert it
     }
 
-    // Test that we get results from multiple pages
+    // Test that we get results from the page
     assert!(
-        recent_scrobbles.len() >= 10,
-        "Should get multiple scrobbles from 2 pages"
+        recent_tracks_page.tracks.len() >= 10,
+        "Should get multiple tracks from page 2"
     );
+
+    // Verify page metadata
+    assert_eq!(recent_tracks_page.page_number, 2, "Page number should be 2");
 }
 
 #[test_log::test(tokio::test)]

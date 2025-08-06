@@ -106,18 +106,26 @@ mod mock_tests {
 
         // Set up expectation
         mock_client
-            .expect_get_recent_scrobbles()
+            .expect_get_recent_tracks_page()
             .with(eq(1))
             .times(1)
-            .returning(move |_| Ok(expected_tracks.clone()));
+            .returning(move |page| {
+                Ok(TrackPage {
+                    tracks: expected_tracks.clone(),
+                    page_number: page,
+                    has_next_page: false,
+                    total_pages: Some(1),
+                })
+            });
 
         // Use the mock
         let client: &dyn LastFmEditClient = &mock_client;
-        let tracks = client.get_recent_scrobbles(1).await?;
+        let page = client.get_recent_tracks_page(1).await?;
 
-        assert_eq!(tracks.len(), 2);
-        assert_eq!(tracks[0].name, "Test Track 1");
-        assert_eq!(tracks[1].name, "Test Track 2");
+        assert_eq!(page.tracks.len(), 2);
+        assert_eq!(page.tracks[0].name, "Test Track 1");
+        assert_eq!(page.tracks[1].name, "Test Track 2");
+        assert_eq!(page.page_number, 1);
 
         Ok(())
     }
@@ -189,17 +197,22 @@ mod mock_tests {
             });
 
         mock_client
-            .expect_get_recent_scrobbles()
+            .expect_get_recent_tracks_page()
             .with(eq(1))
-            .returning(|_| {
-                Ok(vec![Track {
-                    name: "Recent Track 1".to_string(),
-                    artist: "Recent Artist".to_string(),
-                    album: Some("Recent Album".to_string()),
-                    album_artist: Some("Recent Artist".to_string()),
-                    playcount: 1,
-                    timestamp: Some(1640995300),
-                }])
+            .returning(|page| {
+                Ok(TrackPage {
+                    tracks: vec![Track {
+                        name: "Recent Track 1".to_string(),
+                        artist: "Recent Artist".to_string(),
+                        album: Some("Recent Album".to_string()),
+                        album_artist: Some("Recent Artist".to_string()),
+                        playcount: 1,
+                        timestamp: Some(1640995300),
+                    }],
+                    page_number: page,
+                    has_next_page: false,
+                    total_pages: Some(1),
+                })
             });
 
         mock_client
@@ -230,9 +243,9 @@ mod mock_tests {
         assert_eq!(tracks_page.tracks.len(), 1);
         assert_eq!(tracks_page.tracks[0].name, "Iterator Track 1");
 
-        let recent_page = client.get_recent_scrobbles(1).await?;
-        assert_eq!(recent_page.len(), 1);
-        assert_eq!(recent_page[0].name, "Recent Track 1");
+        let recent_page = client.get_recent_tracks_page(1).await?;
+        assert_eq!(recent_page.tracks.len(), 1);
+        assert_eq!(recent_page.tracks[0].name, "Recent Track 1");
 
         let albums_page = client.get_artist_albums_page("test_artist", 1).await?;
         assert_eq!(albums_page.albums.len(), 1);

@@ -21,23 +21,6 @@ pub fn add_common_headers(request: &mut Request) {
     let _ = request.insert_header("sec-ch-ua-platform", SEC_CH_UA_PLATFORM);
 }
 
-/// Add headers for HTML form login requests
-pub fn add_login_headers(request: &mut Request, login_url: &str, base_url: &str) {
-    add_common_headers(request);
-    let _ = request.insert_header("Referer", login_url);
-    let _ = request.insert_header("Origin", base_url);
-    let _ = request.insert_header("Content-Type", "application/x-www-form-urlencoded");
-    let _ = request.insert_header(
-        "Accept",
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
-    );
-    let _ = request.insert_header("Upgrade-Insecure-Requests", "1");
-    let _ = request.insert_header("Sec-Fetch-Dest", "document");
-    let _ = request.insert_header("Sec-Fetch-Mode", "navigate");
-    let _ = request.insert_header("Sec-Fetch-Site", "same-origin");
-    let _ = request.insert_header("Sec-Fetch-User", "?1");
-}
-
 /// Add headers for AJAX form edit requests
 pub fn add_edit_headers(request: &mut Request, referer_url: &str) {
     add_common_headers(request);

@@ -1412,10 +1412,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
         self.username()
     }
 
-    async fn get_recent_scrobbles(&self, page: u32) -> Result<Vec<Track>> {
-        self.get_recent_scrobbles(page).await
-    }
-
     async fn find_recent_scrobble_for_track(
         &self,
         track_name: &str,
@@ -1501,6 +1497,10 @@ impl LastFmEditClient for LastFmEditClientImpl {
     ) -> Result<TrackPage> {
         self.get_album_tracks_page(album_name, artist_name, page)
             .await
+    }
+
+    async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
+        self.get_recent_tracks_page(page).await
     }
 
     fn artists(&self) -> Box<dyn crate::AsyncPaginatedIterator<crate::Artist>> {

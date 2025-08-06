@@ -118,6 +118,7 @@ coverage:
         --out Html \
         --output-dir coverage \
         --exclude-files "tests/vcr/*" \
+        --exclude-files "src/bin/*" \
         --timeout 120
 
     echo "✅ Coverage report generated in coverage/tarpaulin-report.html"
