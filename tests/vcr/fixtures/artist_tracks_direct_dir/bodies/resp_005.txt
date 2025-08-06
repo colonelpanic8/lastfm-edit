@@ -1546,7 +1546,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="71ee8df43ee810cc5b5763418b67b7df"
+        data-toggle-button-group-id="5533da084e1e8a4cc2c40676f1426721"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -1559,7 +1559,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button chartlist-love-button"
@@ -1596,7 +1596,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="71ee8df43ee810cc5b5763418b67b7df"
+        data-toggle-button-group-id="5533da084e1e8a4cc2c40676f1426721"
         
     
     data-toggle-button-current-state="unloved"
@@ -1636,13 +1636,13 @@
                     lazy-buylinks-toggle
                 "
                 aria-expanded="false"
-                aria-controls="buylinks-ad395269-91f0-4ad9-ab53-26426ad99a1b"
+                aria-controls="buylinks-4faa57c6-d42f-4548-a8b8-dd08d11fe850"
                 data-disclose-lazy-buylinks
                 data-lazy-buylink-url="/music/The+Beatles/_/Yes+It+Is/+partial/buylinks"
                 data-dropdown-layout-at="center bottom+3"
             >Buy</button>
             <ul
-                id="buylinks-ad395269-91f0-4ad9-ab53-26426ad99a1b"
+                id="buylinks-4faa57c6-d42f-4548-a8b8-dd08d11fe850"
                 class="
                     disclose-hide
                     dropdown-menu-clickable
@@ -1681,13 +1681,13 @@
                         chartlist-more-button
                     "
                     aria-expanded="false"
-                    aria-controls="chartlist-more-e314dde7-ade9-4f5b-a67d-ce70952fa5c4"
+                    aria-controls="chartlist-more-1a453551-395f-46cf-a0f3-a200b558d910"
                     data-disclose-lazy-buylinks
                     data-lazy-buylink-url="/music/The+Beatles/_/Yes+It+Is/+partial/buylinks"
                     data-dropdown-layout-at="center bottom+3"
                 >More</button>
                 <ul
-                    id="chartlist-more-e314dde7-ade9-4f5b-a67d-ce70952fa5c4"
+                    id="chartlist-more-1a453551-395f-46cf-a0f3-a200b558d910"
                     class="
                         disclose-hide
                         disclose-hide--js-only
@@ -1765,7 +1765,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="71ee8df43ee810cc5b5763418b67b7df"
+        data-toggle-button-group-id="5533da084e1e8a4cc2c40676f1426721"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -1778,7 +1778,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button 
@@ -1817,7 +1817,7 @@
             action="/user/IvanMalison/obsessions"
             data-submit-to-modal
         >
-            <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+            <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
             <input type="hidden" name="name" value="Yes It Is" />
             <input type="hidden" name="artist_name" value="The Beatles" />
             
@@ -2130,7 +2130,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="7fb5271b3e6032c25c397c7c52044869"
+        data-toggle-button-group-id="538aeffbc57d0a50ec7e6066ac81df35"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -2143,7 +2143,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button chartlist-love-button"
@@ -2180,7 +2180,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="7fb5271b3e6032c25c397c7c52044869"
+        data-toggle-button-group-id="538aeffbc57d0a50ec7e6066ac81df35"
         
     
     data-toggle-button-current-state="unloved"
@@ -2220,13 +2220,13 @@
                     lazy-buylinks-toggle
                 "
                 aria-expanded="false"
-                aria-controls="buylinks-a3294e82-cc31-4ede-a1db-3c679fccdf8a"
+                aria-controls="buylinks-8030c316-4f8b-4611-8730-2e74f6fbcf20"
                 data-disclose-lazy-buylinks
                 data-lazy-buylink-url="/music/The+Beatles/_/You+Know+My+Name+(Look+Up+the+Number)/+partial/buylinks"
                 data-dropdown-layout-at="center bottom+3"
             >Buy</button>
             <ul
-                id="buylinks-a3294e82-cc31-4ede-a1db-3c679fccdf8a"
+                id="buylinks-8030c316-4f8b-4611-8730-2e74f6fbcf20"
                 class="
                     disclose-hide
                     dropdown-menu-clickable
@@ -2265,13 +2265,13 @@
                         chartlist-more-button
                     "
                     aria-expanded="false"
-                    aria-controls="chartlist-more-b5951094-7529-4778-a22a-ea6909df3999"
+                    aria-controls="chartlist-more-3a82ab5e-5a97-4fb9-8b2b-309f0d975349"
                     data-disclose-lazy-buylinks
                     data-lazy-buylink-url="/music/The+Beatles/_/You+Know+My+Name+(Look+Up+the+Number)/+partial/buylinks"
                     data-dropdown-layout-at="center bottom+3"
                 >More</button>
                 <ul
-                    id="chartlist-more-b5951094-7529-4778-a22a-ea6909df3999"
+                    id="chartlist-more-3a82ab5e-5a97-4fb9-8b2b-309f0d975349"
                     class="
                         disclose-hide
                         disclose-hide--js-only
@@ -2349,7 +2349,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="7fb5271b3e6032c25c397c7c52044869"
+        data-toggle-button-group-id="538aeffbc57d0a50ec7e6066ac81df35"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -2362,7 +2362,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button 
@@ -2401,7 +2401,7 @@
             action="/user/IvanMalison/obsessions"
             data-submit-to-modal
         >
-            <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+            <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
             <input type="hidden" name="name" value="You Know My Name (Look Up the Number)" />
             <input type="hidden" name="artist_name" value="The Beatles" />
             
@@ -2675,7 +2675,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="531f28945d140b2f316882e07ca1169f"
+        data-toggle-button-group-id="e2fac9093e6a964b80cb46b007f5f43b"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -2688,7 +2688,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button chartlist-love-button"
@@ -2725,7 +2725,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="531f28945d140b2f316882e07ca1169f"
+        data-toggle-button-group-id="e2fac9093e6a964b80cb46b007f5f43b"
         
     
     data-toggle-button-current-state="unloved"
@@ -2765,13 +2765,13 @@
                     lazy-buylinks-toggle
                 "
                 aria-expanded="false"
-                aria-controls="buylinks-e7e504e1-d6cb-447f-a17e-334ef49b3666"
+                aria-controls="buylinks-5a06efbd-6a9c-449b-90fd-fa9ddbb7736b"
                 data-disclose-lazy-buylinks
                 data-lazy-buylink-url="/music/The+Beatles/_/You+Won%E2%80%99t+See+Me/+partial/buylinks"
                 data-dropdown-layout-at="center bottom+3"
             >Buy</button>
             <ul
-                id="buylinks-e7e504e1-d6cb-447f-a17e-334ef49b3666"
+                id="buylinks-5a06efbd-6a9c-449b-90fd-fa9ddbb7736b"
                 class="
                     disclose-hide
                     dropdown-menu-clickable
@@ -2810,13 +2810,13 @@
                         chartlist-more-button
                     "
                     aria-expanded="false"
-                    aria-controls="chartlist-more-8c402940-1e12-46b2-9c91-5dd0f2aa96ce"
+                    aria-controls="chartlist-more-a9b7c7ba-3b19-439f-b4b1-0d2627d181e6"
                     data-disclose-lazy-buylinks
                     data-lazy-buylink-url="/music/The+Beatles/_/You+Won%E2%80%99t+See+Me/+partial/buylinks"
                     data-dropdown-layout-at="center bottom+3"
                 >More</button>
                 <ul
-                    id="chartlist-more-8c402940-1e12-46b2-9c91-5dd0f2aa96ce"
+                    id="chartlist-more-a9b7c7ba-3b19-439f-b4b1-0d2627d181e6"
                     class="
                         disclose-hide
                         disclose-hide--js-only
@@ -2894,7 +2894,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="531f28945d140b2f316882e07ca1169f"
+        data-toggle-button-group-id="e2fac9093e6a964b80cb46b007f5f43b"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -2907,7 +2907,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button 
@@ -2946,7 +2946,7 @@
             action="/user/IvanMalison/obsessions"
             data-submit-to-modal
         >
-            <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+            <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
             <input type="hidden" name="name" value="You Won’t See Me" />
             <input type="hidden" name="artist_name" value="The Beatles" />
             
@@ -3259,7 +3259,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="3718fdde21df88328d4cc9ac66d50d11"
+        data-toggle-button-group-id="eded4e5559040bbe9536a995f176348c"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -3272,7 +3272,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button chartlist-love-button"
@@ -3309,7 +3309,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="3718fdde21df88328d4cc9ac66d50d11"
+        data-toggle-button-group-id="eded4e5559040bbe9536a995f176348c"
         
     
     data-toggle-button-current-state="unloved"
@@ -3349,13 +3349,13 @@
                     lazy-buylinks-toggle
                 "
                 aria-expanded="false"
-                aria-controls="buylinks-00ed7971-6ad8-4c29-9622-93f1d27e60bd"
+                aria-controls="buylinks-fb5c70ad-82ee-44a5-af35-d3a603cde9aa"
                 data-disclose-lazy-buylinks
                 data-lazy-buylink-url="/music/The+Beatles/_/You%27re+Going+to+Lose+That+Girl/+partial/buylinks"
                 data-dropdown-layout-at="center bottom+3"
             >Buy</button>
             <ul
-                id="buylinks-00ed7971-6ad8-4c29-9622-93f1d27e60bd"
+                id="buylinks-fb5c70ad-82ee-44a5-af35-d3a603cde9aa"
                 class="
                     disclose-hide
                     dropdown-menu-clickable
@@ -3394,13 +3394,13 @@
                         chartlist-more-button
                     "
                     aria-expanded="false"
-                    aria-controls="chartlist-more-3f190f90-5e8e-4cbe-8345-a9a084a43661"
+                    aria-controls="chartlist-more-24c4cad2-6103-4547-ab4e-309c41295716"
                     data-disclose-lazy-buylinks
                     data-lazy-buylink-url="/music/The+Beatles/_/You%27re+Going+to+Lose+That+Girl/+partial/buylinks"
                     data-dropdown-layout-at="center bottom+3"
                 >More</button>
                 <ul
-                    id="chartlist-more-3f190f90-5e8e-4cbe-8345-a9a084a43661"
+                    id="chartlist-more-24c4cad2-6103-4547-ab4e-309c41295716"
                     class="
                         disclose-hide
                         disclose-hide--js-only
@@ -3478,7 +3478,7 @@
         
     
         data-toggle-button
-        data-toggle-button-group-id="3718fdde21df88328d4cc9ac66d50d11"
+        data-toggle-button-group-id="eded4e5559040bbe9536a995f176348c"
         
             data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
         
@@ -3491,7 +3491,7 @@
                 action="/user/IvanMalison/loved"
                 method="post"
             >
-                <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+                <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
                 <button
                     type="submit"
                     class="toggle-button 
@@ -3530,7 +3530,7 @@
             action="/user/IvanMalison/obsessions"
             data-submit-to-modal
         >
-            <input type='hidden' name='csrfmiddlewaretoken' value='4AzFO2sSv351NbutQPXq2MQOW0Iqk2tUfSx3jhNeJfuKCLK1mVPbk44TYLROjA20' />
+            <input type='hidden' name='csrfmiddlewaretoken' value='y09x7WAVnIZ0DIkIjUgvmUtqpMnlzpkdLSmAfpHhTHrJdlEPh1U5SrEMpetyCuzK' />
             <input type="hidden" name="name" value="You&#39;re Going to Lose That Girl" />
             <input type="hidden" name="artist_name" value="The Beatles" />
             

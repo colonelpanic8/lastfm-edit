@@ -118,7 +118,13 @@
       "Bash(then echo \"Converting $file...\")",
       "Bash(then dest=\"$file%.yaml_dir\")",
       "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::artist_tracks::artist_tracks -- --nocapture)",
-      "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::artist_tracks::artist_tracks_direct -- --nocapture)"
+      "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::artist_tracks::artist_tracks_direct -- --nocapture)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test vcr::artist_tracks::artist_tracks)",
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests vcr::discovery::discover_artist_tracks)",
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests vcr::discovery::discover_artist_tracks vcr::discovery::discover_exact_match vcr::discovery::discover_album_tracks vcr::discovery::discover_track_variations vcr::search::search_iterator vcr::recent_tracks::get_recent_tracks vcr::beatles_page4::beatles_page4_tracks)",
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests -- discover_artist_tracks discover_exact_match discover_album_tracks discover_track_variations search_iterator get_recent_tracks beatles_page4_tracks)",
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests discover_album_tracks)",
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests beatles_page4_tracks)"
     ],
     "deny": []
   }

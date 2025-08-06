@@ -24,6 +24,13 @@ impl VcrTestSetup {
                 | "hey_jude_album"
                 | "now_and_then_album"
                 | "multiple_failing_albums"
+                | "discover_artist_tracks"
+                | "discover_exact_match"
+                | "discover_album_tracks"
+                | "discover_track_variations"
+                | "search"
+                | "recent_tracks"
+                | "beatles_page4"
         );
 
         let cassette_path = if use_directory_format {
