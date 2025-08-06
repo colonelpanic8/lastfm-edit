@@ -32,31 +32,6 @@ impl LastFmEditClientImpl {
         urlencoding::encode(input).to_string()
     }
 
-    /// Detect if the response content indicates a login redirect
-    fn is_login_redirect(&self, content: &str) -> bool {
-        // Check for common login redirect indicators
-        content.contains("login")
-            || content.contains("sign in")
-            || content.contains("signin")
-            || content.contains("Log in to Last.fm")
-            || content.contains("Please sign in")
-            // Check for login form elements
-            || (content.contains("<form") && content.contains("password"))
-            // Check for authentication-related classes or IDs
-            || content.contains("auth-form")
-            || content.contains("login-form")
-    }
-
-    /// Check if a specific endpoint requires authentication that our session doesn't provide
-    pub async fn validate_endpoint_access(&self, url: &str) -> Result<bool> {
-        let mut response = self.get(url).await?;
-        let content = response
-            .body_string()
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        Ok(!self.is_login_redirect(&content))
-    }
     pub fn from_session(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -218,10 +193,6 @@ impl LastFmEditClientImpl {
 
     pub fn get_session(&self) -> LastFmEditSession {
         self.session.lock().unwrap().clone()
-    }
-
-    pub fn restore_session(&self, session: LastFmEditSession) {
-        *self.session.lock().unwrap() = session;
     }
 
     pub fn with_shared_broadcaster(&self, client: Box<dyn HttpClient + Send + Sync>) -> Self {
@@ -991,10 +962,6 @@ impl LastFmEditClientImpl {
             .parse_tracks_page(document, page_number, artist, album)
     }
 
-    pub fn parse_recent_scrobbles(&self, document: &Html) -> Result<Vec<Track>> {
-        self.parser.parse_recent_scrobbles(document)
-    }
-
     fn extract_csrf_token(&self, document: &Html) -> Result<String> {
         let csrf_selector = Selector::parse("input[name=\"csrfmiddlewaretoken\"]").unwrap();
 
@@ -1473,10 +1440,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn get_session(&self) -> LastFmEditSession {
         self.get_session()
-    }
-
-    fn restore_session(&self, session: LastFmEditSession) {
-        self.restore_session(session)
     }
 
     fn subscribe(&self) -> ClientEventReceiver {

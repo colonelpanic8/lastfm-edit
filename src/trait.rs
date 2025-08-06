@@ -450,15 +450,6 @@ pub trait LastFmEditClient {
     /// Returns a [`LastFmEditSession`] that can be serialized and saved.
     fn get_session(&self) -> LastFmEditSession;
 
-    /// Restore session state from a previously saved session.
-    ///
-    /// This allows you to restore authentication state without logging in again.
-    ///
-    /// # Arguments
-    ///
-    /// * `session` - Previously saved session state
-    fn restore_session(&self, session: LastFmEditSession);
-
     /// Subscribe to internal client events.
     ///
     /// Returns a broadcast receiver that can be used to listen to events like rate limiting.

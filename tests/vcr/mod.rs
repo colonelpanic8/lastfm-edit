@@ -12,6 +12,5 @@ mod recent_scrobbles_iterator;
 mod recent_tracks;
 mod search;
 mod session_persistence;
-mod special_character_albums;
 mod username;
 mod validate_session;
