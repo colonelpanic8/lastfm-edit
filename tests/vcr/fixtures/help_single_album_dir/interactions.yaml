@@ -1,0 +1,90 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/The+Beatles/Help%21+%5BSingle%5D?page=1&ajax=true
+    headers:
+      accept-language:
+      - en-US,en;q=0.9
+      accept:
+      - '*/*'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      connection:
+      - keep-alive
+      sec-ch-ua-mobile:
+      - ?0
+      content-type:
+      - application/octet-stream
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      dnt:
+      - '1'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      cookie:
+      - csrftoken=q7UAAEmdEYABbP6FExBn3WOEi7yn6z9g; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      x-requested-with:
+      - XMLHttpRequest
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/The+Beatles/Help%21+%5BSingle%5D
+      accept-encoding:
+      - gzip, deflate, br
+    version: None
+  response:
+    status: 200
+    headers:
+      cache-control:
+      - max-age=0, must-revalidate
+      x-cache-hits:
+      - 0, 0
+      content-type:
+      - text/html; charset=utf-8
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-timer:
+      - S1754424051.210746,VS0,VE2479
+      etag:
+      - W/"d216ec18d30ed15cfabad2f6c02e6ba1"
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      date:
+      - Tue, 05 Aug 2025 20:00:53 GMT
+      x-cache:
+      - MISS, MISS
+      x-lfm-upstream-type:
+      - PASS
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 20:01:53 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=q7UAAEmdEYABbP6FExBn3WOEi7yn6z9g; expires=Tue, 04 Aug 2026 20:00:53 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 20:00:53 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/The+Beatles/Help%21+%5BSingle%5D?page=1&ajax=true
+      accept-ranges:
+      - bytes
+      x-lfm-cacheable-page:
+      - '0'
+      x-frame-options:
+      - DENY
+      server:
+      - nginx
+      x-request-category:
+      - page
+      content-encoding:
+      - gzip
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      strict-transport-security:
+      - max-age=300
+      x-served-by:
+      - cache-chi-klot8100177-CHI, cache-chi-klot8100169-CHI
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/The+Beatles/Help%21+%5BSingle%5D?page=1&ajax=true
+      content-language:
+      - en
+    body_file: resp_001.txt
+    version: None

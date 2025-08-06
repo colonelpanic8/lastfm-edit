@@ -1,0 +1,1350 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/The%20Who/Tommy%20%28Deluxe%20Edition%20-%20International%20Version%29?page=1&ajax=true
+    headers:
+      cookie:
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      x-requested-with:
+      - XMLHttpRequest
+      accept:
+      - '*/*'
+      dnt:
+      - '1'
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/The%20Who/Tommy%20%28Deluxe%20Edition%20-%20International%20Version%29
+      content-type:
+      - application/octet-stream
+      accept-encoding:
+      - gzip, deflate, br
+      connection:
+      - keep-alive
+      sec-ch-ua-mobile:
+      - ?0
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua-platform:
+      - '"Linux"'
+    version: None
+  response:
+    status: 200
+    headers:
+      content-encoding:
+      - gzip
+      x-served-by:
+      - cache-chi-klot8100096-CHI, cache-chi-klot8100107-CHI
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-timer:
+      - S1754374213.623814,VS0,VE748
+      x-lfm-upstream-type:
+      - PASS
+      x-cache-hits:
+      - 0, 0
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:13 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:13 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:13 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      strict-transport-security:
+      - max-age=300
+      content-type:
+      - text/html; charset=utf-8
+      cache-control:
+      - max-age=0, must-revalidate
+      content-language:
+      - en
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-cache:
+      - MISS, MISS
+      x-lfm-cacheable-page:
+      - '0'
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/The%20Who/Tommy%20%28Deluxe%20Edition%20-%20International%20Version%29?page=1&ajax=true
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/The%20Who/Tommy%20%28Deluxe%20Edition%20-%20International%20Version%29?page=1&ajax=true
+      x-frame-options:
+      - DENY
+      date:
+      - Tue, 05 Aug 2025 06:10:13 GMT
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-request-category:
+      - page
+      etag:
+      - W/"92f434403508e6fe1269ed82e33cdcef"
+      server:
+      - nginx
+      accept-ranges:
+      - bytes
+      content-security-policy:
+      - upgrade-insecure-requests;
+    body_file: resp_001.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/The%20Who/_/Pinball%20Wizard
+    headers:
+      connection:
+      - keep-alive
+      content-type:
+      - application/octet-stream
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      accept-language:
+      - en-US,en;q=0.9
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept-encoding:
+      - gzip, deflate, br
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      upgrade-insecure-requests:
+      - '1'
+      dnt:
+      - '1'
+      sec-ch-ua-mobile:
+      - ?0
+    version: None
+  response:
+    status: 200
+    headers:
+      x-lfm-upstream-type:
+      - PASS
+      server:
+      - nginx
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      content-encoding:
+      - gzip
+      x-served-by:
+      - cache-chi-klot8100149-CHI, cache-chi-klot8100107-CHI
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:14 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:14 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:14 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-timer:
+      - S1754374213.426801,VS0,VE1256
+      x-lfm-cacheable-page:
+      - '0'
+      x-request-category:
+      - page
+      x-cache-hits:
+      - 0, 0
+      date:
+      - Tue, 05 Aug 2025 06:10:14 GMT
+      etag:
+      - W/"c62bb3e65e838f9558a10746d02077d5"
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/The%20Who/_/Pinball%20Wizard
+      content-security-policy:
+      - upgrade-insecure-requests;
+      content-type:
+      - text/html; charset=utf-8
+      x-frame-options:
+      - DENY
+      cache-control:
+      - max-age=0, must-revalidate
+      content-language:
+      - en
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      accept-ranges:
+      - bytes
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/The%20Who/_/Pinball%20Wizard
+      x-cache:
+      - MISS, MISS
+      strict-transport-security:
+      - max-age=300
+    body_file: resp_002.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/The%20Who/_/Overture
+    headers:
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-platform:
+      - '"Linux"'
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua-mobile:
+      - ?0
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      connection:
+      - keep-alive
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      dnt:
+      - '1'
+      accept-encoding:
+      - gzip, deflate, br
+      content-type:
+      - application/octet-stream
+      upgrade-insecure-requests:
+      - '1'
+    version: None
+  response:
+    status: 200
+    headers:
+      x-served-by:
+      - cache-chi-klot8100174-CHI, cache-chi-klot8100107-CHI
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/The%20Who/_/Overture
+      x-frame-options:
+      - DENY
+      server:
+      - nginx
+      content-security-policy:
+      - upgrade-insecure-requests;
+      content-language:
+      - en
+      etag:
+      - W/"455a6d820bbe03608e7b5585338d56a1"
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:15 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:15 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:15 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      strict-transport-security:
+      - max-age=300
+      content-encoding:
+      - gzip
+      x-lfm-upstream-type:
+      - PASS
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/The%20Who/_/Overture
+      x-timer:
+      - S1754374215.894575,VS0,VE654
+      x-request-category:
+      - page
+      x-cache:
+      - MISS, MISS
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      cache-control:
+      - max-age=0, must-revalidate
+      x-lfm-cacheable-page:
+      - '0'
+      content-type:
+      - text/html; charset=utf-8
+      x-cache-hits:
+      - 0, 0
+      date:
+      - Tue, 05 Aug 2025 06:10:15 GMT
+      accept-ranges:
+      - bytes
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+    body_file: resp_003.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      upgrade-insecure-requests:
+      - '1'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      sec-ch-ua-platform:
+      - '"Linux"'
+      content-type:
+      - application/octet-stream
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      dnt:
+      - '1'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua-mobile:
+      - ?0
+      connection:
+      - keep-alive
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept-language:
+      - en-US,en;q=0.9
+    version: None
+  response:
+    status: 302
+    headers:
+      x-lfm-upstream-type:
+      - PASS
+      x-request-category:
+      - page
+      x-frame-options:
+      - DENY
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-cache:
+      - MISS, MISS
+      x-lfm-cacheable-page:
+      - '0'
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      cache-control:
+      - max-age=0, must-revalidate
+      date:
+      - Tue, 05 Aug 2025 06:10:15 GMT
+      x-cache-hits:
+      - 0, 0
+      x-timer:
+      - S1754374216.692262,VS0,VE246
+      content-language:
+      - en
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:15 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:15 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      content-length:
+      - '0'
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      server:
+      - nginx
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      content-security-policy:
+      - upgrade-insecure-requests;
+      location:
+      - /user/IvanMalison/library
+      strict-transport-security:
+      - max-age=300
+      accept-ranges:
+      - bytes
+      x-served-by:
+      - cache-chi-klot8100116-CHI, cache-chi-klot8100107-CHI
+      content-type:
+      - text/html; charset=utf-8
+      vary:
+      - Accept-Language, Cookie
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library
+    headers:
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      upgrade-insecure-requests:
+      - '1'
+      accept-encoding:
+      - gzip, deflate, br
+      connection:
+      - keep-alive
+      dnt:
+      - '1'
+      cookie:
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-platform:
+      - '"Linux"'
+      content-type:
+      - application/octet-stream
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      sec-ch-ua-mobile:
+      - ?0
+    version: None
+  response:
+    status: 200
+    headers:
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library
+      content-type:
+      - text/html; charset=utf-8
+      cache-control:
+      - max-age=0, must-revalidate
+      x-frame-options:
+      - DENY
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-served-by:
+      - cache-chi-klot8100161-CHI, cache-chi-klot8100107-CHI
+      x-request-category:
+      - page
+      server:
+      - nginx
+      date:
+      - Tue, 05 Aug 2025 06:10:17 GMT
+      content-encoding:
+      - gzip
+      x-lfm-cacheable-page:
+      - '0'
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:17 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:17 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:17 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      strict-transport-security:
+      - max-age=300
+      etag:
+      - W/"a0d78aab27874f07f241c77ce8c0fe25"
+      x-lfm-upstream-type:
+      - PASS
+      content-language:
+      - en
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-cache-hits:
+      - 0, 0
+      x-timer:
+      - S1754374216.984033,VS0,VE1247
+      accept-ranges:
+      - bytes
+      x-cache:
+      - MISS, MISS
+      x-lfm-upstream:
+      - /user/IvanMalison/library
+      content-security-policy:
+      - upgrade-insecure-requests;
+    body_file: resp_005.txt
+    version: None
+- request:
+    method: POST
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept:
+      - '*/*'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-mobile:
+      - ?0
+      accept-language:
+      - en-US,en;q=0.9
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua-platform:
+      - '"Linux"'
+      referer:
+      - https://www.last.fm/user/IvanMalison/library
+      sec-fetch-mode:
+      - cors
+      sec-fetch-site:
+      - same-origin
+      x-requested-with:
+      - XMLHttpRequest
+      dnt:
+      - '1'
+      priority:
+      - u=1, i
+      content-type:
+      - application/x-www-form-urlencoded;charset=UTF-8
+      sec-fetch-dest:
+      - empty
+      connection:
+      - keep-alive
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+    body_file: req_006.b64
+    version: None
+  response:
+    status: 200
+    headers:
+      cache-control:
+      - max-age=0, must-revalidate
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-type:
+      - text/html; charset=utf-8
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:17 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:17 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:17 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      strict-transport-security:
+      - max-age=300
+      x-served-by:
+      - cache-chi-klot8100174-CHI, cache-chi-klot8100107-CHI
+      content-encoding:
+      - gzip
+      x-timer:
+      - S1754374218.534464,VS0,VE488
+      accept-ranges:
+      - bytes
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      date:
+      - Tue, 05 Aug 2025 06:10:18 GMT
+      x-lfm-cacheable-page:
+      - '0'
+      x-lfm-upstream-type:
+      - PASS
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      content-language:
+      - en
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      x-cache-hits:
+      - 0, 0
+      server:
+      - nginx
+      x-request-category:
+      - page
+      x-cache:
+      - MISS, MISS
+      x-frame-options:
+      - DENY
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+    body_file: resp_006.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      accept-encoding:
+      - gzip, deflate, br
+      accept-language:
+      - en-US,en;q=0.9
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      connection:
+      - keep-alive
+      upgrade-insecure-requests:
+      - '1'
+      content-type:
+      - application/octet-stream
+      dnt:
+      - '1'
+      sec-ch-ua-mobile:
+      - ?0
+      sec-ch-ua-platform:
+      - '"Linux"'
+    version: None
+  response:
+    status: 302
+    headers:
+      x-cache:
+      - MISS, MISS
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:18 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:18 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-timer:
+      - S1754374218.064343,VS0,VE141
+      content-security-policy:
+      - upgrade-insecure-requests;
+      location:
+      - /user/IvanMalison/library
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      accept-ranges:
+      - bytes
+      content-language:
+      - en
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      x-lfm-upstream-type:
+      - PASS
+      content-type:
+      - text/html; charset=utf-8
+      server:
+      - nginx
+      x-cache-hits:
+      - 0, 0
+      content-length:
+      - '0'
+      cache-control:
+      - max-age=0, must-revalidate
+      x-request-category:
+      - page
+      x-lfm-cacheable-page:
+      - '0'
+      x-served-by:
+      - cache-chi-klot8100111-CHI, cache-chi-klot8100107-CHI
+      date:
+      - Tue, 05 Aug 2025 06:10:18 GMT
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      strict-transport-security:
+      - max-age=300
+      vary:
+      - Accept-Language, Cookie
+      x-frame-options:
+      - DENY
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library
+    headers:
+      content-type:
+      - application/octet-stream
+      connection:
+      - keep-alive
+      accept-language:
+      - en-US,en;q=0.9
+      cookie:
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-ch-ua-mobile:
+      - ?0
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      upgrade-insecure-requests:
+      - '1'
+      dnt:
+      - '1'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+    version: None
+  response:
+    status: 200
+    headers:
+      x-lfm-upstream:
+      - /user/IvanMalison/library
+      x-cache:
+      - MISS, MISS
+      x-lfm-upstream-type:
+      - PASS
+      x-frame-options:
+      - DENY
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-cacheable-page:
+      - '0'
+      x-timer:
+      - S1754374218.246710,VS0,VE1245
+      date:
+      - Tue, 05 Aug 2025 06:10:19 GMT
+      cache-control:
+      - max-age=0, must-revalidate
+      x-served-by:
+      - cache-chi-klot8100174-CHI, cache-chi-klot8100107-CHI
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      accept-ranges:
+      - bytes
+      content-type:
+      - text/html; charset=utf-8
+      server:
+      - nginx
+      content-encoding:
+      - gzip
+      strict-transport-security:
+      - max-age=300
+      x-cache-hits:
+      - 0, 0
+      x-request-category:
+      - page
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      etag:
+      - W/"a24f31a2e28a7d6a7a419509db49b692"
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:19 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:19 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:19 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      content-language:
+      - en
+    body_file: resp_008.txt
+    version: None
+- request:
+    method: POST
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      accept:
+      - '*/*'
+      content-type:
+      - application/x-www-form-urlencoded;charset=UTF-8
+      sec-fetch-mode:
+      - cors
+      x-requested-with:
+      - XMLHttpRequest
+      referer:
+      - https://www.last.fm/user/IvanMalison/library
+      dnt:
+      - '1'
+      connection:
+      - keep-alive
+      sec-fetch-site:
+      - same-origin
+      sec-ch-ua-mobile:
+      - ?0
+      priority:
+      - u=1, i
+      accept-language:
+      - en-US,en;q=0.9
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept-encoding:
+      - gzip, deflate, br
+      sec-fetch-dest:
+      - empty
+    body_file: req_009.b64
+    version: None
+  response:
+    status: 200
+    headers:
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-cache-hits:
+      - 0, 0
+      accept-ranges:
+      - bytes
+      x-timer:
+      - S1754374220.799023,VS0,VE546
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      x-request-category:
+      - page
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:20 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:20 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:20 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-lfm-upstream-type:
+      - PASS
+      cache-control:
+      - max-age=0, must-revalidate
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      x-served-by:
+      - cache-chi-klot8100074-CHI, cache-chi-klot8100107-CHI
+      x-lfm-cacheable-page:
+      - '0'
+      content-security-policy:
+      - upgrade-insecure-requests;
+      content-language:
+      - en
+      content-type:
+      - text/html; charset=utf-8
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      server:
+      - nginx
+      x-frame-options:
+      - DENY
+      strict-transport-security:
+      - max-age=300
+      x-cache:
+      - MISS, MISS
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      date:
+      - Tue, 05 Aug 2025 06:10:20 GMT
+      content-encoding:
+      - gzip
+    body_file: resp_009.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      connection:
+      - keep-alive
+      upgrade-insecure-requests:
+      - '1'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-mobile:
+      - ?0
+      sec-ch-ua-platform:
+      - '"Linux"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      content-type:
+      - application/octet-stream
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      dnt:
+      - '1'
+      accept-language:
+      - en-US,en;q=0.9
+    version: None
+  response:
+    status: 302
+    headers:
+      location:
+      - /user/IvanMalison/library
+      x-frame-options:
+      - DENY
+      strict-transport-security:
+      - max-age=300
+      x-cache:
+      - MISS, MISS
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-lfm-cacheable-page:
+      - '0'
+      date:
+      - Tue, 05 Aug 2025 06:10:20 GMT
+      vary:
+      - Accept-Language, Cookie
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-request-category:
+      - page
+      content-length:
+      - '0'
+      x-cache-hits:
+      - 0, 0
+      content-language:
+      - en
+      accept-ranges:
+      - bytes
+      cache-control:
+      - max-age=0, must-revalidate
+      x-timer:
+      - S1754374220.397071,VS0,VE526
+      server:
+      - nginx
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      content-security-policy:
+      - upgrade-insecure-requests;
+      content-type:
+      - text/html; charset=utf-8
+      x-lfm-upstream-type:
+      - PASS
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:20 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:20 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-served-by:
+      - cache-chi-klot8100041-CHI, cache-chi-klot8100107-CHI
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library
+    headers:
+      sec-ch-ua-platform:
+      - '"Linux"'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-ch-ua-mobile:
+      - ?0
+      connection:
+      - keep-alive
+      dnt:
+      - '1'
+      content-type:
+      - application/octet-stream
+      accept-encoding:
+      - gzip, deflate, br
+      cookie:
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      accept-language:
+      - en-US,en;q=0.9
+      upgrade-insecure-requests:
+      - '1'
+    version: None
+  response:
+    status: 200
+    headers:
+      x-timer:
+      - S1754374221.960506,VS0,VE1449
+      cache-control:
+      - max-age=0, must-revalidate
+      date:
+      - Tue, 05 Aug 2025 06:10:22 GMT
+      accept-ranges:
+      - bytes
+      x-lfm-upstream-type:
+      - PASS
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-cache-hits:
+      - 0, 0
+      server:
+      - nginx
+      x-lfm-cacheable-page:
+      - '0'
+      x-served-by:
+      - cache-chi-klot8100041-CHI, cache-chi-klot8100107-CHI
+      content-type:
+      - text/html; charset=utf-8
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      strict-transport-security:
+      - max-age=300
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library
+      etag:
+      - W/"97980afdfbb0e4fb63069252d7843920"
+      x-cache:
+      - MISS, MISS
+      x-frame-options:
+      - DENY
+      content-language:
+      - en
+      x-request-category:
+      - page
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:22 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:22 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:22 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-upstream:
+      - /user/IvanMalison/library
+      content-encoding:
+      - gzip
+    body_file: resp_011.txt
+    version: None
+- request:
+    method: POST
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-fetch-site:
+      - same-origin
+      accept-encoding:
+      - gzip, deflate, br
+      referer:
+      - https://www.last.fm/user/IvanMalison/library
+      priority:
+      - u=1, i
+      dnt:
+      - '1'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-mobile:
+      - ?0
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-fetch-mode:
+      - cors
+      connection:
+      - keep-alive
+      content-type:
+      - application/x-www-form-urlencoded;charset=UTF-8
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      accept:
+      - '*/*'
+      accept-language:
+      - en-US,en;q=0.9
+      sec-fetch-dest:
+      - empty
+      x-requested-with:
+      - XMLHttpRequest
+    body_file: req_012.b64
+    version: None
+  response:
+    status: 200
+    headers:
+      x-lfm-upstream-type:
+      - PASS
+      x-cache-hits:
+      - 0, 0
+      content-security-policy:
+      - upgrade-insecure-requests;
+      date:
+      - Tue, 05 Aug 2025 06:10:23 GMT
+      content-encoding:
+      - gzip
+      x-request-category:
+      - page
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:23 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:23 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:23 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-timer:
+      - S1754374223.709098,VS0,VE458
+      x-frame-options:
+      - DENY
+      content-language:
+      - en
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      server:
+      - nginx
+      x-lfm-cacheable-page:
+      - '0'
+      cache-control:
+      - max-age=0, must-revalidate
+      accept-ranges:
+      - bytes
+      x-served-by:
+      - cache-chi-klot8100101-CHI, cache-chi-klot8100107-CHI
+      x-cache:
+      - MISS, MISS
+      content-type:
+      - text/html; charset=utf-8
+      strict-transport-security:
+      - max-age=300
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    body_file: resp_012.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      sec-ch-ua-mobile:
+      - ?0
+      upgrade-insecure-requests:
+      - '1'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      accept-language:
+      - en-US,en;q=0.9
+      connection:
+      - keep-alive
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      content-type:
+      - application/octet-stream
+      sec-ch-ua-platform:
+      - '"Linux"'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      dnt:
+      - '1'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept-encoding:
+      - gzip, deflate, br
+    version: None
+  response:
+    status: 302
+    headers:
+      x-request-category:
+      - page
+      location:
+      - /user/IvanMalison/library
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      accept-ranges:
+      - bytes
+      strict-transport-security:
+      - max-age=300
+      server:
+      - nginx
+      x-cache:
+      - MISS, MISS
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-lfm-upstream-type:
+      - PASS
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      vary:
+      - Accept-Language, Cookie
+      cache-control:
+      - max-age=0, must-revalidate
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:23 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:23 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-served-by:
+      - cache-chi-klot8100157-CHI, cache-chi-klot8100107-CHI
+      date:
+      - Tue, 05 Aug 2025 06:10:23 GMT
+      content-type:
+      - text/html; charset=utf-8
+      content-length:
+      - '0'
+      content-language:
+      - en
+      x-cache-hits:
+      - 0, 0
+      x-timer:
+      - S1754374223.212090,VS0,VE162
+      x-lfm-cacheable-page:
+      - '0'
+      x-frame-options:
+      - DENY
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library
+    headers:
+      cookie:
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-platform:
+      - '"Linux"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-ch-ua-mobile:
+      - ?0
+      dnt:
+      - '1'
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      upgrade-insecure-requests:
+      - '1'
+      content-type:
+      - application/octet-stream
+      connection:
+      - keep-alive
+      accept-language:
+      - en-US,en;q=0.9
+    version: None
+  response:
+    status: 200
+    headers:
+      strict-transport-security:
+      - max-age=300
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library
+      content-type:
+      - text/html; charset=utf-8
+      x-lfm-cacheable-page:
+      - '0'
+      cache-control:
+      - max-age=0, must-revalidate
+      x-served-by:
+      - cache-chi-klot8100172-CHI, cache-chi-klot8100107-CHI
+      etag:
+      - W/"0b534ef827833d95535475cc8db93a6c"
+      accept-ranges:
+      - bytes
+      content-encoding:
+      - gzip
+      server:
+      - nginx
+      content-security-policy:
+      - upgrade-insecure-requests;
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      content-language:
+      - en
+      x-lfm-upstream:
+      - /user/IvanMalison/library
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-timer:
+      - S1754374223.410916,VS0,VE1044
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      date:
+      - Tue, 05 Aug 2025 06:10:24 GMT
+      x-request-category:
+      - page
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:24 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:24 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:24 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-cache:
+      - MISS, MISS
+      x-frame-options:
+      - DENY
+      x-cache-hits:
+      - 0, 0
+      x-lfm-upstream-type:
+      - PASS
+    body_file: resp_014.txt
+    version: None
+- request:
+    method: POST
+    url: https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+    headers:
+      x-requested-with:
+      - XMLHttpRequest
+      accept-encoding:
+      - gzip, deflate, br
+      sec-fetch-site:
+      - same-origin
+      referer:
+      - https://www.last.fm/user/IvanMalison/library
+      priority:
+      - u=1, i
+      dnt:
+      - '1'
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua-platform:
+      - '"Linux"'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept:
+      - '*/*'
+      sec-fetch-mode:
+      - cors
+      sec-fetch-dest:
+      - empty
+      sec-ch-ua-mobile:
+      - ?0
+      content-type:
+      - application/x-www-form-urlencoded;charset=UTF-8
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      connection:
+      - keep-alive
+    body_file: req_015.b64
+    version: None
+  response:
+    status: 200
+    headers:
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:11:25 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=aJslDQrynrDSx0vu6Zufemkq7lNfqMv1; expires=Tue, 04 Aug 2026 06:10:25 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:10:25 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-language:
+      - en
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      date:
+      - Tue, 05 Aug 2025 06:10:25 GMT
+      content-type:
+      - text/html; charset=utf-8
+      x-lfm-cacheable-page:
+      - '0'
+      x-served-by:
+      - cache-chi-klot8100056-CHI, cache-chi-klot8100107-CHI
+      x-lfm-upstream:
+      - /user/IvanMalison/library/edit?edited-variation=library-track-scrobble
+      server:
+      - nginx
+      content-encoding:
+      - gzip
+      x-cache-hits:
+      - 0, 0
+      x-cache:
+      - MISS, MISS
+      cache-control:
+      - max-age=0, must-revalidate
+      x-lfm-upstream-type:
+      - PASS
+      accept-ranges:
+      - bytes
+      x-timer:
+      - S1754374225.748130,VS0,VE313
+      strict-transport-security:
+      - max-age=300
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-request-category:
+      - page
+      x-frame-options:
+      - DENY
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+    body_file: resp_015.txt
+    version: None

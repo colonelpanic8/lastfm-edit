@@ -15,7 +15,22 @@ struct VcrTestSetup {
 
 impl VcrTestSetup {
     fn new(test_name: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let cassette_path = format!("tests/vcr/fixtures/{test_name}.yaml");
+        // Use directory format for tests that benefit from better duplicate request handling
+        let use_directory_format = matches!(
+            test_name,
+            "artist_tracks"
+                | "artist_tracks_direct"
+                | "help_single_album"
+                | "hey_jude_album"
+                | "now_and_then_album"
+                | "multiple_failing_albums"
+        );
+
+        let cassette_path = if use_directory_format {
+            format!("tests/vcr/fixtures/{test_name}_dir")
+        } else {
+            format!("tests/vcr/fixtures/{test_name}.yaml")
+        };
 
         // Ensure fixtures directory exists
         if let Some(parent_dir) = std::path::Path::new(&cassette_path).parent() {
@@ -116,8 +131,11 @@ pub async fn create_lastfm_vcr_test_client_with_login_recording(
     let (username, password) = setup.get_credentials();
     let vcr_client = setup.create_vcr_client().await?;
 
-    // Login with VCR recording the interaction using testing config
-    let config = lastfm_edit::ClientConfig::for_testing();
+    // Login with VCR recording the interaction - use appropriate config based on mode
+    let config = match setup.mode {
+        VcrMode::Record => lastfm_edit::ClientConfig::default(), // Real rate limiting for recording
+        _ => lastfm_edit::ClientConfig::for_testing(),           // Disabled for replay/filter
+    };
     let client = LastFmEditClientImpl::login_with_credentials_and_client_config(
         Box::new(vcr_client),
         &username,
@@ -148,9 +166,9 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
         // Recording mode: do real login outside VCR, then create VCR client with session
         let (username, password) = setup.get_credentials();
 
-        // Do login outside VCR to get session using testing config
+        // Do login outside VCR to get session - use default config for recording
         let login_client = Box::new(http_client::native::NativeClient::new());
-        let config = lastfm_edit::ClientConfig::for_testing();
+        let config = lastfm_edit::ClientConfig::default(); // Real rate limiting for recording
         let logged_in_client = LastFmEditClientImpl::login_with_credentials_and_client_config(
             login_client,
             &username,
@@ -175,8 +193,8 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
 
         let vcr_client = builder.build().await?;
 
-        // Create client with existing session and VCR http client using testing config
-        let config = lastfm_edit::ClientConfig::for_testing();
+        // Create client with existing session and VCR http client - use default config for recording
+        let config = lastfm_edit::ClientConfig::default(); // Real rate limiting for recording
         let client = LastFmEditClientImpl::from_session_with_client_config(
             Box::new(vcr_client),
             session,
@@ -196,7 +214,7 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
             "https://www.last.fm".to_string(),
         );
 
-        // Create client with testing config for replay/filter mode too
+        // Create client with testing config for replay/filter mode (rate limit detection enabled, no delays)
         let config = lastfm_edit::ClientConfig::for_testing();
         let client = LastFmEditClientImpl::from_session_with_client_config(
             Box::new(vcr_client),

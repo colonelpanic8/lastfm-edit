@@ -27,6 +27,36 @@ pub struct LastFmEditClientImpl {
 }
 
 impl LastFmEditClientImpl {
+    /// Custom URL encoding for Last.fm paths
+    fn lastfm_encode(&self, input: &str) -> String {
+        urlencoding::encode(input).to_string()
+    }
+
+    /// Detect if the response content indicates a login redirect
+    fn is_login_redirect(&self, content: &str) -> bool {
+        // Check for common login redirect indicators
+        content.contains("login") 
+            || content.contains("sign in") 
+            || content.contains("signin")
+            || content.contains("Log in to Last.fm")
+            || content.contains("Please sign in")
+            // Check for login form elements
+            || (content.contains("<form") && content.contains("password"))
+            // Check for authentication-related classes or IDs
+            || content.contains("auth-form")
+            || content.contains("login-form")
+    }
+
+    /// Check if a specific endpoint requires authentication that our session doesn't provide
+    pub async fn validate_endpoint_access(&self, url: &str) -> Result<bool> {
+        let mut response = self.get(url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        Ok(!self.is_login_redirect(&content))
+    }
     pub fn from_session(
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
@@ -1170,13 +1200,16 @@ impl LastFmEditClientImpl {
 
         for pattern in &rate_limit_config.custom_patterns {
             if body_lower.contains(&pattern.to_lowercase()) {
+                log::debug!("Rate limit detected (custom pattern: '{pattern}')");
                 return true;
             }
         }
 
         if rate_limit_config.detect_by_patterns {
             for pattern in &rate_limit_config.patterns {
-                if body_lower.contains(&pattern.to_lowercase()) {
+                let pattern_lower = pattern.to_lowercase();
+                if body_lower.contains(&pattern_lower) {
+                    log::debug!("Rate limit detected (pattern: '{pattern}')");
                     return true;
                 }
             }
@@ -1268,13 +1301,15 @@ impl LastFmEditClientImpl {
                 "{}/user/{}/library/music/{}/{}?page={}&ajax=true",
                 session.base_url,
                 session.username,
-                urlencoding::encode(artist_name),
-                urlencoding::encode(album_name),
+                self.lastfm_encode(artist_name),
+                self.lastfm_encode(album_name),
                 page
             )
         };
 
         log::debug!("Fetching tracks page {page} for album '{album_name}' by '{artist_name}'");
+        log::debug!("🔗 Album URL: {url}");
+
         let mut response = self.get(&url).await?;
         let content = response
             .body_string()
@@ -1289,8 +1324,34 @@ impl LastFmEditClientImpl {
 
         log::debug!("Parsing HTML response from AJAX endpoint");
         let document = Html::parse_document(&content);
-        self.parser
-            .parse_tracks_page(&document, page, artist_name, Some(album_name))
+        let result =
+            self.parser
+                .parse_tracks_page(&document, page, artist_name, Some(album_name))?;
+
+        // Debug logging for albums that return 0 tracks
+        if result.tracks.is_empty() {
+            if content.contains("404") || content.contains("Not Found") {
+                log::warn!("🚨 404 ERROR for album '{album_name}' by '{artist_name}': {url}");
+            } else if content.contains("no tracks") || content.contains("no music") {
+                log::debug!("ℹ️  Album '{album_name}' by '{artist_name}' explicitly has no tracks in user's library");
+            } else {
+                log::warn!(
+                    "🚨 UNKNOWN EMPTY RESPONSE for album '{album_name}' by '{artist_name}': {url}"
+                );
+                log::debug!("🔍 Response length: {} chars", content.len());
+                log::debug!(
+                    "🔍 Response preview (first 200 chars): {}",
+                    &content.chars().take(200).collect::<String>()
+                );
+            }
+        } else {
+            log::debug!(
+                "✅ SUCCESS: Album '{album_name}' by '{artist_name}' returned {} tracks",
+                result.tracks.len()
+            );
+        }
+
+        Ok(result)
     }
 
     pub async fn search_tracks_page(&self, query: &str, page: u32) -> Result<TrackPage> {

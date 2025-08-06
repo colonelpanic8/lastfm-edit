@@ -180,6 +180,11 @@ impl<C: LastFmEditClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracks
                 // Get next album
                 if let Some(ref mut album_iter) = self.album_iterator {
                     if let Some(album) = album_iter.next().await? {
+                        log::debug!(
+                            "Processing album '{}' for artist '{}'",
+                            album.name,
+                            self.artist
+                        );
                         // Create album tracks iterator for this album
                         self.current_album_tracks = Some(AlbumTracksIterator::new(
                             self.client.clone(),
@@ -188,6 +193,7 @@ impl<C: LastFmEditClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracks
                         ));
                     } else {
                         // No more albums, we're done
+                        log::debug!("No more albums for artist '{}'", self.artist);
                         self.finished = true;
                         return Ok(None);
                     }
@@ -200,6 +206,10 @@ impl<C: LastFmEditClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracks
                     self.track_buffer.push(track);
                 } else {
                     // This album is exhausted, move to next album
+                    log::debug!(
+                        "Finished processing current album for artist '{}'",
+                        self.artist
+                    );
                     self.current_album_tracks = None;
                     // Continue the loop to try getting the next album
                 }
@@ -653,6 +663,27 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for AlbumTracksIterator<
                 .client
                 .get_album_tracks_page(&self.album_name, &self.artist_name, 1)
                 .await?;
+            log::debug!(
+                "Album '{}' by '{}' has {} tracks: {:?}",
+                self.album_name,
+                self.artist_name,
+                tracks_page.tracks.len(),
+                tracks_page
+                    .tracks
+                    .iter()
+                    .map(|t| &t.name)
+                    .collect::<Vec<_>>()
+            );
+
+            if tracks_page.tracks.is_empty() {
+                log::warn!(
+                    "🚨 ZERO TRACKS FOUND for album '{}' by '{}' - investigating...",
+                    self.album_name,
+                    self.artist_name
+                );
+                log::debug!("Full TrackPage for empty album: has_next_page={}, page_number={}, total_pages={:?}", 
+                           tracks_page.has_next_page, tracks_page.page_number, tracks_page.total_pages);
+            }
             self.tracks = Some(tracks_page.tracks);
         }
 

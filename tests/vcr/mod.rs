@@ -7,3 +7,4 @@ mod edit;
 mod login;
 mod recent_tracks;
 mod search;
+mod special_character_albums;

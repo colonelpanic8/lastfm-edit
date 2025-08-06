@@ -1,0 +1,174 @@
+- request:
+    method: GET
+    url: https://www.last.fm/login
+    headers:
+      content-type:
+      - application/octet-stream
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+    version: None
+  response:
+    status: 200
+    headers:
+      x-timer:
+      - S1754364961.978580,VS0,VE151
+      x-cache-hits:
+      - 0, 0
+      date:
+      - Tue, 05 Aug 2025 03:36:01 GMT
+      x-served-by:
+      - cache-chi-kigq8000121-CHI, cache-chi-kigq8000121-CHI
+      content-encoding:
+      - gzip
+      x-lfm-upstream:
+      - /login
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-upstream-type:
+      - PASS
+      set-cookie:
+      - csrftoken=R7IscipbWvcCp0OfzhYLwHdlt0sildY3; expires=Tue, 04 Aug 2026 03:36:01 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - lpfrmo=0; Domain=last.fm; expires=Tue, 05 Aug 2025 03:37:01 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=1; Path=/
+      - not_first_visit=1; Path=/
+      - sessionid=eyJfYXV0aF91c2VyX2hhc2giOiJkZWZhdWx0Iiwic2Vzc2lvbl9pZCI6IjdhOGFiZWQ2LTFlOTUtNDAwOC1hMDY0LWU0ZmE3MjE1ZmU1MSJ9:1uj8T3:sIcoOqaCyNnPwZnqBwXwShc-B5cZrfkUoh2Cz1j9nUs; Domain=.last.fm; expires=Wed, 05 Aug 2026 03:36:01 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      cache-control:
+      - max-age=0, must-revalidate
+      strict-transport-security:
+      - max-age=300
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      content-type:
+      - text/html; charset=utf-8
+      x-backend-cache-control:
+      - max-age=0, no-cache, no-store, must-revalidate, private
+      expires:
+      - Tue, 05 Aug 2025 03:36:01 GMT
+      x-request-category:
+      - page
+      accept-ranges:
+      - bytes
+      content-language:
+      - en
+      x-cache:
+      - MISS, MISS
+      x-lfm-cacheable-page:
+      - '0'
+      x-pjax-url:
+      - https://www.last.fm/login
+      x-frame-options:
+      - DENY
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      server:
+      - nginx
+    body_file: resp_001.txt
+    version: None
+- request:
+    method: POST
+    url: https://www.last.fm/login
+    headers:
+      dnt:
+      - '1'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-fetch-mode:
+      - navigate
+      cookie:
+      - csrftoken=R7IscipbWvcCp0OfzhYLwHdlt0sildY3; lpfrmo=0; lfmanon=1; not_first_visit=1; sessionid=poo; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      connection:
+      - keep-alive
+      sec-fetch-site:
+      - same-origin
+      referer:
+      - https://www.last.fm/login
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      content-type:
+      - application/x-www-form-urlencoded
+      upgrade-insecure-requests:
+      - '1'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      sec-fetch-user:
+      - ?1
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-mobile:
+      - ?0
+      accept-encoding:
+      - gzip, deflate, br
+      accept-language:
+      - en-US,en;q=0.9
+      sec-fetch-dest:
+      - document
+      origin:
+      - https://www.last.fm
+    body_file: req_002.txt
+    version: None
+  response:
+    status: 302
+    headers:
+      expires:
+      - Tue, 05 Aug 2025 03:36:01 GMT
+      server:
+      - nginx
+      x-cache:
+      - MISS, MISS
+      x-lfm-upstream-type:
+      - PASS
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-frame-options:
+      - DENY
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      set-cookie:
+      - csrftoken=eqiKMuvIYYa2QU6UTGCUQmuxlRetCG8a; expires=Tue, 04 Aug 2026 03:36:01 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 03:37:01 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - sessionid=.eJyVVUmPs0gS_S91HlskizGf1AfbYAw2SbFDXiwgweymjDHLaP77JK7SdKtH3Zo5IAVkRLwXEfmCf35cw_6ZXfsueVyzsMs-fn3gJA376vnxj48u6br83lxzTD7z4TaMErxZgUTgVixFbVchtWFXCZuGPA24NOEAiflDvnfYr1-_HEsyFZEYW3oDAPsnryiMy6RZXKu0Xg9JtB6GYR22bbdenNY_52vn0e1_XEl82z86EqLZ8ajbCqUV5QjngNOG335bjrvv42RSs0iOcz1XLWdWAMyVTqmfLTooG6VS_aAUvgxLFdbEsY0ZbXG845M5xPP9dWFgFTOwjWi2R3U1IU_NYtrpES28ED1Wlxq-IktoL96YxYxZRxbIsG_elXzIA98tleKehxboAh9SqKae5BsVHhYCR4DlLMVy9USWsiE1AChqNBRLWrOGHPsEtxK-SRYKTWpjNVsD8G3HgzbHjG4HQLd3jDZLrG4bs26X1IIbM26-4GpFMOn2bdRmh15sOO9mOMccLBxOE-NZs28cweRIbH45qG3gG7leSAwkuWBhED-J8HTZ-PDDz9ZG8rz5IQ9koTcsvWpxfewj79iFPulFuW-I3UYHrohoaslbvd-PAo18tSU9rJaa8EkFaMnze09zveny0DOrqDFb0pcqnpQNmcl3PInxpr_H8n2qUxrYIppLQ49L45P6wnVVIl9ZeA5kBjOmhQkt_W8IDsmFl_427hRP33O7-Pspoo0nkgUqtp089am1ByxF2tmhe7jilq4zdT7eNv3XjEOl5LJwQpx8dt2vTt6uPnObqk3bY8bHSH-V_FfbXet8P9PY4ru4uu2rF-TAE3ABvQWtC8TC3lQbr25sDQIBzDv9KbKi1OkzPlvYtCplyMc5HWhTHxVlf3my_UZ4feLXUY3OVrVpHbE7CMd-TrTRH7ceVwp2zbM1JVTm5_WTaQxkzVsHbhzlOj1kzttRAbvq743bOTjJGrnZGl0jJElYNYxQrFh0NJ5NVDTsNZe0zeHu9LF1nnrheLqOVdViKdkbpwy2u4ermIdXfZN4x5QeduS9LvLzwlHbxL0X4FMXVG8KZnkjxwYvpM10pDPDFCtXvTu1d5DN3aLQ5_-g0KIEmmeWyC5nrXbzwIOlLmYZqpVBEzUmqFGFxKyGhZprIq418UbDWlkuHpX4uyXn2QVGnhp_qe-AcSfkm6-QdvtLjV8RjTtkve_U66-0-6ZWl89IPs5YRs-Lt-j5tsC-75HPmG3kOf-tp8adiQ7I_SRay5WJ6JnTRWmGdrDYzFISnEsa2uUAZ23UxZLS5pKD7zsLQZD___sg9I4U2QdkNzokV0ARv3HRZXLa_YHfDfzo_Rl4VffeWz7KohqQ0VRzRHM7RL813we08Fzyfu-AMcW1O4UeatFSU2NO2HNIHtTGy7jIHlOKllcWHXocFfpmi3ztrfX_7JCq-3usCgiE7xx6uPfpqvcZolGG4MnutPCMyQxiBr_i-r3HKIKTRc3SXxXEjfYzNzDEtVBePPOFTxJQGiCsZWvM7vqJ30qqXnb7S-EV8bmgw5inYgtyaYd5c6dtcuVWXLIs7cqZldgq1QMJSudzDPZ2Qh25e2HA2GCCDY9WWEm2J9lzXjXiWHFP8TfgNFL8srWHdBylL6a_YaGvnKxP3YrN9721f8ySrke5g1M0epBKOHuknQdRyX63zTzFu2tMJp3O3VQeC1v44j8p43iWUguqCX-2Z6ICBq1kLw14Znu_0F0EGqeZzyV1unZaVFK9nl7qaet-njXzxtTXhwhhcKA_xeFZnAWprAzMHmR0v-xB73PpYzpB8v-QbFVVlYZKGp4bNihI7E3BAkbTlPNc8KEVeBJmsmY8jwe8O7j5kRdkXvTKJDE-_vVvDXzNiQ:1uj8T3:IxmPN9WoZ2xWeM1uWh1OdhMwUVMcjRNrIatcZ-izBrU; Domain=.last.fm; expires=Wed, 05 Aug 2026 03:36:01 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      date:
+      - Tue, 05 Aug 2025 03:36:01 GMT
+      vary:
+      - Cookie, Accept-Language
+      content-language:
+      - en
+      x-lfm-cacheable-page:
+      - '0'
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      strict-transport-security:
+      - max-age=300
+      cache-control:
+      - max-age=0, must-revalidate
+      x-request-category:
+      - page
+      x-timer:
+      - S1754364961.200731,VS0,VE680
+      x-lfm-upstream:
+      - /login
+      x-pjax-url:
+      - https://www.last.fm/login
+      x-backend-cache-control:
+      - max-age=0, no-cache, no-store, must-revalidate, private
+      accept-ranges:
+      - bytes
+      location:
+      - /user/_
+      content-type:
+      - text/html; charset=utf-8
+      x-served-by:
+      - cache-chi-kigq8000121-CHI, cache-chi-kigq8000121-CHI
+      x-cache-hits:
+      - 0, 0
+      content-length:
+      - '0'
+    version: None

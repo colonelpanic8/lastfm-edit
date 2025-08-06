@@ -1,6 +1,6 @@
 [package]
 name = "lastfm-edit"
-version = "3.11.0"
+version = "3.11.1"
 edition = "2021"
 description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
 license = "MIT"
@@ -34,8 +34,7 @@ dirs = "5.0"
 mockall = { version = "0.13", optional = true }
 
 # VCR testing utilities
-http-client-vcr = { git = "https://github.com/colonelpanic8/http-client-vcr" }
-# http-client-vcr = { path = "/home/imalison/Projects/http-client-vcr" }
+http-client-vcr = "1.1.0"
 
 
 [features]
@@ -47,8 +46,7 @@ mock = ["mockall"]
 [dev-dependencies]
 tokio-test = "0.4"
 mockall = "0.13"
-http-client-vcr = { git = "https://github.com/colonelpanic8/http-client-vcr" }
-# http-client-vcr = { path = "/home/imalison/Projects/http-client-vcr" }
+http-client-vcr = "1.1.0"
 test-log = "0.2"
 
 [[bin]]

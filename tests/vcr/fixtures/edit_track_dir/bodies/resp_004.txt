@@ -1,0 +1,575 @@
+<div js-modal-body class="modal-share-content" >
+    
+    <div class="modal-body 
+    automatic-edit-modal-body-v2
+">
+        
+            <h2 id="modal-label"
+                class="modal-title 
+    modal-title__edit-scrobble
+">
+                
+    
+        Edit Scrobble
+    
+
+            </h2>
+        
+        
+        <div>
+            
+    
+        <div
+            data-modal-type="narrow"
+            data-modal-dont-show
+        >
+            <p class="big-modal-alert alert-success">
+                Success
+            </p>
+            <script data-modal-message type="text/template">
+                
+                    <div data-edit-scrobble-bulk></div>
+                
+                
+                    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <table
+        
+        class="
+            chartlist
+            
+            
+            
+            
+            
+            
+            
+            
+            
+                chartlist--with-album
+            
+            
+                chartlist--with-more
+            
+            
+            
+            
+            
+            
+            
+                chartlist--wide-artist-column
+            
+            
+                chartlist--with-buylinks
+            
+            
+            
+            
+        "
+    >
+        <thead class="sr-only">
+            <tr>
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                <th>
+                    
+                    
+                        Track name
+                    
+                </th>
+
+                
+
+                
+                    
+                    <th>Album name</th>
+                
+
+                
+                    
+                    <th>Buy</th>
+                
+
+                
+                    
+                    <th>Options</th>
+                
+
+                
+                    
+                    <th>Timestamp</th>
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+            </tr>
+        </thead>
+        <tbody
+                data-playlisting-add-entries
+                
+        >
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+            data-edit-scrobble-id="bd3b1a4b8f57fa972e72955551e9a3f6"
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/The+Who/_/Won%27t+Get+Fooled+Again"
+            
+            
+                title="Won&#39;t Get Fooled Again"
+            
+                class=""
+            
+        >Won&#39;t Get Fooled Again</a>
+        </td>
+
+        
+
+        
+            <td class="chartlist-album">
+                
+                    <a
+            href="/music/The+Who/Who%27s+Next+(Deluxe+Edition)"
+            
+            
+                title="Who&#39;s Next (Deluxe Edition)"
+            
+        >Who&#39;s Next (Deluxe Edition)</a>
+                
+            </td>
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-f0bbcd20-1f0b-43c5-99bd-dbd2e2c68fcd"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/The+Who/_/Won%27t+Get+Fooled+Again/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-f0bbcd20-1f0b-43c5-99bd-dbd2e2c68fcd"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-a2ffe5a4-91f0-4f29-bcf9-af37d7e39af0"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/The+Who/_/Won%27t+Get+Fooled+Again/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-a2ffe5a4-91f0-4f29-bcf9-af37d7e39af0"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+                        <li>
+                            
+                                <form
+                                    method="POST"
+                                    action="/user/IvanMalison/library/edit-track?edited-variation=library-track-scrobble"
+                                    data-edit-scrobble
+                                >
+                                    <input type='hidden' name='csrfmiddlewaretoken' value='CMCSIZB2PnDF1bxdyaMfVK1gW1h1hWoyj9pJMjTjDF0sa2iA0MQ8bMx38imtVtLr' />
+                                    <input type="hidden" name="artist_name" value="The Who" />
+                                    <input type="hidden" name="track_name" value="Won&#39;t Get Fooled Again" />
+                                    
+                                        <input type="hidden" name="album_name" value="Who&#39;s Next (Deluxe Edition)" />
+                                    
+                                    
+                                        <input type="hidden" name="album_artist_name" value="The Who" />
+                                    
+                                    <input type="hidden" name="timestamp" value="1741300007" />
+                                    <button
+                                        type="submit"
+                                        class="
+                                            mimic-link
+                                            dropdown-menu-clickable-item
+                                            more-item--edit-old
+                                        "
+                                        data-analytics-action="EditScrobbleOpen"
+                                    >
+                                        Edit scrobble
+                                    </button>
+                                </form>
+                            
+                        </li>
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/The+Who/_/Won%27t+Get+Fooled+Again"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+
+                        
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/music/The+Who/Who%27s+Next+(Deluxe+Edition)"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/The+Who/Who%27s+Next+(Deluxe+Edition)"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                    
+
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='CMCSIZB2PnDF1bxdyaMfVK1gW1h1hWoyj9pJMjTjDF0sa2iA0MQ8bMx38imtVtLr' />
+            <input type="hidden" name="name" value="Won&#39;t Get Fooled Again" />
+            <input type="hidden" name="artist_name" value="The Who" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+                        <li>
+                            <form
+                                method="POST"
+                                data-ajax-form
+                                action="/user/IvanMalison/library/delete"
+                            >
+                                <input type='hidden' name='csrfmiddlewaretoken' value='CMCSIZB2PnDF1bxdyaMfVK1gW1h1hWoyj9pJMjTjDF0sa2iA0MQ8bMx38imtVtLr' />
+                                <input type="hidden" name="artist_name" value="The Who" />
+                                <input type="hidden" name="track_name" value="Won&#39;t Get Fooled Again" />
+                                <input type="hidden" name="timestamp" value="1741300007" />
+                                <button
+                                    type="submit"
+                                    class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--delete
+                                    "
+                                    data-ajax-form-sets-state="deleted"
+                                >
+                                    Delete scrobble
+                                </button>
+                            </form>
+                        </li>
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+            <td class="
+                chartlist-timestamp
+                chartlist-timestamp--lang-en
+            ">
+                
+                    <span title="Thursday 6 Mar 2025, 3:26pm">
+                        6 Mar 3:26pm
+                    </span>
+                
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+        </tbody>
+    </table>
+
+
+                
+            </script>
+        </div>
+    
+
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,1 @@
+csrfmiddlewaretoken=ZEBXKTI9Qe6RCxlb3JLXpAf2gGg3ogSbGB9fM1XaCz8jRnZgsQzyL7idzwybzjG4&username_or_email=IvanMalison&password=test_password&next=%2Fuser%2F_

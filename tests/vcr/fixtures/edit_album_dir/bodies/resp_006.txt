@@ -1,0 +1,260 @@
+<div js-modal-body class="modal-share-content" >
+    
+    <div class="modal-body 
+    automatic-edit-modal-body-v2
+">
+        
+            <h2 id="modal-label"
+                class="modal-title 
+    modal-title__edit-scrobble
+">
+                
+    
+        Edit Scrobble
+    
+
+            </h2>
+        
+        
+        <div>
+            
+    
+        
+            
+    <div class="content-form">
+        <form
+            method="post"
+            action="/user/IvanMalison/library/edit?edited-variation=library-track-scrobble"
+            class="form-horizontal"
+            data-modal-form
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='APlbzlvw4cozGbROqc6Wiv49n66ywOY1AoDm21MUhtRh31c8m1q1mHepkhJDMqjS' />
+            
+    
+        
+            <div class="alert alert-danger">
+                Your edit doesn't contain any real changes. We <a href="https://support.last.fm/t/editing-scrobbles-last-fm-pro-feature/187" target="_blank">cannot accept casing changes</a>.
+            </div>
+        
+    
+    
+
+            
+    <div class="edit-scrobble-top-box">
+        <p class="edit-scrobble-top-box__track-name">Pinball Wizard</p>
+        <div class="edit-scrobble-top-box__bottom">
+            <p>The Who</p>
+            
+                <span class="timestamp">19 Jul 2025, 9:00pm</span>
+            
+        </div>
+    </div>
+
+            
+    
+    <div class="edit-scrobble-form">
+        
+        
+            
+    <p class="edit-scrobble-label">Track</p>
+    <span class="edit-scrobble-label--originally hidden-lg hidden-md hidden-sm">
+        
+        Originally "Pinball Wizard"
+    </span>
+    <label
+        for="id_track_name"
+        class="
+            control-label
+            
+            hidden
+        "
+    >
+        Track
+    </label>
+    <div class="form-group form-group--track-name js-form-group ">
+        <div class="original-field hidden-xs"><input type="text" name="track_name_original" value="Pinball Wizard" readonly="readonly" required id="id_track_name_original"></div>
+        <div class="form-arrow hidden-xs"></div>
+        <input type="text" name="track_name" value="Pinball Wizard" required id="id_track_name">
+    </div>
+
+        
+
+        
+    <p class="edit-scrobble-label">Album</p>
+    <span class="edit-scrobble-label--originally hidden-lg hidden-md hidden-sm">
+        
+        Originally "Tommy"
+    </span>
+    <label
+        for="id_album_name"
+        class="
+            control-label
+            
+            hidden
+        "
+    >
+        Album
+    </label>
+    <div class="form-group form-group--album-name js-form-group ">
+        <div class="original-field hidden-xs"><input type="text" name="album_name_original" value="Tommy" readonly="readonly" id="id_album_name_original"></div>
+        <div class="form-arrow hidden-xs"></div>
+        <input type="text" name="album_name" value="Tommy" id="id_album_name">
+    </div>
+
+
+        
+            
+    <p class="edit-scrobble-label">Artist</p>
+    <span class="edit-scrobble-label--originally hidden-lg hidden-md hidden-sm">
+        
+        Originally "The Who"
+    </span>
+    <label
+        for="id_artist_name"
+        class="
+            control-label
+            
+            hidden
+        "
+    >
+        Artist
+    </label>
+    <div class="form-group form-group--artist-name js-form-group ">
+        <div class="original-field hidden-xs"><input type="text" name="artist_name_original" value="The Who" readonly="readonly" required id="id_artist_name_original"></div>
+        <div class="form-arrow hidden-xs"></div>
+        <input type="text" name="artist_name" value="The Who" required id="id_artist_name">
+    </div>
+
+        
+
+        
+    <p class="edit-scrobble-label">Album Artist</p>
+    <span class="edit-scrobble-label--originally hidden-lg hidden-md hidden-sm">
+        
+        Originally "The Who"
+    </span>
+    <label
+        for="id_album_artist_name"
+        class="
+            control-label
+            
+            hidden
+        "
+    >
+        Album Artist
+    </label>
+    <div class="form-group form-group--album-artist-name js-form-group ">
+        <div class="original-field hidden-xs"><input type="text" name="album_artist_name_original" value="The Who" readonly="readonly" id="id_album_artist_name_original"></div>
+        <div class="form-arrow hidden-xs"></div>
+        <input type="text" name="album_artist_name" value="The Who" id="id_album_artist_name">
+    </div>
+
+
+        <hr />
+
+        
+            <input type="hidden" name="timestamp" value="1752980407" id="id_timestamp">
+        
+
+        
+        
+            
+    <div class="
+        
+    ">
+        
+            <label
+                for="id_edit_all"
+                class="
+                    control-label
+                    
+                    hidden
+                "
+            >Bulk edit</label>
+            <p class="edit-scrobble-label">Bulk edit</p>
+        
+        <div>
+            
+                <div class="checkbox">
+                    <label for="id_edit_all"><input type="checkbox" name="edit_all" id="id_edit_all" checked>Apply to all (30) past scrobbles of this track</label>
+                </div>
+            
+            
+            
+            
+    
+
+            
+        </div>
+    </div>
+
+        
+        
+            
+    <div class="
+        
+    ">
+        
+            <label
+                for="id_create_automatic_edit_rule"
+                class="
+                    control-label
+                    
+                    hidden
+                "
+            >Automatic edit</label>
+            <p class="edit-scrobble-label">Automatic edit</p>
+        
+        <div>
+            
+                <div class="checkbox">
+                    <label for="id_create_automatic_edit_rule"><input type="checkbox" name="create_automatic_edit_rule" id="id_create_automatic_edit_rule">Apply to all future scrobbles of this track</label>
+                </div>
+            
+            
+            
+                <div class='form-row-help-text js-field-help-text'>You can manage and edit your automatic edits <a href="/settings/subscription/automatic-edits/tracks" target="_blank">here</a>.</div>
+            
+            
+    
+
+            
+        </div>
+    </div>
+
+        
+    </div>
+
+            <div class="form-group form-group--submit">
+                <div class="form-submit">
+                    
+                    
+    <button
+        
+        type="submit"
+        
+            class="btn-primary"
+        
+        
+    >
+        <span class="btn-inner">
+            Save edit
+        </span>
+    </button>
+    
+        <input type="hidden" value="edit-scrobble" name="submit" />
+    
+
+                    <button type="button" class="btn-secondary js-close">Cancel</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+        
+    
+
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,90 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/The%20Beatles/+tracks?page=4&ajax=true
+    headers:
+      accept:
+      - '*/*'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept-encoding:
+      - gzip, deflate, br
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/The%20Beatles/+tracks
+      x-requested-with:
+      - XMLHttpRequest
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      connection:
+      - keep-alive
+      sec-ch-ua-platform:
+      - '"Linux"'
+      content-type:
+      - application/octet-stream
+      dnt:
+      - '1'
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua-mobile:
+      - ?0
+      cookie:
+      - csrftoken=RDqAA43hByQDC86NyunLIFNoKQWuHSsm; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+    version: None
+  response:
+    status: 200
+    headers:
+      x-timer:
+      - S1754376675.764474,VS0,VE2863
+      etag:
+      - W/"e679af51177c0c1600d12c31387fca71"
+      cache-control:
+      - max-age=0, must-revalidate
+      date:
+      - Tue, 05 Aug 2025 06:51:17 GMT
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      strict-transport-security:
+      - max-age=300
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-cache:
+      - MISS, MISS
+      content-type:
+      - text/html; charset=utf-8
+      x-lfm-upstream-type:
+      - PASS
+      x-cache-hits:
+      - 0, 0
+      content-language:
+      - en
+      x-served-by:
+      - cache-chi-kigq8000126-CHI, cache-chi-kigq8000126-CHI
+      x-lfm-cacheable-page:
+      - '0'
+      x-request-category:
+      - page
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/The%20Beatles/+tracks?page=4&ajax=true
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/The%20Beatles/+tracks?page=4&ajax=true
+      server:
+      - nginx
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 06:52:17 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=RDqAA43hByQDC86NyunLIFNoKQWuHSsm; expires=Tue, 04 Aug 2026 06:51:17 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 06:51:17 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      accept-ranges:
+      - bytes
+      content-encoding:
+      - gzip
+      x-frame-options:
+      - DENY
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      content-security-policy:
+      - upgrade-insecure-requests;
+    body_file: resp_001.txt
+    version: None

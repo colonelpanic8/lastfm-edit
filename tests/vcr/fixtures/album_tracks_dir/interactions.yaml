@@ -1,0 +1,90 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/Radiohead/In%20Rainbows?page=1&ajax=true
+    headers:
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      cookie:
+      - csrftoken=Y69xMWCIN8e6kUhq4pmgtDIEq8fjbwfZ; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      accept-language:
+      - en-US,en;q=0.9
+      accept-encoding:
+      - gzip, deflate, br
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/Radiohead/In%20Rainbows
+      sec-ch-ua-mobile:
+      - ?0
+      accept:
+      - '*/*'
+      content-type:
+      - application/octet-stream
+      dnt:
+      - '1'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      connection:
+      - keep-alive
+      x-requested-with:
+      - XMLHttpRequest
+      sec-ch-ua-platform:
+      - '"Linux"'
+    version: None
+  response:
+    status: 200
+    headers:
+      etag:
+      - W/"5f70fc7758a676c40a503752b026aec8"
+      x-cache:
+      - MISS, MISS
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/Radiohead/In%20Rainbows?page=1&ajax=true
+      content-type:
+      - text/html; charset=utf-8
+      x-cache-hits:
+      - 0, 0
+      x-request-category:
+      - page
+      x-timer:
+      - S1754373075.550098,VS0,VE745
+      date:
+      - Tue, 05 Aug 2025 05:51:15 GMT
+      content-encoding:
+      - gzip
+      x-lfm-upstream-type:
+      - PASS
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/Radiohead/In%20Rainbows?page=1&ajax=true
+      server:
+      - nginx
+      content-security-policy:
+      - upgrade-insecure-requests;
+      content-language:
+      - en
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Tue, 05 Aug 2025 05:52:15 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=Y69xMWCIN8e6kUhq4pmgtDIEq8fjbwfZ; expires=Tue, 04 Aug 2026 05:51:15 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Wed, 05 Aug 2026 05:51:15 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-frame-options:
+      - DENY
+      cache-control:
+      - max-age=0, must-revalidate
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      strict-transport-security:
+      - max-age=300
+      accept-ranges:
+      - bytes
+      x-served-by:
+      - cache-chi-klot8100040-CHI, cache-chi-klot8100040-CHI
+      x-lfm-cacheable-page:
+      - '0'
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+    body_file: resp_001.txt
+    version: None

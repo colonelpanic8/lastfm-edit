@@ -1126,11 +1126,16 @@ impl ClientConfig {
         }
     }
 
-    /// Create config optimized for testing (no delays, minimal retries, no rate limiting)
+    /// Create config optimized for testing (rate limit detection enabled, retries enabled but no delays)
     pub fn for_testing() -> Self {
         Self {
-            retry: RetryConfig::disabled(),
-            rate_limit: RateLimitConfig::disabled(),
+            retry: RetryConfig {
+                max_retries: 3,
+                base_delay: 0, // No delay for fast tests
+                max_delay: 0,  // No delay for fast tests
+                enabled: true,
+            },
+            rate_limit: RateLimitConfig::default(), // Keep detection enabled
             operational_delays: OperationalDelayConfig::no_delays(),
         }
     }
