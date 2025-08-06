@@ -1,0 +1,1148 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/At%20the%20Drive-In/In%2FCasino%2FOut?page=1&ajax=true
+    headers:
+      content-type:
+      - application/octet-stream
+      connection:
+      - keep-alive
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      dnt:
+      - '1'
+      cookie:
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-mobile:
+      - ?0
+      sec-ch-ua-platform:
+      - '"Linux"'
+      x-requested-with:
+      - XMLHttpRequest
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/At%20the%20Drive-In/In%2FCasino%2FOut
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, br
+      accept-language:
+      - en-US,en;q=0.9
+    version: None
+  response:
+    status: 200
+    headers:
+      strict-transport-security:
+      - max-age=300
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-cacheable-page:
+      - '0'
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-language:
+      - en
+      content-encoding:
+      - gzip
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/At%20the%20Drive-In/In%2FCasino%2FOut?page=1&ajax=true
+      accept-ranges:
+      - bytes
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/At%20the%20Drive-In/In%2FCasino%2FOut?page=1&ajax=true
+      x-cache:
+      - MISS, MISS
+      x-request-category:
+      - page
+      x-cache-hits:
+      - 0, 0
+      content-type:
+      - text/html; charset=utf-8
+      x-timer:
+      - S1754454065.466947,VS0,VE650
+      cache-control:
+      - max-age=0, must-revalidate
+      server:
+      - nginx
+      x-served-by:
+      - cache-chi-klot8100174-CHI, cache-chi-klot8100089-CHI
+      etag:
+      - W/"c7a265311a40ef73815862831e0a054c"
+      x-frame-options:
+      - DENY
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:06 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:06 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:06 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-lfm-upstream-type:
+      - PASS
+      date:
+      - Wed, 06 Aug 2025 04:21:06 GMT
+    body_file: resp_001.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/For%20Now..%20We%20Toast
+    headers:
+      sec-ch-ua-mobile:
+      - ?0
+      connection:
+      - keep-alive
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      content-type:
+      - application/octet-stream
+      upgrade-insecure-requests:
+      - '1'
+      accept-encoding:
+      - gzip, deflate, br
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      dnt:
+      - '1'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept-language:
+      - en-US,en;q=0.9
+    version: None
+  response:
+    status: 200
+    headers:
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/For%20Now..%20We%20Toast
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-cache-hits:
+      - 0, 0
+      x-timer:
+      - S1754454066.242774,VS0,VE962
+      content-language:
+      - en
+      etag:
+      - W/"9e759801892604bb756215b8ddc0af16"
+      cache-control:
+      - max-age=0, must-revalidate
+      server:
+      - nginx
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:07 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:07 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:07 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-lfm-cacheable-page:
+      - '0'
+      content-encoding:
+      - gzip
+      content-type:
+      - text/html; charset=utf-8
+      accept-ranges:
+      - bytes
+      x-served-by:
+      - cache-chi-klot8100145-CHI, cache-chi-klot8100089-CHI
+      x-request-category:
+      - page
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      strict-transport-security:
+      - max-age=300
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/For%20Now..%20We%20Toast
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-frame-options:
+      - DENY
+      x-lfm-upstream-type:
+      - PASS
+      x-cache:
+      - MISS, MISS
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      date:
+      - Wed, 06 Aug 2025 04:21:07 GMT
+    body_file: resp_002.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/At%20the%20Drive-In/_/For%20Now..%20We%20Toast?page=2
+    headers:
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-ch-ua-mobile:
+      - ?0
+      content-type:
+      - application/octet-stream
+      accept-encoding:
+      - gzip, deflate, br
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      accept-language:
+      - en-US,en;q=0.9
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/At%20the%20Drive-In/_/For%20Now..%20We%20Toast
+      dnt:
+      - '1'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      connection:
+      - keep-alive
+      upgrade-insecure-requests:
+      - '1'
+    version: None
+  response:
+    status: 200
+    headers:
+      content-type:
+      - text/html; charset=utf-8
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-frame-options:
+      - DENY
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/At%20the%20Drive-In/_/For%20Now..%20We%20Toast?page=2
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      content-encoding:
+      - gzip
+      x-lfm-cacheable-page:
+      - '0'
+      etag:
+      - W/"da120d3e455c14d5b5a5f3866421c315"
+      content-security-policy:
+      - upgrade-insecure-requests;
+      cache-control:
+      - max-age=0, must-revalidate
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:08 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:08 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:08 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      accept-ranges:
+      - bytes
+      strict-transport-security:
+      - max-age=300
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-served-by:
+      - cache-chi-klot8100154-CHI, cache-chi-klot8100089-CHI
+      x-lfm-upstream-type:
+      - PASS
+      content-language:
+      - en
+      server:
+      - nginx
+      date:
+      - Wed, 06 Aug 2025 04:21:08 GMT
+      x-cache-hits:
+      - 0, 0
+      x-request-category:
+      - page
+      x-timer:
+      - S1754454068.587910,VS0,VE647
+      x-cache:
+      - MISS, MISS
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/At%20the%20Drive-In/_/For%20Now..%20We%20Toast?page=2
+    body_file: resp_003.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Napoleon%20Solo
+    headers:
+      sec-ch-ua-platform:
+      - '"Linux"'
+      content-type:
+      - application/octet-stream
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      upgrade-insecure-requests:
+      - '1'
+      accept-language:
+      - en-US,en;q=0.9
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      connection:
+      - keep-alive
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-ch-ua-mobile:
+      - ?0
+      accept-encoding:
+      - gzip, deflate, br
+      dnt:
+      - '1'
+    version: None
+  response:
+    status: 200
+    headers:
+      x-timer:
+      - S1754454068.437971,VS0,VE951
+      content-language:
+      - en
+      x-cache-hits:
+      - 0, 0
+      cache-control:
+      - max-age=0, must-revalidate
+      content-encoding:
+      - gzip
+      x-lfm-cacheable-page:
+      - '0'
+      x-lfm-upstream-type:
+      - PASS
+      accept-ranges:
+      - bytes
+      x-served-by:
+      - cache-chi-klot8100082-CHI, cache-chi-klot8100089-CHI
+      x-frame-options:
+      - DENY
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      date:
+      - Wed, 06 Aug 2025 04:21:09 GMT
+      content-security-policy:
+      - upgrade-insecure-requests;
+      server:
+      - nginx
+      strict-transport-security:
+      - max-age=300
+      content-type:
+      - text/html; charset=utf-8
+      x-cache:
+      - MISS, MISS
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:09 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:09 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:09 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Napoleon%20Solo
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-request-category:
+      - page
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Napoleon%20Solo
+      etag:
+      - W/"6b7b8c9e270dacb6816358c975cee0a5"
+    body_file: resp_004.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Transatlantic%20Foe
+    headers:
+      accept-language:
+      - en-US,en;q=0.9
+      connection:
+      - keep-alive
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-platform:
+      - '"Linux"'
+      dnt:
+      - '1'
+      upgrade-insecure-requests:
+      - '1'
+      sec-ch-ua-mobile:
+      - ?0
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept-encoding:
+      - gzip, deflate, br
+      content-type:
+      - application/octet-stream
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+    version: None
+  response:
+    status: 200
+    headers:
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Transatlantic%20Foe
+      x-served-by:
+      - cache-chi-klot8100065-CHI, cache-chi-klot8100089-CHI
+      x-lfm-upstream-type:
+      - PASS
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-cacheable-page:
+      - '0'
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:11 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:11 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:11 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      etag:
+      - W/"cd894ccbabed439b856a7247051d66fc"
+      x-cache:
+      - MISS, MISS
+      accept-ranges:
+      - bytes
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      cache-control:
+      - max-age=0, must-revalidate
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-type:
+      - text/html; charset=utf-8
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Transatlantic%20Foe
+      x-frame-options:
+      - DENY
+      x-timer:
+      - S1754454070.758561,VS0,VE1463
+      x-request-category:
+      - page
+      server:
+      - nginx
+      x-cache-hits:
+      - 0, 0
+      strict-transport-security:
+      - max-age=300
+      content-language:
+      - en
+      date:
+      - Wed, 06 Aug 2025 04:21:11 GMT
+      content-encoding:
+      - gzip
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+    body_file: resp_005.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Hulahoop%20Wounds
+    headers:
+      connection:
+      - keep-alive
+      accept-encoding:
+      - gzip, deflate, br
+      content-type:
+      - application/octet-stream
+      dnt:
+      - '1'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua-mobile:
+      - ?0
+      upgrade-insecure-requests:
+      - '1'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      sec-ch-ua-platform:
+      - '"Linux"'
+    version: None
+  response:
+    status: 200
+    headers:
+      strict-transport-security:
+      - max-age=300
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:12 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:12 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:12 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      content-type:
+      - text/html; charset=utf-8
+      x-frame-options:
+      - DENY
+      x-timer:
+      - S1754454072.539940,VS0,VE855
+      etag:
+      - W/"dd3a5e9fe07da49f60630e7e5eaac17f"
+      accept-ranges:
+      - bytes
+      x-lfm-cacheable-page:
+      - '0'
+      x-cache:
+      - MISS, MISS
+      content-security-policy:
+      - upgrade-insecure-requests;
+      server:
+      - nginx
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-cache-hits:
+      - 0, 0
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Hulahoop%20Wounds
+      x-request-category:
+      - page
+      content-language:
+      - en
+      cache-control:
+      - max-age=0, must-revalidate
+      content-encoding:
+      - gzip
+      date:
+      - Wed, 06 Aug 2025 04:21:12 GMT
+      x-served-by:
+      - cache-chi-klot8100097-CHI, cache-chi-klot8100089-CHI
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Hulahoop%20Wounds
+      x-lfm-upstream-type:
+      - PASS
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+    body_file: resp_006.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Shaking%20Hand%20Incision
+    headers:
+      sec-ch-ua-platform:
+      - '"Linux"'
+      connection:
+      - keep-alive
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      dnt:
+      - '1'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      upgrade-insecure-requests:
+      - '1'
+      content-type:
+      - application/octet-stream
+      sec-ch-ua-mobile:
+      - ?0
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      accept-encoding:
+      - gzip, deflate, br
+    version: None
+  response:
+    status: 200
+    headers:
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:13 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:13 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:13 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-timer:
+      - S1754454073.713154,VS0,VE853
+      content-encoding:
+      - gzip
+      date:
+      - Wed, 06 Aug 2025 04:21:13 GMT
+      content-language:
+      - en
+      content-security-policy:
+      - upgrade-insecure-requests;
+      strict-transport-security:
+      - max-age=300
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Shaking%20Hand%20Incision
+      server:
+      - nginx
+      cache-control:
+      - max-age=0, must-revalidate
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-request-category:
+      - page
+      etag:
+      - W/"5ee1680a91847c29ee5ab8089eb72ae0"
+      x-lfm-upstream-type:
+      - PASS
+      content-type:
+      - text/html; charset=utf-8
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Shaking%20Hand%20Incision
+      accept-ranges:
+      - bytes
+      x-cache-hits:
+      - 0, 0
+      x-frame-options:
+      - DENY
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-lfm-cacheable-page:
+      - '0'
+      x-cache:
+      - MISS, MISS
+      x-served-by:
+      - cache-chi-klot8100158-CHI, cache-chi-klot8100089-CHI
+    body_file: resp_007.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/A%20Devil%20Among%20The%20Tailors
+    headers:
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept-language:
+      - en-US,en;q=0.9
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      upgrade-insecure-requests:
+      - '1'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-mobile:
+      - ?0
+      dnt:
+      - '1'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      accept-encoding:
+      - gzip, deflate, br
+      content-type:
+      - application/octet-stream
+      connection:
+      - keep-alive
+    version: None
+  response:
+    status: 200
+    headers:
+      x-frame-options:
+      - DENY
+      x-cache:
+      - MISS, MISS
+      etag:
+      - W/"1e9338d1e4191b5559815e6e231b18d7"
+      x-served-by:
+      - cache-chi-klot8100024-CHI, cache-chi-klot8100089-CHI
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:14 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:14 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:14 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      content-encoding:
+      - gzip
+      x-timer:
+      - S1754454074.811065,VS0,VE526
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/A%20Devil%20Among%20The%20Tailors
+      x-lfm-upstream-type:
+      - PASS
+      accept-ranges:
+      - bytes
+      x-cache-hits:
+      - 0, 0
+      content-language:
+      - en
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/A%20Devil%20Among%20The%20Tailors
+      x-lfm-cacheable-page:
+      - '0'
+      cache-control:
+      - max-age=0, must-revalidate
+      strict-transport-security:
+      - max-age=300
+      x-request-category:
+      - page
+      server:
+      - nginx
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      date:
+      - Wed, 06 Aug 2025 04:21:14 GMT
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-security-policy:
+      - upgrade-insecure-requests;
+      content-type:
+      - text/html; charset=utf-8
+    body_file: resp_008.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Pickpocket
+    headers:
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-ch-ua-mobile:
+      - ?0
+      dnt:
+      - '1'
+      accept-language:
+      - en-US,en;q=0.9
+      connection:
+      - keep-alive
+      upgrade-insecure-requests:
+      - '1'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      content-type:
+      - application/octet-stream
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept-encoding:
+      - gzip, deflate, br
+    version: None
+  response:
+    status: 200
+    headers:
+      strict-transport-security:
+      - max-age=300
+      x-cache-hits:
+      - 0, 0
+      content-language:
+      - en
+      content-encoding:
+      - gzip
+      accept-ranges:
+      - bytes
+      x-timer:
+      - S1754454075.527170,VS0,VE744
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Pickpocket
+      date:
+      - Wed, 06 Aug 2025 04:21:15 GMT
+      content-type:
+      - text/html; charset=utf-8
+      x-lfm-cacheable-page:
+      - '0'
+      x-cache:
+      - MISS, MISS
+      x-served-by:
+      - cache-chi-klot8100057-CHI, cache-chi-klot8100089-CHI
+      cache-control:
+      - max-age=0, must-revalidate
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:15 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:15 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:15 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-frame-options:
+      - DENY
+      etag:
+      - W/"15c3d79a9c9b56615452bae50d64dcac"
+      x-lfm-upstream-type:
+      - PASS
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Pickpocket
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      content-security-policy:
+      - upgrade-insecure-requests;
+      server:
+      - nginx
+      x-request-category:
+      - page
+    body_file: resp_009.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Chanbara
+    headers:
+      connection:
+      - keep-alive
+      upgrade-insecure-requests:
+      - '1'
+      sec-ch-ua-mobile:
+      - ?0
+      sec-ch-ua-platform:
+      - '"Linux"'
+      dnt:
+      - '1'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      content-type:
+      - application/octet-stream
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      accept-language:
+      - en-US,en;q=0.9
+      accept-encoding:
+      - gzip, deflate, br
+    version: None
+  response:
+    status: 200
+    headers:
+      x-lfm-upstream-type:
+      - PASS
+      x-cache-hits:
+      - 0, 0
+      content-encoding:
+      - gzip
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Chanbara
+      x-cache:
+      - MISS, MISS
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      date:
+      - Wed, 06 Aug 2025 04:21:16 GMT
+      x-request-category:
+      - page
+      x-lfm-cacheable-page:
+      - '0'
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      strict-transport-security:
+      - max-age=300
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-frame-options:
+      - DENY
+      x-timer:
+      - S1754454075.435199,VS0,VE1049
+      content-security-policy:
+      - upgrade-insecure-requests;
+      etag:
+      - W/"9fbbfe7b150c695e23199e35caa27fb0"
+      content-type:
+      - text/html; charset=utf-8
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:16 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:16 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:16 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Chanbara
+      content-language:
+      - en
+      accept-ranges:
+      - bytes
+      cache-control:
+      - max-age=0, must-revalidate
+      x-served-by:
+      - cache-chi-klot8100163-CHI, cache-chi-klot8100089-CHI
+      server:
+      - nginx
+    body_file: resp_010.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Lopsided
+    headers:
+      content-type:
+      - application/octet-stream
+      accept-encoding:
+      - gzip, deflate, br
+      connection:
+      - keep-alive
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      upgrade-insecure-requests:
+      - '1'
+      accept-language:
+      - en-US,en;q=0.9
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      sec-ch-ua-mobile:
+      - ?0
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      dnt:
+      - '1'
+    version: None
+  response:
+    status: 200
+    headers:
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-lfm-upstream-type:
+      - PASS
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-language:
+      - en
+      x-served-by:
+      - cache-chi-klot8100097-CHI, cache-chi-klot8100089-CHI
+      x-cache-hits:
+      - 0, 0
+      x-request-category:
+      - page
+      date:
+      - Wed, 06 Aug 2025 04:21:17 GMT
+      x-timer:
+      - S1754454077.650271,VS0,VE656
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      content-encoding:
+      - gzip
+      etag:
+      - W/"2e1d9ac729f7b9ba94b8d1c3aca9db0f"
+      accept-ranges:
+      - bytes
+      content-security-policy:
+      - upgrade-insecure-requests;
+      server:
+      - nginx
+      x-frame-options:
+      - DENY
+      content-type:
+      - text/html; charset=utf-8
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Lopsided
+      x-lfm-cacheable-page:
+      - '0'
+      strict-transport-security:
+      - max-age=300
+      cache-control:
+      - max-age=0, must-revalidate
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Lopsided
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:17 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:17 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:17 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-cache:
+      - MISS, MISS
+    body_file: resp_011.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Alpha%20Centauri
+    headers:
+      sec-ch-ua-mobile:
+      - ?0
+      connection:
+      - keep-alive
+      sec-ch-ua-platform:
+      - '"Linux"'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept-encoding:
+      - gzip, deflate, br
+      accept-language:
+      - en-US,en;q=0.9
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      content-type:
+      - application/octet-stream
+      upgrade-insecure-requests:
+      - '1'
+      dnt:
+      - '1'
+    version: None
+  response:
+    status: 200
+    headers:
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Alpha%20Centauri
+      x-lfm-upstream-type:
+      - PASS
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-request-category:
+      - page
+      date:
+      - Wed, 06 Aug 2025 04:21:17 GMT
+      strict-transport-security:
+      - max-age=300
+      cache-control:
+      - max-age=0, must-revalidate
+      x-frame-options:
+      - DENY
+      x-cache:
+      - MISS, MISS
+      accept-ranges:
+      - bytes
+      x-timer:
+      - S1754454077.455886,VS0,VE509
+      x-cache-hits:
+      - 0, 0
+      etag:
+      - W/"0a3bfc0656a7e3aa5238a6721868a3f6"
+      content-type:
+      - text/html; charset=utf-8
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-cacheable-page:
+      - '0'
+      content-encoding:
+      - gzip
+      server:
+      - nginx
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Alpha%20Centauri
+      content-language:
+      - en
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:17 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:17 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:17 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-served-by:
+      - cache-chi-klot8100099-CHI, cache-chi-klot8100089-CHI
+    body_file: resp_012.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Hourglass
+    headers:
+      accept-language:
+      - en-US,en;q=0.9
+      dnt:
+      - '1'
+      accept-encoding:
+      - gzip, deflate, br
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-platform:
+      - '"Linux"'
+      sec-ch-ua-mobile:
+      - ?0
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      connection:
+      - keep-alive
+      upgrade-insecure-requests:
+      - '1'
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      content-type:
+      - application/octet-stream
+    version: None
+  response:
+    status: 200
+    headers:
+      x-frame-options:
+      - DENY
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Hourglass
+      content-encoding:
+      - gzip
+      strict-transport-security:
+      - max-age=300
+      x-cache:
+      - MISS, MISS
+      etag:
+      - W/"6ff0cf58612a5f855b33d046b9627f80"
+      x-timer:
+      - S1754454078.101525,VS0,VE650
+      date:
+      - Wed, 06 Aug 2025 04:21:18 GMT
+      cache-control:
+      - max-age=0, must-revalidate
+      content-language:
+      - en
+      server:
+      - nginx
+      x-lfm-cacheable-page:
+      - '0'
+      content-security-policy:
+      - upgrade-insecure-requests;
+      content-type:
+      - text/html; charset=utf-8
+      accept-ranges:
+      - bytes
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-served-by:
+      - cache-chi-klot8100099-CHI, cache-chi-klot8100089-CHI
+      x-lfm-upstream-type:
+      - PASS
+      x-cache-hits:
+      - 0, 0
+      x-request-category:
+      - page
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/Hourglass
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 04:22:18 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=E0kP6cxi7hj1aF7XIFs74WWPhmPMKz0f; expires=Wed, 05 Aug 2026 04:21:18 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 04:21:18 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+    body_file: resp_013.txt
+    version: None

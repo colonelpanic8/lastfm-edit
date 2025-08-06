@@ -1,0 +1,6134 @@
+
+
+
+
+
+
+    
+        <section
+            id="top-tracks-section"
+            data-require="components/library-fetch"
+            data-endpoint="/user/IvanMalison/library/music/At+the+Drive-In/Acrobatic+Tenement"
+            data-section-id="top-tracks-section"
+            class="library-fetch"
+            count="9"
+            v-bind:class="{ loading: loading, 'library-format-grid': format }"
+        >
+            <div v-if="loading && !format" class="loader">
+                
+    
+
+    <table
+        
+        class="
+            chartlist
+            chartlist__placeholder
+            
+
+            
+                chartlist--with-image
+                chartlist__placeholder--with-image
+            
+            
+                chartlist--with-bar
+                chartlist__placeholder--with-bar
+            
+        "
+    >
+        <thead class="sr-only">
+            <tr>
+
+            
+                
+                <th>
+                    Image
+                </th>
+            
+
+            <th>
+                
+                Name
+            </th>
+
+            
+                
+                <th>Scrobbles</th>
+            
+            </tr>
+        </thead>
+        <tbody>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+                <tr class="chartlist-row chartlist__placeholder-row">
+                    
+                        <td class="chartlist-image chartlist__placeholder-image">
+                        </td>
+                    
+
+                    <td class="chartlist-name chartlist__placeholder-name">
+                        <div class="chartlist__placeholder-loading"></div>
+                    </td>
+
+                    
+                        <td class="chartlist-bar chartlist__placeholder-bar">
+                        </td>
+                    
+                </tr>
+            
+        </tbody>
+    </table>
+
+            </div>
+            <div v-else-if="loading && format" class="loader">
+                
+    <ol
+        class="
+            grid-items
+            grid-items__placeholder
+        "
+    >
+        <li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li><li class="
+                    grid-items-item
+                    js-focus-controls-container
+            ">
+                <div class="grid-items-empty-inner">
+                    <div class="grid-items-item--loading"></div>
+                </div>
+            </li>
+    </ol>
+
+            </div>
+            <div v-else v-html="html">
+                
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <table
+        
+        class="
+            chartlist
+            
+            
+                chartlist--with-index
+                chartlist--with-index--length-1
+            
+            
+                chartlist--with-play
+            
+            
+                chartlist--with-mobile-play
+            
+            
+            
+                chartlist--with-image
+            
+            
+                chartlist--with-loved
+            
+            
+                chartlist--with-artist
+            
+            
+            
+                chartlist--with-more
+            
+            
+                chartlist--with-duration
+            
+            
+                chartlist--with-bar
+            
+            
+            
+            
+            
+            
+                chartlist--with-buylinks
+            
+            
+            
+            
+        "
+    >
+        <thead class="sr-only">
+            <tr>
+                
+
+                
+                    
+                    <th>Rank</th>
+                
+
+                
+
+                
+                    
+                    <th>Play</th>
+                
+
+                
+
+                
+                    
+                    <th>
+                        
+                            Album
+                        
+                    </th>
+                
+
+                
+                    
+                    <th>Loved</th>
+                
+
+                <th>
+                    
+                    
+                        Track name
+                    
+                </th>
+
+                
+                    
+                    <th>Artist name </th>
+                
+
+                
+
+                
+                    
+                    <th>Buy</th>
+                
+
+                
+                    
+                    <th>Options</th>
+                
+
+                
+
+                
+                    
+                    <th>Duration</th>
+                
+
+                
+
+                
+                    
+                    <th>Scrobbles</th>
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+            </tr>
+        </thead>
+        <tbody
+                data-playlisting-add-entries
+                
+        >
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                1
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/1Fl4zN0KW5MFrXGUg0AhWb"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="1Fl4zN0KW5MFrXGUg0AhWb"
+    data-spotify-url="https://open.spotify.com/track/1Fl4zN0KW5MFrXGUg0AhWb"
+
+    data-track-name="Schaffino"
+    data-track-url="/music/At+the+Drive-In/_/Schaffino"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=KTwBdSkREOQ"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="KTwBdSkREOQ"
+    data-youtube-url="https://www.youtube.com/watch?v=KTwBdSkREOQ"
+
+    data-track-name="Schaffino"
+    data-track-url="/music/At+the+Drive-In/_/Schaffino"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="3a2e0cf477143e12d7e539dcfe13ad93"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="loved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="UnloveTrack"
+                >
+                    Unlove this track
+                </button>
+                <input type="hidden" name="action" value="unlove">
+                
+                    <input type="hidden" name="track" value="Schaffino">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1195499">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="3a2e0cf477143e12d7e539dcfe13ad93"
+        
+    
+    data-toggle-button-current-state="loved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Schaffino"
+            
+            
+                title="Schaffino"
+            
+                class=""
+            
+        >Schaffino</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-092d237d-e550-45a7-9957-c5b5aa268606"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Schaffino/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-092d237d-e550-45a7-9957-c5b5aa268606"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-a2ce45de-2270-4100-9fe9-ad4ad1cbbdbb"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Schaffino/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-a2ce45de-2270-4100-9fe9-ad4ad1cbbdbb"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Schaffino"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Schaffino"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="3a2e0cf477143e12d7e539dcfe13ad93"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="loved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="UnloveTrack"
+                >
+                    Unlove this track
+                </button>
+                <input type="hidden" name="action" value="unlove">
+                
+                    <input type="hidden" name="track" value="Schaffino">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1195499">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Schaffino" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                2:48
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Schaffino"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="16"
+                    class="chartlist-count-bar-slug"
+                    style="width:100.0%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                16 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                2
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/2aGoVMdJI7eNazltau9MWD"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="2aGoVMdJI7eNazltau9MWD"
+    data-spotify-url="https://open.spotify.com/track/2aGoVMdJI7eNazltau9MWD"
+
+    data-track-name="Initiation"
+    data-track-url="/music/At+the+Drive-In/_/Initiation"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=55n7Rx3EJpU"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="55n7Rx3EJpU"
+    data-youtube-url="https://www.youtube.com/watch?v=55n7Rx3EJpU"
+
+    data-track-name="Initiation"
+    data-track-url="/music/At+the+Drive-In/_/Initiation"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="6ca72ae81c5b366948dd785ec4d7b335"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="loved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="UnloveTrack"
+                >
+                    Unlove this track
+                </button>
+                <input type="hidden" name="action" value="unlove">
+                
+                    <input type="hidden" name="track" value="Initiation">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1063912">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="6ca72ae81c5b366948dd785ec4d7b335"
+        
+    
+    data-toggle-button-current-state="loved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Initiation"
+            
+            
+                title="Initiation"
+            
+                class=""
+            
+        >Initiation</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-cf8d23ac-9779-4542-9fd0-b25e5a128f0e"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Initiation/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-cf8d23ac-9779-4542-9fd0-b25e5a128f0e"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-c1ba166b-c517-4b62-ba4b-8df2febab709"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Initiation/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-c1ba166b-c517-4b62-ba4b-8df2febab709"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Initiation"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Initiation"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="6ca72ae81c5b366948dd785ec4d7b335"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="loved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="UnloveTrack"
+                >
+                    Unlove this track
+                </button>
+                <input type="hidden" name="action" value="unlove">
+                
+                    <input type="hidden" name="track" value="Initiation">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1063912">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Initiation" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                3:33
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Initiation"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="13"
+                    class="chartlist-count-bar-slug"
+                    style="width:81.25%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                13 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+                chartlist-row--with-artist
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                3
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/25OfDebGdpLxPdnqayfkFI"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="25OfDebGdpLxPdnqayfkFI"
+    data-spotify-url="https://open.spotify.com/track/25OfDebGdpLxPdnqayfkFI"
+
+    data-track-name="Starslight"
+    data-track-url="/music/+noredirect/At+the+Drive-In/_/Starslight"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/+noredirect/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=nhlnRea_3Cc"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="nhlnRea_3Cc"
+    data-youtube-url="https://www.youtube.com/watch?v=nhlnRea_3Cc"
+
+    data-track-name="Starslight"
+    data-track-url="/music/+noredirect/At+the+Drive-In/_/Starslight"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/+noredirect/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/4128a6eb29f94943c9d206c08e625904.jpg"
+            alt="Starslight"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="337860310ecf3199eba23123e1dda01c"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Starslight">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="2159687">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="337860310ecf3199eba23123e1dda01c"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/+noredirect/At+the+Drive-In/_/Starslight"
+            
+            
+                title="Starslight"
+            
+                class=""
+            
+        >Starslight</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                    <a
+            href="/music/+noredirect/At+the+Drive-In"
+            
+            
+                title="At the Drive-In"
+            
+        >At the Drive-In</a>
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-1a31f961-ff9c-4844-ad3e-c606be396c8e"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/+noredirect/At+the+Drive-In/_/Starslight/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-1a31f961-ff9c-4844-ad3e-c606be396c8e"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-50160681-8844-45c9-8c08-8ce719675a5a"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/+noredirect/At+the+Drive-In/_/Starslight/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-50160681-8844-45c9-8c08-8ce719675a5a"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/+noredirect/At+the+Drive-In/_/Starslight"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/+noredirect/At+the+Drive-In/_/Starslight"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/music/+noredirect/At+the+Drive-In"
+            class="
+                dropdown-menu-clickable-item
+                more-item--artist
+            "
+        >
+            
+                
+                    Go to artist
+                
+            
+        </a>
+    </li>
+
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/+noredirect/At+the+Drive-In"
+            class="
+                dropdown-menu-clickable-item
+                more-item--artist
+            "
+        >
+            
+                
+                    Go to artist in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="337860310ecf3199eba23123e1dda01c"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Starslight">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="2159687">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Starslight" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/+noredirect/At+the+Drive-In/_/Starslight"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="4"
+                    class="chartlist-count-bar-slug"
+                    style="width:25.0%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                4 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                4
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/0K6D1ymHkiEBrXBd828gVG"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="0K6D1ymHkiEBrXBd828gVG"
+    data-spotify-url="https://open.spotify.com/track/0K6D1ymHkiEBrXBd828gVG"
+
+    data-track-name="Communication Drive-in"
+    data-track-url="/music/At+the+Drive-In/_/Communication+Drive-in"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=Y8fEXCxBSf0"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="Y8fEXCxBSf0"
+    data-youtube-url="https://www.youtube.com/watch?v=Y8fEXCxBSf0"
+
+    data-track-name="Communication Drive-in"
+    data-track-url="/music/At+the+Drive-In/_/Communication+Drive-in"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="eadd2709dc611e505454e2c877b2e53e"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Communication Drive-in">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1063938">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="eadd2709dc611e505454e2c877b2e53e"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Communication+Drive-in"
+            
+            
+                title="Communication Drive-in"
+            
+                class=""
+            
+        >Communication Drive-in</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-44fc91df-8df8-4d3d-b9a5-1fb74231f6bb"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Communication+Drive-in/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-44fc91df-8df8-4d3d-b9a5-1fb74231f6bb"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-c04133bd-4311-40d1-bd9e-f058f2265d4f"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Communication+Drive-in/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-c04133bd-4311-40d1-bd9e-f058f2265d4f"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Communication+Drive-in"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Communication+Drive-in"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="eadd2709dc611e505454e2c877b2e53e"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Communication Drive-in">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1063938">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Communication Drive-in" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                1:45
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Communication+Drive-in"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="3"
+                    class="chartlist-count-bar-slug"
+                    style="width:18.75%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                3 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                5
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/0ipsTPwOvFk0LQFN011XEA"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="0ipsTPwOvFk0LQFN011XEA"
+    data-spotify-url="https://open.spotify.com/track/0ipsTPwOvFk0LQFN011XEA"
+
+    data-track-name="Ebroglio"
+    data-track-url="/music/At+the+Drive-In/_/Ebroglio"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=WTYin04XszQ"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="WTYin04XszQ"
+    data-youtube-url="https://www.youtube.com/watch?v=WTYin04XszQ"
+
+    data-track-name="Ebroglio"
+    data-track-url="/music/At+the+Drive-In/_/Ebroglio"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="919abc1f3c3f6264f523d4996bcbdf1c"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Ebroglio">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1061101">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="919abc1f3c3f6264f523d4996bcbdf1c"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Ebroglio"
+            
+            
+                title="Ebroglio"
+            
+                class=""
+            
+        >Ebroglio</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-904f4d28-554b-4d88-a191-537ba5c2eb80"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Ebroglio/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-904f4d28-554b-4d88-a191-537ba5c2eb80"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-aa09bc4d-908b-4da1-b3eb-774267e0e276"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Ebroglio/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-aa09bc4d-908b-4da1-b3eb-774267e0e276"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Ebroglio"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Ebroglio"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="919abc1f3c3f6264f523d4996bcbdf1c"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Ebroglio">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1061101">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Ebroglio" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                2:45
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Ebroglio"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="2"
+                    class="chartlist-count-bar-slug"
+                    style="width:12.5%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                2 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                6
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/0U1WAeFD7wwKNdoRN2wxXE"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="0U1WAeFD7wwKNdoRN2wxXE"
+    data-spotify-url="https://open.spotify.com/track/0U1WAeFD7wwKNdoRN2wxXE"
+
+    data-track-name="Coating of Arms"
+    data-track-url="/music/At+the+Drive-In/_/Coating+of+Arms"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=I-7Z31mRMo8"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="I-7Z31mRMo8"
+    data-youtube-url="https://www.youtube.com/watch?v=I-7Z31mRMo8"
+
+    data-track-name="Coating of Arms"
+    data-track-url="/music/At+the+Drive-In/_/Coating+of+Arms"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="54cd8a18345d3a74a47f5ede67622076"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Coating of Arms">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1064077">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="54cd8a18345d3a74a47f5ede67622076"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Coating+of+Arms"
+            
+            
+                title="Coating of Arms"
+            
+                class=""
+            
+        >Coating of Arms</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-127b2a4d-9e7f-463c-a9bd-d6cef63245c5"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Coating+of+Arms/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-127b2a4d-9e7f-463c-a9bd-d6cef63245c5"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-e1438845-6058-40d0-93de-e67101146ee6"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Coating+of+Arms/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-e1438845-6058-40d0-93de-e67101146ee6"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Coating+of+Arms"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Coating+of+Arms"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="54cd8a18345d3a74a47f5ede67622076"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Coating of Arms">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1064077">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Coating of Arms" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                2:46
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Coating+of+Arms"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="1"
+                    class="chartlist-count-bar-slug"
+                    style="width:6.25%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                1 <span class="stat-name">scrobble</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                7
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/1gvUpgHs2E6GVdvZ44KDAv"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="1gvUpgHs2E6GVdvZ44KDAv"
+    data-spotify-url="https://open.spotify.com/track/1gvUpgHs2E6GVdvZ44KDAv"
+
+    data-track-name="Porfirio Diaz"
+    data-track-url="/music/At+the+Drive-In/_/Porfirio+Diaz"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=dTT6c86u1hw"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="dTT6c86u1hw"
+    data-youtube-url="https://www.youtube.com/watch?v=dTT6c86u1hw"
+
+    data-track-name="Porfirio Diaz"
+    data-track-url="/music/At+the+Drive-In/_/Porfirio+Diaz"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="23079af305d1ebba67b20f12d1d4d5e4"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Porfirio Diaz">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1195467">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="23079af305d1ebba67b20f12d1d4d5e4"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Porfirio+Diaz"
+            
+            
+                title="Porfirio Diaz"
+            
+                class=""
+            
+        >Porfirio Diaz</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-cba8f900-b071-4078-b9a3-30866c75d896"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Porfirio+Diaz/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-cba8f900-b071-4078-b9a3-30866c75d896"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-b697a1b8-d1f3-4f72-955a-01cf1a73af96"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Porfirio+Diaz/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-b697a1b8-d1f3-4f72-955a-01cf1a73af96"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Porfirio+Diaz"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Porfirio+Diaz"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="23079af305d1ebba67b20f12d1d4d5e4"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Porfirio Diaz">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1195467">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Porfirio Diaz" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                2:58
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Porfirio+Diaz"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="1"
+                    class="chartlist-count-bar-slug"
+                    style="width:6.25%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                1 <span class="stat-name">scrobble</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                8
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/1tCkgnvJ2bn4ODVIcj0GFc"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="1tCkgnvJ2bn4ODVIcj0GFc"
+    data-spotify-url="https://open.spotify.com/track/1tCkgnvJ2bn4ODVIcj0GFc"
+
+    data-track-name="Skips on The Record"
+    data-track-url="/music/At+the+Drive-In/_/Skips+on+The+Record"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=OVJAV_lDe0o"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="OVJAV_lDe0o"
+    data-youtube-url="https://www.youtube.com/watch?v=OVJAV_lDe0o"
+
+    data-track-name="Skips on The Record"
+    data-track-url="/music/At+the+Drive-In/_/Skips+on+The+Record"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="4f0dafcc1407c214e2caeb81e4cd0d9e"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Skips on The Record">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1063964">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="4f0dafcc1407c214e2caeb81e4cd0d9e"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Skips+on+The+Record"
+            
+            
+                title="Skips on The Record"
+            
+                class=""
+            
+        >Skips on The Record</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-871ac41b-66fc-4081-9df2-0b5fb4a2456e"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Skips+on+The+Record/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-871ac41b-66fc-4081-9df2-0b5fb4a2456e"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-717f4a2e-3f73-44cb-b2ae-f677aca07e94"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Skips+on+The+Record/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-717f4a2e-3f73-44cb-b2ae-f677aca07e94"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Skips+on+The+Record"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Skips+on+The+Record"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="4f0dafcc1407c214e2caeb81e4cd0d9e"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Skips on The Record">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1063964">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Skips on The Record" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                3:07
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Skips+on+The+Record"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="1"
+                    class="chartlist-count-bar-slug"
+                    style="width:6.25%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                1 <span class="stat-name">scrobble</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+        
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                9
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button desktop-playlink
+        
+            js-playlink
+        
+    "
+    href="https://open.spotify.com/track/0Odurz4nWFYuSLtbRwh1zM"
+    target="_blank"
+
+    data-playlink-affiliate="spotify"
+    data-spotify-id="0Odurz4nWFYuSLtbRwh1zM"
+    data-spotify-url="https://open.spotify.com/track/0Odurz4nWFYuSLtbRwh1zM"
+
+    data-track-name="Ticklish"
+    data-track-url="/music/At+the+Drive-In/_/Ticklish"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on Spotify"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="spotify"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+            
+                
+            
+            <a
+                
+    class="
+        chartlist-play-button mobile-playlink
+        
+            js-playlink
+        
+    "
+    href="https://www.youtube.com/watch?v=HgJ2NKA38Os"
+    target="_blank"
+
+    data-playlink-affiliate="youtube"
+    data-youtube-id="HgJ2NKA38Os"
+    data-youtube-url="https://www.youtube.com/watch?v=HgJ2NKA38Os"
+
+    data-track-name="Ticklish"
+    data-track-url="/music/At+the+Drive-In/_/Ticklish"
+    
+        data-artist-name="At the Drive-In"
+        data-artist-url="/music/At+the+Drive-In"
+    
+    title="Play on YouTube"
+    
+    data-analytics-action="PlayTrackOnPage"
+    data-analytics-label="youtube"
+
+    
+
+
+                
+            >
+                
+                    Play track
+                
+            </a>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <a href="/music/At+the+Drive-In/Acrobatic+Tenement" class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </a>
+    
+
+                
+                
+            </td>
+        
+
+        
+            <td class="chartlist-loved">
+                
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="94c153d844a7d28ca6adbf9e8ee44fea"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button chartlist-love-button"
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Ticklish">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1064021">
+                
+            </form>
+        
+    </div>
+
+    
+
+            </td>
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+                
+    
+    
+        
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="94c153d844a7d28ca6adbf9e8ee44fea"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/_/Ticklish"
+            
+            
+                title="Ticklish"
+            
+                class=""
+            
+        >Ticklish</a>
+        </td>
+
+        
+            <td
+                class="chartlist-artist"
+                
+            >
+                
+                
+            </td>
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-52bceb57-ad6b-4d72-afbe-e76bea1a10bc"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/_/Ticklish/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-52bceb57-ad6b-4d72-afbe-e76bea1a10bc"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-cd61c689-5aa9-4469-8af9-ac521774e0ab"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/_/Ticklish/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-cd61c689-5aa9-4469-8af9-ac521774e0ab"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/_/Ticklish"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Ticklish"
+            class="
+                dropdown-menu-clickable-item
+                more-item--track
+            "
+        >
+            
+                
+                    Go to track in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            
+    
+    
+        
+        
+    <div
+        
+    
+        data-toggle-button
+        data-toggle-button-group-id="94c153d844a7d28ca6adbf9e8ee44fea"
+        
+            data-toggle-button-states="[{&#34;name&#34;: &#34;unloved&#34;, &#34;button_text&#34;: &#34;Love this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;love&#34;, &#34;analytics_action&#34;: &#34;LoveTrack&#34;, &#34;event&#34;: &#34;track.love&#34;}, {&#34;name&#34;: &#34;loved&#34;, &#34;button_text&#34;: &#34;Unlove this track&#34;, &#34;url&#34;: &#34;/user/IvanMalison/loved&#34;, &#34;action&#34;: &#34;unlove&#34;, &#34;analytics_action&#34;: &#34;UnloveTrack&#34;, &#34;event&#34;: &#34;track.unlove&#34;}]"
+        
+    
+    data-toggle-button-current-state="unloved"
+
+    >
+        
+            <form
+                action="/user/IvanMalison/loved"
+                method="post"
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+                <button
+                    type="submit"
+                    class="toggle-button 
+                                    dropdown-menu-clickable-item
+                                    chartlist-more-menu-love
+                                "
+                    data-analytics-action="LoveTrack"
+                >
+                    Love this track
+                </button>
+                <input type="hidden" name="action" value="love">
+                
+                    <input type="hidden" name="track" value="Ticklish">
+                
+                    <input type="hidden" name="artist" value="At the Drive-In">
+                
+                    <input type="hidden" name="track_spelling_id" value="1064021">
+                
+            </form>
+        
+    </div>
+
+    
+
+                        </li>
+                    
+
+                    
+                        <li>
+                            
+                                
+    
+        <form
+            method="POST"
+            class=""
+            action="/user/IvanMalison/obsessions"
+            data-submit-to-modal
+        >
+            <input type='hidden' name='csrfmiddlewaretoken' value='rTVQqWz6dgmXcV8jCDV1qteFequgpiYz3ehejgcBdqYKt2serVsUr2x7cs62JLu4' />
+            <input type="hidden" name="name" value="Ticklish" />
+            <input type="hidden" name="artist_name" value="At the Drive-In" />
+            
+            <button class="
+                                        mimic-link
+                                        dropdown-menu-clickable-item
+                                        more-item--obsession
+                                    ">
+                Set track as current obsession
+            </button>
+        </form>
+    
+
+                            
+                        </li>
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get track
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-duration">
+                4:35
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/_/Ticklish"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="16"
+                    data-stat-value="1"
+                    class="chartlist-count-bar-slug"
+                    style="width:6.25%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                1 <span class="stat-name">scrobble</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+        </tbody>
+    </table>
+
+
+    
+    
+
+
+            </div>
+        </section>
+    
+

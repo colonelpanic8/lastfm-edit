@@ -1,0 +1,88 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/One%20Armed%20Scissor
+    headers:
+      upgrade-insecure-requests:
+      - '1'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      accept-language:
+      - en-US,en;q=0.9
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua-platform:
+      - '"Linux"'
+      connection:
+      - keep-alive
+      content-type:
+      - application/octet-stream
+      dnt:
+      - '1'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      cookie:
+      - csrftoken=xok2dHNpf16bE4yF3wEmoL9RGFAlYdUS; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-mobile:
+      - ?0
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+    version: None
+  response:
+    status: 200
+    headers:
+      content-language:
+      - en
+      etag:
+      - W/"083b02c34f369dd69ef102fa0dec2321"
+      x-request-category:
+      - page
+      server:
+      - nginx
+      content-security-policy:
+      - upgrade-insecure-requests;
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-encoding:
+      - gzip
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Wed, 06 Aug 2025 03:57:43 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=xok2dHNpf16bE4yF3wEmoL9RGFAlYdUS; expires=Wed, 05 Aug 2026 03:56:43 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Thu, 06 Aug 2026 03:56:43 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      strict-transport-security:
+      - max-age=300
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/One%20Armed%20Scissor
+      content-type:
+      - text/html; charset=utf-8
+      accept-ranges:
+      - bytes
+      x-served-by:
+      - cache-chi-kigq8000053-CHI, cache-chi-kigq8000053-CHI
+      x-cache:
+      - MISS, MISS
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-cache-hits:
+      - 0, 0
+      x-timer:
+      - S1754452603.802751,VS0,VE1075
+      x-frame-options:
+      - DENY
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/At%20the%20Drive-In/_/One%20Armed%20Scissor
+      date:
+      - Wed, 06 Aug 2025 03:56:43 GMT
+      x-lfm-upstream-type:
+      - PASS
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      cache-control:
+      - max-age=0, must-revalidate
+      x-lfm-cacheable-page:
+      - '0'
+    body_file: resp_001.txt
+    version: None

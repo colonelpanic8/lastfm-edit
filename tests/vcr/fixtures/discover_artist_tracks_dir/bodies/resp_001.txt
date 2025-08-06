@@ -1,0 +1,2728 @@
+
+
+
+
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <table
+        
+        class="
+            chartlist
+            
+            
+                chartlist--with-index
+                chartlist--with-index--length-1
+            
+            
+                chartlist--with-play
+            
+            
+            
+            
+                chartlist--with-image
+            
+            
+            
+            
+            
+                chartlist--with-more
+            
+            
+            
+                chartlist--with-bar
+            
+            
+            
+            
+            
+            
+                chartlist--with-buylinks
+            
+            
+            
+            
+        "
+    >
+        <thead class="sr-only">
+            <tr>
+                
+
+                
+                    
+                    <th>Rank</th>
+                
+
+                
+
+                
+                    
+                    <th>Play</th>
+                
+
+                
+
+                
+                    
+                    <th>
+                        
+                            Artwork
+                        
+                    </th>
+                
+
+                
+
+                <th>
+                    
+                    
+                        Album name
+                    
+                </th>
+
+                
+
+                
+
+                
+                    
+                    <th>Buy</th>
+                
+
+                
+                    
+                    <th>Options</th>
+                
+
+                
+
+                
+
+                
+
+                
+                    
+                    <th>Scrobbles</th>
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+
+                
+            </tr>
+        </thead>
+        <tbody
+                data-playlisting-add-entries
+                
+        >
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+                link-block-basic
+                js-link-block
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+            data-album-row
+            data-edit-album-id="358f5535feadccf9ea3842fe399c05f8"
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                1
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        <button
+            class="
+                chartlist-play-button
+                js-playlink-station
+                desktop-playlink
+            "
+            data-station-url="/player/station/music/At+the+Drive-In/In%2FCasino%2FOut"
+            title="Play album"
+            data-analytics-action="PlayAlbumOnPage"
+            >
+            Play album
+        </button>
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/fe0b326b76fa4bb4cbfaf5d395a0b578.jpg"
+            alt="In/Casino/Out"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+                    
+    <a
+        href="/music/At+the+Drive-In/In%2FCasino%2FOut"
+        
+        class="
+            js-link-block-cover-link
+            link-block-cover-link
+        "
+        tabindex="-1"
+        aria-hidden="true"
+    ></a>
+
+                
+            </td>
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/In%2FCasino%2FOut"
+            
+            
+                title="In/Casino/Out"
+            
+                class="link-block-target"
+            
+        >In/Casino/Out</a>
+        </td>
+
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-f13ba6d1-bc65-4da0-8efb-a11fc2c478b2"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/In%2FCasino%2FOut/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-f13ba6d1-bc65-4da0-8efb-a11fc2c478b2"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-f06dbbae-3017-4b02-aaae-00e4e78ffa23"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/In%2FCasino%2FOut/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-f06dbbae-3017-4b02-aaae-00e4e78ffa23"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                            
+
+    <li>
+        
+            <form
+                method="POST"
+                action="/user/IvanMalison/library/edit-album?edited-variation=library-album-scrobble"
+                data-edit-album
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='8Ci9N0garQ3NkIkLGRobjDPo0EXoMnJNKXExGkTFr0FABPEGv9V4kc8QYGza6Qfi' />
+
+                <input type="hidden" name="album_name" value="In/Casino/Out" />
+                <input type="hidden" name="album_artist_name" value="At the Drive-In" />
+                <input type="hidden" name="album_image" value="None" />
+
+                <input type="hidden" name="album_name_original" value="In/Casino/Out" />
+                <input type="hidden" name="album_artist_name_original" value="At the Drive-In" />
+                <input type="hidden" name="count" value="277" />
+
+                <button
+                    type="submit"
+                    class="
+                        mimic-link
+                        dropdown-menu-clickable-item
+                        more-item--edit-old
+                    "
+                    data-analytics-action="EditScrobbleOpen"
+                >
+                    Edit album
+                </button>
+            </form>
+        
+    </li>
+
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/In%2FCasino%2FOut"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/In%2FCasino%2FOut"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get album
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/In%2FCasino%2FOut"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="277"
+                    data-stat-value="277"
+                    class="chartlist-count-bar-slug"
+                    style="width:100.0%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                277 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+                link-block-basic
+                js-link-block
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+            data-album-row
+            data-edit-album-id="8a355ebd09761a32ead41a4bd186daa4"
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                2
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        <button
+            class="
+                chartlist-play-button
+                js-playlink-station
+                desktop-playlink
+            "
+            data-station-url="/player/station/music/At+the+Drive-In/Relationship+of+Command"
+            title="Play album"
+            data-analytics-action="PlayAlbumOnPage"
+            >
+            Play album
+        </button>
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/7c43868a0a3edd7696edc11d256d5f7e.jpg"
+            alt="Relationship of Command"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+                    
+    <a
+        href="/music/At+the+Drive-In/Relationship+of+Command"
+        
+        class="
+            js-link-block-cover-link
+            link-block-cover-link
+        "
+        tabindex="-1"
+        aria-hidden="true"
+    ></a>
+
+                
+            </td>
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/Relationship+of+Command"
+            
+            
+                title="Relationship of Command"
+            
+                class="link-block-target"
+            
+        >Relationship of Command</a>
+        </td>
+
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-ddbc40b0-90bf-4baa-81c9-18c677866e9d"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/Relationship+of+Command/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-ddbc40b0-90bf-4baa-81c9-18c677866e9d"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-5b10b77d-f980-422e-9b91-d0bf8eab016b"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/Relationship+of+Command/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-5b10b77d-f980-422e-9b91-d0bf8eab016b"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                            
+
+    <li>
+        
+            <form
+                method="POST"
+                action="/user/IvanMalison/library/edit-album?edited-variation=library-album-scrobble"
+                data-edit-album
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='8Ci9N0garQ3NkIkLGRobjDPo0EXoMnJNKXExGkTFr0FABPEGv9V4kc8QYGza6Qfi' />
+
+                <input type="hidden" name="album_name" value="Relationship of Command" />
+                <input type="hidden" name="album_artist_name" value="At the Drive-In" />
+                <input type="hidden" name="album_image" value="None" />
+
+                <input type="hidden" name="album_name_original" value="Relationship of Command" />
+                <input type="hidden" name="album_artist_name_original" value="At the Drive-In" />
+                <input type="hidden" name="count" value="255" />
+
+                <button
+                    type="submit"
+                    class="
+                        mimic-link
+                        dropdown-menu-clickable-item
+                        more-item--edit-old
+                    "
+                    data-analytics-action="EditScrobbleOpen"
+                >
+                    Edit album
+                </button>
+            </form>
+        
+    </li>
+
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/Relationship+of+Command"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Relationship+of+Command"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get album
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Relationship+of+Command"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="277"
+                    data-stat-value="255"
+                    class="chartlist-count-bar-slug"
+                    style="width:92.05776173285199%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                255 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+                link-block-basic
+                js-link-block
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+            data-album-row
+            data-edit-album-id="6fd3154dd548e830f0707f93c540eeda"
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                3
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        <button
+            class="
+                chartlist-play-button
+                js-playlink-station
+                desktop-playlink
+            "
+            data-station-url="/player/station/music/At+the+Drive-In/Vaya"
+            title="Play album"
+            data-analytics-action="PlayAlbumOnPage"
+            >
+            Play album
+        </button>
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/22bd0388dddf4e2f54077a07b9129aa4.jpg"
+            alt="Vaya"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+                    
+    <a
+        href="/music/At+the+Drive-In/Vaya"
+        
+        class="
+            js-link-block-cover-link
+            link-block-cover-link
+        "
+        tabindex="-1"
+        aria-hidden="true"
+    ></a>
+
+                
+            </td>
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/Vaya"
+            
+            
+                title="Vaya"
+            
+                class="link-block-target"
+            
+        >Vaya</a>
+        </td>
+
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-adb4f857-68f1-43b6-8111-e0ef5e7cfc78"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/Vaya/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-adb4f857-68f1-43b6-8111-e0ef5e7cfc78"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-b99bde72-20ca-4a96-9866-a625f42d4a97"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/Vaya/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-b99bde72-20ca-4a96-9866-a625f42d4a97"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                            
+
+    <li>
+        
+            <form
+                method="POST"
+                action="/user/IvanMalison/library/edit-album?edited-variation=library-album-scrobble"
+                data-edit-album
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='8Ci9N0garQ3NkIkLGRobjDPo0EXoMnJNKXExGkTFr0FABPEGv9V4kc8QYGza6Qfi' />
+
+                <input type="hidden" name="album_name" value="Vaya" />
+                <input type="hidden" name="album_artist_name" value="At the Drive-In" />
+                <input type="hidden" name="album_image" value="None" />
+
+                <input type="hidden" name="album_name_original" value="Vaya" />
+                <input type="hidden" name="album_artist_name_original" value="At the Drive-In" />
+                <input type="hidden" name="count" value="183" />
+
+                <button
+                    type="submit"
+                    class="
+                        mimic-link
+                        dropdown-menu-clickable-item
+                        more-item--edit-old
+                    "
+                    data-analytics-action="EditScrobbleOpen"
+                >
+                    Edit album
+                </button>
+            </form>
+        
+    </li>
+
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/Vaya"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Vaya"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get album
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Vaya"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="277"
+                    data-stat-value="183"
+                    class="chartlist-count-bar-slug"
+                    style="width:66.06498194945848%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                183 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+                link-block-basic
+                js-link-block
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+            data-album-row
+            data-edit-album-id="9c36756b1ff1b479a63ac22a8c868b8e"
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                4
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        <button
+            class="
+                chartlist-play-button
+                js-playlink-station
+                desktop-playlink
+            "
+            data-station-url="/player/station/music/At+the+Drive-In/Acrobatic+Tenement"
+            title="Play album"
+            data-analytics-action="PlayAlbumOnPage"
+            >
+            Play album
+        </button>
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/3fcb32948e2e561f2882fc4ed445efcb.jpg"
+            alt="Acrobatic Tenement"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+                    
+    <a
+        href="/music/At+the+Drive-In/Acrobatic+Tenement"
+        
+        class="
+            js-link-block-cover-link
+            link-block-cover-link
+        "
+        tabindex="-1"
+        aria-hidden="true"
+    ></a>
+
+                
+            </td>
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/Acrobatic+Tenement"
+            
+            
+                title="Acrobatic Tenement"
+            
+                class="link-block-target"
+            
+        >Acrobatic Tenement</a>
+        </td>
+
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-2c441cd6-1b45-4660-b5cb-ec1dc532a10e"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/Acrobatic+Tenement/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-2c441cd6-1b45-4660-b5cb-ec1dc532a10e"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-2d1f5a5c-3281-4034-af63-aa7e5eaf67c7"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/Acrobatic+Tenement/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-2d1f5a5c-3281-4034-af63-aa7e5eaf67c7"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                            
+
+    <li>
+        
+            <form
+                method="POST"
+                action="/user/IvanMalison/library/edit-album?edited-variation=library-album-scrobble"
+                data-edit-album
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='8Ci9N0garQ3NkIkLGRobjDPo0EXoMnJNKXExGkTFr0FABPEGv9V4kc8QYGza6Qfi' />
+
+                <input type="hidden" name="album_name" value="Acrobatic Tenement" />
+                <input type="hidden" name="album_artist_name" value="At the Drive-In" />
+                <input type="hidden" name="album_image" value="None" />
+
+                <input type="hidden" name="album_name_original" value="Acrobatic Tenement" />
+                <input type="hidden" name="album_artist_name_original" value="At the Drive-In" />
+                <input type="hidden" name="count" value="42" />
+
+                <button
+                    type="submit"
+                    class="
+                        mimic-link
+                        dropdown-menu-clickable-item
+                        more-item--edit-old
+                    "
+                    data-analytics-action="EditScrobbleOpen"
+                >
+                    Edit album
+                </button>
+            </form>
+        
+    </li>
+
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/Acrobatic+Tenement"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Acrobatic+Tenement"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get album
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Acrobatic+Tenement"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="277"
+                    data-stat-value="42"
+                    class="chartlist-count-bar-slug"
+                    style="width:15.162454873646208%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                42 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+                link-block-basic
+                js-link-block
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+            data-album-row
+            data-edit-album-id="ab7d120df6083afc04623a49eae5adea"
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                5
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        <button
+            class="
+                chartlist-play-button
+                js-playlink-station
+                desktop-playlink
+            "
+            data-station-url="/player/station/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a"
+            title="Play album"
+            data-analytics-action="PlayAlbumOnPage"
+            >
+            Play album
+        </button>
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/0ffc9940ed3bbdbad4472f4ea55e9dd2.jpg"
+            alt="in•ter a•li•a"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+                    
+    <a
+        href="/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a"
+        
+        class="
+            js-link-block-cover-link
+            link-block-cover-link
+        "
+        tabindex="-1"
+        aria-hidden="true"
+    ></a>
+
+                
+            </td>
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a"
+            
+            
+                title="in•ter a•li•a"
+            
+                class="link-block-target"
+            
+        >in•ter a•li•a</a>
+        </td>
+
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-54a5be0e-ee21-4ede-9e46-4701449b2c4e"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-54a5be0e-ee21-4ede-9e46-4701449b2c4e"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-a238b24c-7663-47d4-9dda-ec3ffaf635ee"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-a238b24c-7663-47d4-9dda-ec3ffaf635ee"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                            
+
+    <li>
+        
+            <form
+                method="POST"
+                action="/user/IvanMalison/library/edit-album?edited-variation=library-album-scrobble"
+                data-edit-album
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='8Ci9N0garQ3NkIkLGRobjDPo0EXoMnJNKXExGkTFr0FABPEGv9V4kc8QYGza6Qfi' />
+
+                <input type="hidden" name="album_name" value="in•ter a•li•a" />
+                <input type="hidden" name="album_artist_name" value="At the Drive-In" />
+                <input type="hidden" name="album_image" value="None" />
+
+                <input type="hidden" name="album_name_original" value="in•ter a•li•a" />
+                <input type="hidden" name="album_artist_name_original" value="At the Drive-In" />
+                <input type="hidden" name="count" value="12" />
+
+                <button
+                    type="submit"
+                    class="
+                        mimic-link
+                        dropdown-menu-clickable-item
+                        more-item--edit-old
+                    "
+                    data-analytics-action="EditScrobbleOpen"
+                >
+                    Edit album
+                </button>
+            </form>
+        
+    </li>
+
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get album
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/in%E2%80%A2ter+a%E2%80%A2li%E2%80%A2a"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="277"
+                    data-stat-value="12"
+                    class="chartlist-count-bar-slug"
+                    style="width:4.332129963898916%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                12 <span class="stat-name">scrobbles</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+                
+
+    
+    
+    
+    
+    
+    
+
+    
+
+    
+    
+
+    
+        
+    
+
+    
+
+    
+    
+
+    
+
+    
+
+    
+
+    
+
+    <tr
+        class="
+            chartlist-row
+            
+            
+            
+                chartlist-row--with-buylinks
+            
+            
+            
+                js-focus-controls-container
+            
+            
+            
+                link-block-basic
+                js-link-block
+            
+            
+        "
+
+        data-scrobble-row
+        data-playlist-row
+        data-ajax-form-state
+
+        
+
+        
+
+        
+
+        
+            data-album-row
+            data-edit-album-id="161ba797a43bdbc47c3c113d5fcf639e"
+        
+
+        
+    >
+        
+
+        
+
+        
+            <td class="chartlist-index">
+                6
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-play">
+                
+    
+        
+    
+
+    
+        <button
+            class="
+                chartlist-play-button
+                js-playlink-station
+                desktop-playlink
+            "
+            data-station-url="/player/station/music/At+the+Drive-In/Diamant%C3%A9"
+            title="Play album"
+            data-analytics-action="PlayAlbumOnPage"
+            >
+            Play album
+        </button>
+    
+
+            </td>
+        
+
+        
+
+        
+            <td class="chartlist-image">
+                
+                    
+    
+        
+    
+
+    
+
+    
+
+    
+        <span class="cover-art">
+    
+
+    
+        <img
+            src="https://lastfm.freetls.fastly.net/i/u/64s/fde85cc96c23ebe8cbcfe513f75315c3.jpg"
+            alt="Diamanté"
+            
+            loading="lazy"
+        />
+    
+
+    
+        </span>
+    
+
+                
+                
+                    
+    <a
+        href="/music/At+the+Drive-In/Diamant%C3%A9"
+        
+        class="
+            js-link-block-cover-link
+            link-block-cover-link
+        "
+        tabindex="-1"
+        aria-hidden="true"
+    ></a>
+
+                
+            </td>
+        
+
+        
+
+        <td
+            class="chartlist-name"
+            
+
+            
+        >
+            
+            
+            <a
+            href="/music/At+the+Drive-In/Diamant%C3%A9"
+            
+            
+                title="Diamanté"
+            
+                class="link-block-target"
+            
+        >Diamanté</a>
+        </td>
+
+        
+
+        
+
+        
+            <td
+                
+                    class="chartlist-buylinks focus-control"
+                
+            >
+                <div class="lazy-buylinks ">
+            
+            <button
+                class="
+                    disclose-trigger
+                    lazy-buylinks-toggle
+                "
+                aria-expanded="false"
+                aria-controls="buylinks-77beb7f5-8376-495c-8fdc-51c115555ce0"
+                data-disclose-lazy-buylinks
+                data-lazy-buylink-url="/music/At+the+Drive-In/Diamant%C3%A9/+partial/buylinks"
+                data-dropdown-layout-at="center bottom+3"
+            >Buy</button>
+            <ul
+                id="buylinks-77beb7f5-8376-495c-8fdc-51c115555ce0"
+                class="
+                    disclose-hide
+                    dropdown-menu-clickable
+                    buylinks-dropdown-menu
+                "
+            >
+                <li
+                    class="menu-loading"
+                    data-lazy-buylinks-loading
+                    aria-live="polite"
+                >Loading</li>
+            </ul>
+        </div>
+            </td>
+        
+
+        
+            <td class="chartlist-more focus-control">
+                
+    
+        
+        
+        
+        
+        
+        
+            
+        
+
+        
+            
+            <div>
+                <button
+                    class="
+                        disclose-trigger
+                        chartlist-more-button
+                    "
+                    aria-expanded="false"
+                    aria-controls="chartlist-more-fb96baf6-a4ef-4ade-bc0a-23083c988185"
+                    data-disclose-lazy-buylinks
+                    data-lazy-buylink-url="/music/At+the+Drive-In/Diamant%C3%A9/+partial/buylinks"
+                    data-dropdown-layout-at="center bottom+3"
+                >More</button>
+                <ul
+                    id="chartlist-more-fb96baf6-a4ef-4ade-bc0a-23083c988185"
+                    class="
+                        disclose-hide
+                        disclose-hide--js-only
+                        dropdown-menu-clickable
+                        chartlist-more-menu
+                    "
+                >
+
+                    
+
+                    
+
+                    
+                        
+                        
+                        
+                            
+
+    <li>
+        
+            <form
+                method="POST"
+                action="/user/IvanMalison/library/edit-album?edited-variation=library-album-scrobble"
+                data-edit-album
+            >
+                <input type='hidden' name='csrfmiddlewaretoken' value='8Ci9N0garQ3NkIkLGRobjDPo0EXoMnJNKXExGkTFr0FABPEGv9V4kc8QYGza6Qfi' />
+
+                <input type="hidden" name="album_name" value="Diamanté" />
+                <input type="hidden" name="album_artist_name" value="At the Drive-In" />
+                <input type="hidden" name="album_image" value="None" />
+
+                <input type="hidden" name="album_name_original" value="Diamanté" />
+                <input type="hidden" name="album_artist_name_original" value="At the Drive-In" />
+                <input type="hidden" name="count" value="1" />
+
+                <button
+                    type="submit"
+                    class="
+                        mimic-link
+                        dropdown-menu-clickable-item
+                        more-item--edit-old
+                    "
+                    data-analytics-action="EditScrobbleOpen"
+                >
+                    Edit album
+                </button>
+            </form>
+        
+    </li>
+
+                        
+                        
+    
+        
+    
+    <li>
+        <a
+            href="/music/At+the+Drive-In/Diamant%C3%A9"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album
+                
+            
+        </a>
+    </li>
+
+
+                        
+                            
+    
+        
+    
+    <li>
+        <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Diamant%C3%A9"
+            class="
+                dropdown-menu-clickable-item
+                more-item--album
+            "
+        >
+            
+                
+                    Go to album in library
+                
+            
+        </a>
+    </li>
+
+                        
+
+                        
+
+                        
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+
+                    
+                        <li class="visible-xs">
+                            <span class="menu-title">
+                                
+                                    Get album
+                                
+                            </span>
+                            <ul class="buylinks-dropdown-menu">
+                                <li
+                                    class="menu-loading"
+                                    data-lazy-buylinks-loading
+                                    aria-live="polite"
+                                >Loading</li>
+                            </ul>
+                        </li>
+                    
+                </ul>
+            </div>
+        
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+            <td class="chartlist-bar">
+                
+    
+        <span class="chartlist-count-bar">
+            <a
+            href="/user/IvanMalison/library/music/At+the+Drive-In/Diamant%C3%A9"
+            
+            
+                class="chartlist-count-bar-link"
+            
+        >
+                <span
+                    data-max-stat-value="277"
+                    data-stat-value="1"
+                    class="chartlist-count-bar-slug"
+                    style="width:0.36101083032490977%;"
+                ></span>
+                <span class="chartlist-count-bar-value">
+                    
+        
+            
+                1 <span class="stat-name">scrobble</span>
+            
+        
+    
+                </span>
+            </a>
+        </span>
+    
+
+            </td>
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+    </tr>
+
+            
+        </tbody>
+    </table>
+
+
+
+    
+    
+
+
