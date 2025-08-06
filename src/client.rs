@@ -35,8 +35,8 @@ impl LastFmEditClientImpl {
     /// Detect if the response content indicates a login redirect
     fn is_login_redirect(&self, content: &str) -> bool {
         // Check for common login redirect indicators
-        content.contains("login") 
-            || content.contains("sign in") 
+        content.contains("login")
+            || content.contains("sign in")
             || content.contains("signin")
             || content.contains("Log in to Last.fm")
             || content.contains("Please sign in")
