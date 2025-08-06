@@ -1,0 +1,21 @@
+[package]
+name = "lastfm-edit-python"
+version = "4.0.0"
+edition = "2021"
+description = "Python bindings for lastfm-edit Rust crate"
+license = "MIT"
+repository = "https://github.com/colonelpanic8/lastfm-edit"
+
+[lib]
+name = "lastfm_edit"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "chrono", "serde"] }
+tokio = { version = "1.0", features = ["full"] }
+lastfm-edit = { path = ".." }
+http-client = { version = "^6.6.3", package = "http-client-2", features = ["h1_client"] }
+serde_json = "1.0"
+
+[build-dependencies]
+pyo3-build-config = "0.22"

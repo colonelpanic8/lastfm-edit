@@ -37,6 +37,13 @@
               cargo-edit
               just
 
+              # Python development tools
+              python3
+              python3Packages.pip
+              python3Packages.ipython
+              maturin
+              uv
+
               # For TUI development
               libiconv
             ]

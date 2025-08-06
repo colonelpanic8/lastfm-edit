@@ -133,7 +133,15 @@
       "Bash(LAST_FM_VCR_RECORD=record timeout 30s cargo test --test vcr_tests vcr::recent_scrobbles_iterator::test_recent_tracks_collect_all)",
       "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::recent_scrobbles_iterator::test_recent_tracks_limited_collection)",
       "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::validate_session::test_validate_session)",
-      "Bash(git-fame:*)"
+      "Bash(git-fame:*)",
+      "Bash(maturin build:*)",
+      "Bash(direnv reload:*)",
+      "Bash(pip3 install:*)",
+      "Bash(nix develop:*)",
+      "Bash(chmod:*)",
+      "Bash(uv add:*)",
+      "Bash(uv run:*)",
+      "Bash(maturin develop:*)"
     ],
     "deny": []
   }

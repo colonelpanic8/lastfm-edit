@@ -102,15 +102,15 @@ check-cassettes:
 coverage:
     #!/usr/bin/env bash
     set -euo pipefail
-    
+
     echo "📊 Running code coverage analysis..."
-    
+
     # Check if cargo-tarpaulin is installed
     if ! command -v cargo-tarpaulin &> /dev/null; then
         echo "📦 Installing cargo-tarpaulin..."
         cargo install cargo-tarpaulin
     fi
-    
+
     # Run coverage with tarpaulin, excluding VCR tests which require network
     echo "🧪 Running tests with coverage..."
     cargo tarpaulin \
@@ -119,7 +119,7 @@ coverage:
         --output-dir coverage \
         --exclude-files "tests/vcr/*" \
         --timeout 120
-    
+
     echo "✅ Coverage report generated in coverage/tarpaulin-report.html"
     echo "📂 Open file://$(pwd)/coverage/tarpaulin-report.html to view results"
 
@@ -208,3 +208,6 @@ publish bump_type="patch":
     cargo publish
 
     echo "🎉 Release v$new_version published successfully!"
+
+ipython:
+    python/start_ipython.sh
