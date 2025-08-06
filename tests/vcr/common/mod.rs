@@ -15,23 +15,8 @@ struct VcrTestSetup {
 
 impl VcrTestSetup {
     fn new(test_name: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        // Use directory format for tests that benefit from better duplicate request handling
-        let use_directory_format = matches!(
-            test_name,
-            "artist_tracks"
-                | "artist_tracks_direct"
-                | "help_single_album"
-                | "hey_jude_album"
-                | "now_and_then_album"
-                | "multiple_failing_albums"
-                | "discover_artist_tracks"
-                | "discover_exact_match"
-                | "discover_album_tracks"
-                | "discover_track_variations"
-                | "search"
-                | "recent_tracks"
-                | "beatles_page4"
-        );
+        // Use directory format for all tests
+        let use_directory_format = true;
 
         let cassette_path = if use_directory_format {
             format!("tests/vcr/fixtures/{test_name}_dir")
