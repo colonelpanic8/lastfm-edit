@@ -2,6 +2,8 @@
 
 A Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping.
 
+📚 **[View API Documentation →](https://docs.rs/lastfm-edit/latest/lastfm_edit/trait.LastFmEditClient.html)**
+
 ## Features
 
 - **Authentication**: Login with username/password
@@ -46,14 +48,11 @@ async fn main() -> Result<()> {
 
 ```toml
 [dependencies]
-lastfm-edit = "4.0.0"
+lastfm-edit = "4.0.1"
 http-client = { version = "^6.6.3", package = "http-client-2", features = ["curl_client"] }
 tokio = { version = "1.0", features = ["full"] }
 ```
 
-## Documentation
-
-📚 **See [`LastFmEditClient`] trait documentation for comprehensive API docs and examples.**
 
 ## License
 
