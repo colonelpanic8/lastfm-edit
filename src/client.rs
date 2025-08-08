@@ -484,11 +484,6 @@ impl LastFmEditClientImpl {
             )));
         }
 
-        log::info!(
-            "Discovered {} scrobble instances to edit",
-            discovered_edits.len()
-        );
-
         let mut all_results = Vec::new();
 
         for (index, discovered_edit) in discovered_edits.iter().enumerate() {
