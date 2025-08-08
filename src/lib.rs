@@ -146,67 +146,6 @@
 //! }
 //! ```
 //!
-//! ### Mocking for Testing
-//!
-//! Enable the `mock` feature to use `MockLastFmEditClient` for testing:
-//!
-//! ```toml
-//! [dev-dependencies]
-//! lastfm-edit = { version = "3.1.0", features = ["mock"] }
-//! mockall = "0.13"
-//! ```
-//!
-//! ```rust,ignore
-//! #[cfg(feature = "mock")]
-//! mod tests {
-//!     use lastfm_edit::{LastFmEditClient, MockLastFmEditClient, Result, EditResponse, ScrobbleEdit};
-//!     use mockall::predicate::*;
-//!
-//!     #[tokio::test]
-//!     async fn test_edit_workflow() -> Result<()> {
-//!         let mut mock_client = MockLastFmEditClient::new();
-//!
-//!         // Set up expectations
-//!         mock_client
-//!             .expect_login()
-//!             .with(eq("testuser"), eq("testpass"))
-//!             .times(1)
-//!             .returning(|_, _| Ok(()));
-//!
-//!         mock_client
-//!             .expect_edit_scrobble()
-//!             .times(1)
-//!             .returning(|_| Ok(EditResponse {
-//!                 success: true,
-//!                 message: Some("Edit successful".to_string()),
-//!             }));
-//!
-//!         // Use as trait object
-//!         let client: &dyn LastFmEditClient = &mock_client;
-//!
-//!         client.login("testuser", "testpass").await?;
-//!
-//!         let edit = ScrobbleEdit::new(
-//!             Some("Old Track".to_string()),
-//!             Some("Old Album".to_string()),
-//!             Some("Old Artist".to_string()),
-//!             Some("Old Artist".to_string()),
-//!             "New Track".to_string(),
-//!             "New Album".to_string(),
-//!             "New Artist".to_string(),
-//!             "New Artist".to_string(),
-//!             1640995200,
-//!             false,
-//!         );
-//!
-//!         let response = client.edit_scrobble(&edit).await?;
-//!         assert!(response.success);
-//!
-//!         Ok(())
-//!     }
-//! }
-//! ```
-//!
 //! ## License
 //!
 //! MIT
