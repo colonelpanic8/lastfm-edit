@@ -7,6 +7,7 @@ license = "MIT"
 repository = "https://github.com/colonelpanic8/lastfm-edit"
 homepage = "https://github.com/colonelpanic8/lastfm-edit"
 documentation = "https://docs.rs/lastfm-edit"
+readme = "README.md"
 
 [dependencies]
 # Core dependencies
