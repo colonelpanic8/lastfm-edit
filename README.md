@@ -2,7 +2,7 @@
 
 A Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping.
 
-📚 **[View API Documentation →](https://docs.rs/lastfm-edit/latest/lastfm_edit/trait.LastFmEditClient.html)**
+📚 **[View API Documentation →](https://docs.rs/lastfm-edit/latest/lastfm_edit/trait/trait.LastFmEditClient.html)**
 
 ## Features
 
