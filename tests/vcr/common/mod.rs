@@ -15,22 +15,16 @@ struct VcrTestSetup {
 
 impl VcrTestSetup {
     fn new(test_name: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        // Use directory format for all tests
-        let use_directory_format = true;
-
-        let cassette_path = if use_directory_format {
-            format!("tests/vcr/fixtures/{test_name}_dir")
-        } else {
-            format!("tests/vcr/fixtures/{test_name}.yaml")
-        };
+        // Always use directory format
+        let cassette_path = format!("tests/vcr/fixtures/{test_name}_dir");
 
         // Ensure fixtures directory exists
         if let Some(parent_dir) = std::path::Path::new(&cassette_path).parent() {
             fs::create_dir_all(parent_dir)?;
         }
 
-        // For directory format, ensure the cassette directory itself exists
-        if use_directory_format && !std::path::Path::new(&cassette_path).exists() {
+        // Ensure the cassette directory itself exists
+        if !std::path::Path::new(&cassette_path).exists() {
             fs::create_dir_all(&cassette_path)?;
         }
 
@@ -90,6 +84,7 @@ impl VcrTestSetup {
             let vcr_client = VcrClient::builder(&self.cassette_path)
                 .inner_client(inner_client)
                 .mode(VcrMode::Replay)
+                .format(http_client_vcr::CassetteFormat::Directory)
                 .matcher(Box::new(LastFmEditVcrMatcher::new()))
                 .build()
                 .await?;
@@ -104,6 +99,7 @@ impl VcrTestSetup {
         let mut builder = VcrClient::builder(&self.cassette_path)
             .inner_client(inner_client)
             .mode(self.mode.clone())
+            .format(http_client_vcr::CassetteFormat::Directory)
             .matcher(Box::new(LastFmEditVcrMatcher::new()));
 
         // Add filter chain for Record mode only (Filter mode is handled above)
