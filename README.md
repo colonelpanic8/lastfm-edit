@@ -1,5 +1,10 @@
 # lastfm-edit
 
+[![Crates.io](https://img.shields.io/crates/v/lastfm-edit.svg)](https://crates.io/crates/lastfm-edit)
+[![Documentation](https://docs.rs/lastfm-edit/badge.svg)](https://docs.rs/lastfm-edit)
+[![CI](https://github.com/imalison/lastfm-edit/workflows/CI/badge.svg)](https://github.com/imalison/lastfm-edit/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping.
 
 📚 **[View API Documentation →](https://docs.rs/lastfm-edit/latest/lastfm_edit/trait/trait.LastFmEditClient.html)**
