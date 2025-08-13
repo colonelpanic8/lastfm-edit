@@ -141,7 +141,9 @@
       "Bash(chmod:*)",
       "Bash(uv add:*)",
       "Bash(uv run:*)",
-      "Bash(maturin develop:*)"
+      "Bash(maturin develop:*)",
+      "Bash(LAST_FM_VCR_RECORD=record cargo test --test vcr_tests vcr::album_search_field_swap::test_album_search_field_order -- --nocapture)",
+      "Bash(LAST_FM_VCR_RECORD=1 cargo test --test vcr_tests vcr::album_search_field_swap::test_album_search_field_order -- --nocapture)"
     ],
     "deny": []
   }

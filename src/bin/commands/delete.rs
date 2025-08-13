@@ -1,5 +1,18 @@
 use super::utils::parse_range;
 use lastfm_edit::LastFmEditClientImpl;
+use std::io::{self, Write};
+
+/// Utility function to ask for user confirmation
+fn ask_for_confirmation(message: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    print!("{message} (y/N): ");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    let response = input.trim().to_lowercase();
+    Ok(response == "y" || response == "yes")
+}
 
 /// Handle deletion of scrobbles from recent pages
 pub async fn handle_delete_recent_pages(
@@ -75,6 +88,28 @@ pub async fn handle_delete_recent_pages(
         println!("\n🔍 DRY RUN - No actual deletions performed");
         println!("Use --apply to execute these deletions");
         return Ok(());
+    }
+
+    // Show first and last tracks that will be deleted
+    if !scrobbles_to_delete.is_empty() {
+        println!("\n🎵 Range of tracks to delete:");
+        let first = &scrobbles_to_delete[0];
+        let last = &scrobbles_to_delete[scrobbles_to_delete.len() - 1];
+
+        println!(
+            "  📍 Starting: '{}' by '{}' ({})",
+            first.1, first.0, first.2
+        );
+        if scrobbles_to_delete.len() > 1 {
+            println!("  📍 Ending:   '{}' by '{}' ({})", last.1, last.0, last.2);
+        }
+        println!("  📊 Total tracks: {}", scrobbles_to_delete.len());
+
+        // Ask for confirmation
+        if !ask_for_confirmation("\n❓ Do you want to proceed with deleting these scrobbles?")? {
+            println!("❌ Deletion cancelled by user");
+            return Ok(());
+        }
     }
 
     // Actually delete the scrobbles
@@ -202,6 +237,28 @@ pub async fn handle_delete_timestamp_range(
         println!("\n🔍 DRY RUN - No actual deletions performed");
         println!("Use --apply to execute these deletions");
         return Ok(());
+    }
+
+    // Show first and last tracks that will be deleted
+    if !scrobbles_to_delete.is_empty() {
+        println!("\n🎵 Range of tracks to delete:");
+        let first = &scrobbles_to_delete[0];
+        let last = &scrobbles_to_delete[scrobbles_to_delete.len() - 1];
+
+        println!(
+            "  📍 Starting: '{}' by '{}' ({})",
+            first.1, first.0, first.2
+        );
+        if scrobbles_to_delete.len() > 1 {
+            println!("  📍 Ending:   '{}' by '{}' ({})", last.1, last.0, last.2);
+        }
+        println!("  📊 Total tracks: {}", scrobbles_to_delete.len());
+
+        // Ask for confirmation
+        if !ask_for_confirmation("\n❓ Do you want to proceed with deleting these scrobbles?")? {
+            println!("❌ Deletion cancelled by user");
+            return Ok(());
+        }
     }
 
     // Actually delete the scrobbles
@@ -346,6 +403,47 @@ pub async fn handle_delete_recent_offset(
         println!("\n🔍 DRY RUN - No actual deletions performed");
         println!("Use --apply to execute these deletions");
         return Ok(());
+    }
+
+    // Show first and last tracks that will be deleted
+    if !scrobbles_in_range.is_empty() {
+        println!("\n🎵 Range of tracks to delete:");
+        let first = &scrobbles_in_range[0];
+        let last = &scrobbles_in_range[scrobbles_in_range.len() - 1];
+
+        if let Some(first_timestamp) = first.timestamp {
+            println!(
+                "  📍 Starting (offset {}): '{}' by '{}' ({})",
+                start_offset, first.name, first.artist, first_timestamp
+            );
+        } else {
+            println!(
+                "  📍 Starting (offset {}): '{}' by '{}' (no timestamp)",
+                start_offset, first.name, first.artist
+            );
+        }
+
+        if scrobbles_in_range.len() > 1 {
+            let end_offset_actual = start_offset + (scrobbles_in_range.len() as u64) - 1;
+            if let Some(last_timestamp) = last.timestamp {
+                println!(
+                    "  📍 Ending   (offset {}): '{}' by '{}' ({})",
+                    end_offset_actual, last.name, last.artist, last_timestamp
+                );
+            } else {
+                println!(
+                    "  📍 Ending   (offset {}): '{}' by '{}' (no timestamp)",
+                    end_offset_actual, last.name, last.artist
+                );
+            }
+        }
+        println!("  📊 Total tracks: {}", scrobbles_in_range.len());
+
+        // Ask for confirmation
+        if !ask_for_confirmation("\n❓ Do you want to proceed with deleting these scrobbles?")? {
+            println!("❌ Deletion cancelled by user");
+            return Ok(());
+        }
     }
 
     // Actually delete the scrobbles
