@@ -1,0 +1,90 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/The%20Beatles/+albums?page=1&ajax=true
+    headers:
+      accept-language:
+      - en-US,en;q=0.9
+      sec-ch-ua-platform:
+      - '"Linux"'
+      accept:
+      - '*/*'
+      connection:
+      - keep-alive
+      x-requested-with:
+      - XMLHttpRequest
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      accept-encoding:
+      - gzip, deflate, br
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/The%20Beatles/+albums
+      cookie:
+      - csrftoken=rVl7imeePIcSsWOzHVcrUZcz775VxjSQ; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua-mobile:
+      - ?0
+      dnt:
+      - '1'
+      content-type:
+      - application/octet-stream
+    version: None
+  response:
+    status: 200
+    headers:
+      strict-transport-security:
+      - max-age=300
+      x-served-by:
+      - cache-chi-kigq8000063-CHI, cache-chi-kigq8000154-CHI
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-lfm-cacheable-page:
+      - '0'
+      etag:
+      - W/"793a25b36af77a5e6d01be594d61707c"
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/The%20Beatles/+albums?page=1&ajax=true
+      date:
+      - Thu, 14 Aug 2025 23:23:31 GMT
+      content-language:
+      - en
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/The%20Beatles/+albums?page=1&ajax=true
+      content-security-policy:
+      - upgrade-insecure-requests;
+      cache-control:
+      - max-age=0, must-revalidate
+      content-encoding:
+      - gzip
+      x-cache-hits:
+      - 0, 0
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-request-category:
+      - page
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Thu, 14 Aug 2025 23:24:31 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=rVl7imeePIcSsWOzHVcrUZcz775VxjSQ; expires=Thu, 13 Aug 2026 23:23:31 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Fri, 14 Aug 2026 23:23:31 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      x-cache:
+      - MISS, MISS
+      x-lfm-upstream-type:
+      - PASS
+      via:
+      - 1.1 google, 1.1 varnish, 1.1 varnish
+      x-timer:
+      - S1755213810.363483,VS0,VE860
+      x-frame-options:
+      - DENY
+      accept-ranges:
+      - bytes
+      content-type:
+      - text/html; charset=utf-8
+      server:
+      - nginx
+    body_file: resp_001.txt
+    version: None
