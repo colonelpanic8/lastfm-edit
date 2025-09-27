@@ -246,12 +246,7 @@ impl LastFmEditClientImpl {
         track_name: &str,
         timestamp: u64,
     ) -> Result<bool> {
-        let config = RetryConfig {
-            max_retries: 3,
-            base_delay: 5,
-            max_delay: 300,
-            enabled: true,
-        };
+        let config = self.config.retry.clone();
 
         let artist_name = artist_name.to_string();
         let track_name = track_name.to_string();
@@ -544,12 +539,9 @@ impl LastFmEditClientImpl {
         exact_edit: &ExactScrobbleEdit,
         max_retries: u32,
     ) -> Result<EditResponse> {
-        let config = RetryConfig {
-            max_retries,
-            base_delay: 5,
-            max_delay: 300,
-            enabled: true,
-        };
+        let mut config = self.config.retry.clone();
+        config.max_retries = max_retries;
+        config.enabled = max_retries > 0;
 
         let edit_clone = exact_edit.clone();
         let client = self.clone();
