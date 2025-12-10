@@ -8,28 +8,6 @@ use async_trait::async_trait;
 /// This trait provides a common interface for iterating over paginated data from Last.fm,
 /// such as tracks, albums, and recent scrobbles. All iterators implement efficient streaming
 /// with automatic pagination and built-in rate limiting.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-///
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut tracks = client.artist_tracks("Radiohead");
-///
-/// // Iterate one by one
-/// while let Some(track) = tracks.next().await? {
-///     println!("{}", track.name);
-/// }
-///
-/// // Or collect a limited number
-/// let first_10 = tracks.take(10).await?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait(?Send)]
 pub trait AsyncPaginatedIterator<T> {
@@ -50,20 +28,6 @@ pub trait AsyncPaginatedIterator<T> {
     /// **Warning**: This method will fetch ALL remaining pages, which could be
     /// many thousands of items for large libraries. Use [`take`](Self::take) for
     /// safer bounded collection.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-    /// # tokio_test::block_on(async {
-    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-    /// let mut tracks = client.artist_tracks("Small Artist");
-    /// let all_tracks = tracks.collect_all().await?;
-    /// println!("Found {} tracks total", all_tracks.len());
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// # });
-    /// ```
     async fn collect_all(&mut self) -> Result<Vec<T>> {
         let mut items = Vec::new();
         while let Some(item) = self.next().await? {
@@ -80,20 +44,6 @@ pub trait AsyncPaginatedIterator<T> {
     /// # Arguments
     ///
     /// * `n` - Maximum number of items to collect
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-    /// # tokio_test::block_on(async {
-    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-    /// let mut tracks = client.artist_tracks("Radiohead");
-    /// let top_20 = tracks.take(20).await?;
-    /// println!("Top 20 tracks: {:?}", top_20);
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// # });
-    /// ```
     async fn take(&mut self, n: usize) -> Result<Vec<T>> {
         let mut items = Vec::new();
         for _ in 0..n {
@@ -128,26 +78,6 @@ pub trait AsyncPaginatedIterator<T> {
 ///
 /// The iterator loads albums and their tracks as needed and handles rate limiting
 /// automatically to be respectful to Last.fm's servers.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut tracks = client.artist_tracks("The Beatles");
-///
-/// // Get the top 5 tracks with album information
-/// let top_tracks = tracks.take(5).await?;
-/// for track in top_tracks {
-///     let album = track.album.as_deref().unwrap_or("Unknown Album");
-///     println!("{} [{}] (played {} times)", track.name, album, track.playcount);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct ArtistTracksIterator<C: LastFmEditClient> {
     client: C,
     artist: String,
@@ -262,25 +192,6 @@ impl<C: LastFmEditClient + Clone> ArtistTracksIterator<C> {
 /// `/user/{username}/library/music/{artist}/+tracks` endpoint with pagination.
 /// This is more efficient than the album-based approach as it doesn't need to
 /// iterate through albums first.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut tracks = client.artist_tracks_direct("The Beatles");
-///
-/// // Get the first 10 tracks directly from the paginated endpoint
-/// let first_10_tracks = tracks.take(10).await?;
-/// for track in first_10_tracks {
-///     println!("{} (played {} times)", track.name, track.playcount);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct ArtistTracksDirectIterator<C: LastFmEditClient> {
     client: C,
     artist: String,
@@ -374,24 +285,6 @@ impl<C: LastFmEditClient> ArtistTracksDirectIterator<C> {
 ///
 /// This iterator provides paginated access to all albums by a specific artist
 /// in the authenticated user's Last.fm library, ordered by play count.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut albums = client.artist_albums("Pink Floyd");
-///
-/// // Get all albums (be careful with large discographies!)
-/// while let Some(album) = albums.next().await? {
-///     println!("{} (played {} times)", album.name, album.playcount);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct ArtistAlbumsIterator<C: LastFmEditClient> {
     client: C,
     artist: String,
@@ -472,30 +365,6 @@ impl<C: LastFmEditClient> ArtistAlbumsIterator<C> {
 /// This iterator provides access to the user's recent listening history with timestamps,
 /// which is essential for finding tracks that can be edited. It supports optional
 /// timestamp-based filtering to avoid reprocessing old data.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// // Get recent tracks with timestamps
-/// let mut recent = client.recent_tracks();
-/// while let Some(track) = recent.next().await? {
-///     if let Some(timestamp) = track.timestamp {
-///         println!("{} - {} ({})", track.artist, track.name, timestamp);
-///     }
-/// }
-///
-/// // Or stop at a specific timestamp to avoid reprocessing
-/// let last_processed = 1640995200;
-/// let mut recent = lastfm_edit::RecentTracksIterator::new(client).with_stop_timestamp(last_processed);
-/// let new_tracks = recent.collect_all().await?;
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct RecentTracksIterator<C: LastFmEditClient> {
     client: C,
     current_page: u32,
@@ -571,21 +440,6 @@ impl<C: LastFmEditClient> RecentTracksIterator<C> {
     ///
     /// * `client` - The LastFmEditClient to use for API calls
     /// * `starting_page` - The page number to start from (1-indexed)
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-    /// # tokio_test::block_on(async {
-    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-    ///
-    /// // Start from page 5
-    /// let mut recent = client.recent_tracks_from_page(5);
-    /// let tracks = recent.take(10).await?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// # });
-    /// ```
     pub fn with_starting_page(client: C, starting_page: u32) -> Self {
         let page = std::cmp::max(1, starting_page);
         Self {
@@ -606,21 +460,6 @@ impl<C: LastFmEditClient> RecentTracksIterator<C> {
     /// # Arguments
     ///
     /// * `timestamp` - Unix timestamp to stop at
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-    /// # tokio_test::block_on(async {
-    /// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-    /// let last_processed = 1640995200; // Some previous timestamp
-    ///
-    /// let mut recent = lastfm_edit::RecentTracksIterator::new(client).with_stop_timestamp(last_processed);
-    /// let new_tracks = recent.collect_all().await?; // Only gets new tracks
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// # });
-    /// ```
     pub fn with_stop_timestamp(mut self, timestamp: u64) -> Self {
         self.stop_at_timestamp = Some(timestamp);
         self
@@ -632,24 +471,6 @@ impl<C: LastFmEditClient> RecentTracksIterator<C> {
 /// This iterator provides access to all tracks in a specific album by an artist
 /// in the authenticated user's Last.fm library. Unlike paginated iterators,
 /// this loads tracks once and iterates through them.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut tracks = client.album_tracks("The Dark Side of the Moon", "Pink Floyd");
-///
-/// // Get all tracks in the album
-/// while let Some(track) = tracks.next().await? {
-///     println!("{} - {}", track.name, track.artist);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct AlbumTracksIterator<C: LastFmEditClient> {
     client: C,
     album_name: String,
@@ -686,7 +507,7 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for AlbumTracksIterator<
                     self.album_name,
                     self.artist_name
                 );
-                log::debug!("Full TrackPage for empty album: has_next_page={}, page_number={}, total_pages={:?}", 
+                log::debug!("Full TrackPage for empty album: has_next_page={}, page_number={}, total_pages={:?}",
                            tracks_page.has_next_page, tracks_page.page_number, tracks_page.total_pages);
             }
             self.tracks = Some(tracks_page.tracks);
@@ -731,24 +552,6 @@ impl<C: LastFmEditClient> AlbumTracksIterator<C> {
 ///
 /// This iterator provides paginated access to tracks that match a search query
 /// in the authenticated user's Last.fm library, using Last.fm's built-in search functionality.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut search_results = client.search_tracks("remaster");
-///
-/// // Get first 20 search results
-/// while let Some(track) = search_results.next().await? {
-///     println!("{} - {} (played {} times)", track.artist, track.name, track.playcount);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct SearchTracksIterator<C: LastFmEditClient> {
     client: C,
     query: String,
@@ -847,23 +650,6 @@ impl<C: LastFmEditClient> SearchTracksIterator<C> {
 /// in the authenticated user's Last.fm library, using Last.fm's built-in search functionality.
 ///
 /// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut search_results = client.search_albums("deluxe");
-///
-/// // Get first 10 search results
-/// let top_10 = search_results.take(10).await?;
-/// for album in top_10 {
-///     println!("{} - {} (played {} times)", album.artist, album.name, album.playcount);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct SearchAlbumsIterator<C: LastFmEditClient> {
     client: C,
     query: String,
@@ -965,25 +751,6 @@ impl<C: LastFmEditClient> SearchAlbumsIterator<C> {
 /// This iterator provides access to all artists in the authenticated user's Last.fm library,
 /// sorted by play count (highest first). The iterator loads artists as needed and handles
 /// rate limiting automatically to be respectful to Last.fm's servers.
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, LastFmEditSession, AsyncPaginatedIterator};
-/// # tokio_test::block_on(async {
-/// # let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-/// let mut client = LastFmEditClientImpl::from_session(Box::new(http_client::native::NativeClient::new()), test_session);
-///
-/// let mut artists = client.artists();
-///
-/// // Get the top 10 artists
-/// let top_artists = artists.take(10).await?;
-/// for artist in top_artists {
-///     println!("{} ({} plays)", artist.name, artist.playcount);
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # });
-/// ```
 pub struct ArtistsIterator<C: LastFmEditClient> {
     client: C,
     current_page: u32,
