@@ -246,6 +246,12 @@ impl LastFmEditClientImpl {
         track_name: &str,
         timestamp: u64,
     ) -> Result<bool> {
+        if !self.config.retry.enabled {
+            return self
+                .delete_scrobble_impl(artist_name, track_name, timestamp)
+                .await;
+        }
+
         let config = self.config.retry.clone();
 
         let artist_name = artist_name.to_string();
@@ -539,9 +545,26 @@ impl LastFmEditClientImpl {
         exact_edit: &ExactScrobbleEdit,
         max_retries: u32,
     ) -> Result<EditResponse> {
+        // Skip retry if disabled in config or max_retries is 0
+        if !self.config.retry.enabled || max_retries == 0 {
+            return match self.edit_scrobble_impl(exact_edit).await {
+                Ok(success) => Ok(EditResponse::single(
+                    success,
+                    None,
+                    None,
+                    exact_edit.clone(),
+                )),
+                Err(error) => Ok(EditResponse::single(
+                    false,
+                    Some(error.to_string()),
+                    None,
+                    exact_edit.clone(),
+                )),
+            };
+        }
+
         let mut config = self.config.retry.clone();
         config.max_retries = max_retries;
-        config.enabled = max_retries > 0;
 
         let edit_clone = exact_edit.clone();
         let client = self.clone();
@@ -979,7 +1002,32 @@ impl LastFmEditClientImpl {
     }
 
     pub async fn get(&self, url: &str) -> Result<Response> {
-        self.get_with_retry(url).await
+        if self.config.retry.enabled {
+            self.get_with_retry(url).await
+        } else {
+            self.get_without_retry(url).await
+        }
+    }
+
+    async fn get_without_retry(&self, url: &str) -> Result<Response> {
+        let mut response = self.get_with_redirects(url, 0).await?;
+
+        let body = self.extract_response_body(url, &mut response).await?;
+
+        if response.status().is_success() && self.is_rate_limit_response(&body) {
+            log::debug!("Response body contains rate limit patterns");
+            return Err(LastFmError::RateLimit { retry_after: 60 });
+        }
+
+        let mut new_response = http_types::Response::new(response.status());
+        for (name, values) in response.iter() {
+            for value in values {
+                let _ = new_response.insert_header(name.clone(), value.clone());
+            }
+        }
+        new_response.set_body(body);
+
+        Ok(new_response)
     }
 
     async fn get_with_retry(&self, url: &str) -> Result<Response> {
@@ -991,28 +1039,7 @@ impl LastFmEditClientImpl {
         let retry_result = retry::retry_with_backoff(
             config,
             &format!("GET {url}"),
-            || async {
-                let mut response = client.get_with_redirects(&url_string, 0).await?;
-
-                let body = client
-                    .extract_response_body(&url_string, &mut response)
-                    .await?;
-
-                if response.status().is_success() && client.is_rate_limit_response(&body) {
-                    log::debug!("Response body contains rate limit patterns");
-                    return Err(LastFmError::RateLimit { retry_after: 60 });
-                }
-
-                let mut new_response = http_types::Response::new(response.status());
-                for (name, values) in response.iter() {
-                    for value in values {
-                        let _ = new_response.insert_header(name.clone(), value.clone());
-                    }
-                }
-                new_response.set_body(body);
-
-                Ok(new_response)
-            },
+            || client.get_without_retry(&url_string),
             |delay, rate_limit_timestamp, operation_name| {
                 self.broadcast_event(ClientEvent::RateLimited {
                     delay_seconds: delay,
