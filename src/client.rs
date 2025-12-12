@@ -830,7 +830,6 @@ impl LastFmEditClientImpl {
         expected_artist: &str,
         unique_albums: &mut std::collections::HashSet<(String, String)>,
     ) -> Result<Vec<ExactScrobbleEdit>> {
-        let mut scrobble_edits = Vec::new();
         let table_selector =
             Selector::parse("table.chartlist:not(.chartlist__placeholder)").unwrap();
         let table = document.select(&table_selector).next().ok_or_else(|| {
@@ -838,64 +837,83 @@ impl LastFmEditClientImpl {
         })?;
 
         let row_selector = Selector::parse("tr").unwrap();
-        for row in table.select(&row_selector) {
-            let count_bar_link_selector = Selector::parse(".chartlist-count-bar-link").unwrap();
-            if row.select(&count_bar_link_selector).next().is_some() {
-                log::debug!("Found count bar link, skipping aggregated row");
-                continue;
-            }
-
-            let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
-            if let Some(form) = row.select(&form_selector).next() {
-                let extract_form_value = |name: &str| -> Option<String> {
-                    let selector = Selector::parse(&format!("input[name='{name}']")).unwrap();
-                    form.select(&selector)
-                        .next()
-                        .and_then(|input| input.value().attr("value"))
-                        .map(|s| s.to_string())
-                };
-
-                let form_track = extract_form_value("track_name").unwrap_or_default();
-                let form_artist = extract_form_value("artist_name").unwrap_or_default();
-                let form_album = extract_form_value("album_name").unwrap_or_default();
-                let form_album_artist =
-                    extract_form_value("album_artist_name").unwrap_or_else(|| form_artist.clone());
-                let form_timestamp = extract_form_value("timestamp").unwrap_or_default();
-
-                if form_track == expected_track && form_artist == expected_artist {
-                    let album_key = (form_album.clone(), form_album_artist.clone());
-                    if unique_albums.insert(album_key) {
-                        let timestamp = if form_timestamp.is_empty() {
-                            None
-                        } else {
-                            form_timestamp.parse::<u64>().ok()
-                        };
-
-                        if let Some(timestamp) = timestamp {
-                            let scrobble_edit = ExactScrobbleEdit::new(
-                                form_track.clone(),
-                                form_album.clone(),
-                                form_artist.clone(),
-                                form_album_artist.clone(),
-                                form_track,
-                                form_album,
-                                form_artist,
-                                form_album_artist,
-                                timestamp,
-                                true,
-                            );
-                            scrobble_edits.push(scrobble_edit);
-                        } else {
-                            log::warn!(
-                                "⚠️ Skipping form without valid timestamp: '{form_album}' by '{form_album_artist}'"
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        let scrobble_edits = table
+            .select(&row_selector)
+            .filter_map(|row| {
+                Self::extract_scrobble_edit_from_row(
+                    row,
+                    expected_track,
+                    expected_artist,
+                    unique_albums,
+                )
+            })
+            .collect();
 
         Ok(scrobble_edits)
+    }
+
+    fn extract_scrobble_edit_from_row(
+        row: scraper::ElementRef,
+        expected_track: &str,
+        expected_artist: &str,
+        unique_albums: &mut std::collections::HashSet<(String, String)>,
+    ) -> Option<ExactScrobbleEdit> {
+        let count_bar_link_selector = Selector::parse(".chartlist-count-bar-link").unwrap();
+        if row.select(&count_bar_link_selector).next().is_some() {
+            log::debug!("Found count bar link, skipping aggregated row");
+            return None;
+        }
+
+        let form_selector = Selector::parse("form[data-edit-scrobble]").unwrap();
+        let form = row.select(&form_selector).next()?;
+
+        let extract_form_value = |name: &str| -> Option<String> {
+            let selector = Selector::parse(&format!("input[name='{name}']")).unwrap();
+            form.select(&selector)
+                .next()
+                .and_then(|input| input.value().attr("value"))
+                .map(|s| s.to_string())
+        };
+
+        let form_track = extract_form_value("track_name").unwrap_or_default();
+        let form_artist = extract_form_value("artist_name").unwrap_or_default();
+
+        if form_track != expected_track || form_artist != expected_artist {
+            return None;
+        }
+
+        let form_album = extract_form_value("album_name").unwrap_or_default();
+        let form_album_artist =
+            extract_form_value("album_artist_name").unwrap_or_else(|| form_artist.clone());
+
+        let album_key = (form_album.clone(), form_album_artist.clone());
+        if !unique_albums.insert(album_key) {
+            return None;
+        }
+
+        let form_timestamp = extract_form_value("timestamp").unwrap_or_default();
+        let timestamp: u64 = match form_timestamp.parse() {
+            Ok(ts) => ts,
+            Err(_) => {
+                log::warn!(
+                    "⚠️ Skipping form without valid timestamp: '{form_album}' by '{form_album_artist}'"
+                );
+                return None;
+            }
+        };
+
+        Some(ExactScrobbleEdit::new(
+            form_track.clone(),
+            form_album.clone(),
+            form_artist.clone(),
+            form_album_artist.clone(),
+            form_track,
+            form_album,
+            form_artist,
+            form_album_artist,
+            timestamp,
+            true,
+        ))
     }
 
     pub async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
