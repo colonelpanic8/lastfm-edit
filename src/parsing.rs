@@ -435,6 +435,60 @@ impl LastFmParser {
         Ok(albums)
     }
 
+    /// Parse artist search results from AJAX response
+    ///
+    /// This parses the HTML returned by `/user/{username}/library/artists/search?ajax=1&query={query}`
+    /// which contains chartlist tables with artist results.
+    pub fn parse_artist_search_results(&self, document: &Html) -> Result<Vec<Artist>> {
+        let mut artists = Vec::new();
+
+        // Search results use the same chartlist structure as library pages
+        let table_selector = Selector::parse("table.chartlist").unwrap();
+        let row_selector = Selector::parse("tbody tr").unwrap();
+
+        let tables: Vec<_> = document.select(&table_selector).collect();
+        log::debug!(
+            "Found {} chartlist tables in artist search results",
+            tables.len()
+        );
+
+        for table in tables {
+            for row in table.select(&row_selector) {
+                if let Ok(artist) = self.parse_search_artist_row(&row) {
+                    artists.push(artist);
+                }
+            }
+        }
+
+        log::debug!("Parsed {} artists from search results", artists.len());
+        Ok(artists)
+    }
+
+    /// Parse a single artist row from search results
+    fn parse_search_artist_row(&self, row: &scraper::ElementRef) -> Result<Artist> {
+        // Extract artist name from the name column
+        let name_selector = Selector::parse("td.chartlist-name a").unwrap();
+        let name = row
+            .select(&name_selector)
+            .next()
+            .ok_or(LastFmError::Parse(
+                "Missing artist name in search results".to_string(),
+            ))?
+            .text()
+            .collect::<String>()
+            .trim()
+            .to_string();
+
+        // Extract playcount from the count bar
+        let playcount = self.extract_playcount_from_row(row);
+
+        Ok(Artist {
+            name,
+            playcount,
+            timestamp: None, // Search results don't have timestamps
+        })
+    }
+
     /// Parse a single track row from search results
     fn parse_search_track_row(&self, row: &scraper::ElementRef) -> Result<Track> {
         // Extract track name using the standard chartlist structure

@@ -103,14 +103,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match try_restore_most_recent_session(args.json).await {
             Some(client) => {
                 if !args.json {
-                    println!("✅ Restored most recent session");
+                    eprintln!("✅ Restored most recent session");
                 }
                 client
             }
             None => {
                 // No valid session found, prompt for credentials
                 if !args.json {
-                    println!("🔐 No valid saved session found. Please provide credentials:");
+                    eprintln!("🔐 No valid saved session found. Please provide credentials:");
                 }
                 let (prompted_username, prompted_password) = prompt_for_credentials();
                 log::info!("🔐 Using username: {prompted_username}");

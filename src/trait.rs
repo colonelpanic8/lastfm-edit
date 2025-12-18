@@ -230,6 +230,21 @@ pub trait LastFmEditClient {
     /// Returns a `SearchAlbumsIterator` for streaming search results.
     fn search_albums(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Album>>;
 
+    /// Create an iterator for searching artists in the user's library.
+    ///
+    /// This returns an iterator that uses Last.fm's library search functionality
+    /// to find artists matching the provided query string. The iterator handles
+    /// pagination automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., artist name, partial match, etc.)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `SearchArtistsIterator` for streaming search results.
+    fn search_artists(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Artist>>;
+
     // =============================================================================
     // SEARCH METHODS - Library search functionality
     // =============================================================================
@@ -265,6 +280,22 @@ pub trait LastFmEditClient {
     ///
     /// Returns an `AlbumPage` containing the search results with pagination information.
     async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage>;
+
+    /// Get a single page of artist search results from the user's library.
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of artists that match the provided query string.
+    /// For iterator-based access, use [`search_artists`](Self::search_artists) instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., artist name, partial match, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ArtistPage` containing the search results with pagination information.
+    async fn search_artists_page(&self, query: &str, page: u32) -> Result<crate::ArtistPage>;
 
     // =============================================================================
     // CORE DATA METHODS - Essential data access

@@ -5,10 +5,10 @@ use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
 use crate::retry;
 use crate::types::{
-    AlbumPage, ClientConfig, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit,
-    LastFmEditSession, LastFmError, OperationalDelayConfig, RateLimitConfig, RateLimitType,
-    RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster, SingleEditResponse, Track,
-    TrackPage,
+    AlbumPage, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver, EditResponse,
+    ExactScrobbleEdit, LastFmEditSession, LastFmError, OperationalDelayConfig, RateLimitConfig,
+    RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
+    SingleEditResponse, Track, TrackPage,
 };
 use crate::Result;
 use async_trait::async_trait;
@@ -1432,6 +1432,45 @@ impl LastFmEditClientImpl {
         })
     }
 
+    pub async fn search_artists_page(&self, query: &str, page: u32) -> Result<ArtistPage> {
+        let url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library/artists/search?page={}&query={}&ajax=1",
+                session.base_url,
+                session.username,
+                page,
+                urlencoding::encode(query)
+            )
+        };
+
+        log::debug!("Searching artists for query '{query}' on page {page}");
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!(
+            "Artist search response: {} status, {} chars",
+            response.status(),
+            content.len()
+        );
+
+        let document = Html::parse_document(&content);
+        let artists = self.parser.parse_artist_search_results(&document)?;
+
+        // For search results, we need to determine pagination differently
+        let (has_next_page, total_pages) = self.parser.parse_pagination(&document, page)?;
+
+        Ok(ArtistPage {
+            artists,
+            page_number: page,
+            has_next_page,
+            total_pages,
+        })
+    }
+
     /// Expose the inner HTTP client for advanced use cases like VCR cassette management
     pub fn inner_client(&self) -> Arc<dyn HttpClient + Send + Sync> {
         self.client.clone()
@@ -1600,12 +1639,23 @@ impl LastFmEditClient for LastFmEditClientImpl {
         ))
     }
 
+    fn search_artists(&self, query: &str) -> Box<dyn crate::AsyncPaginatedIterator<crate::Artist>> {
+        Box::new(crate::SearchArtistsIterator::new(
+            self.clone(),
+            query.to_string(),
+        ))
+    }
+
     async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage> {
         self.search_tracks_page(query, page).await
     }
 
     async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage> {
         self.search_albums_page(query, page).await
+    }
+
+    async fn search_artists_page(&self, query: &str, page: u32) -> Result<crate::ArtistPage> {
+        self.search_artists_page(query, page).await
     }
 
     async fn validate_session(&self) -> bool {

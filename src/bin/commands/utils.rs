@@ -2,10 +2,10 @@ use lastfm_edit::{LastFmEditClientImpl, SessionPersistence};
 use std::env;
 use std::io::{self, Write};
 
-/// Print to stdout in normal mode, suppress in JSON mode
+/// Print to stderr in normal mode, suppress in JSON mode
 fn output_message(json_mode: bool, message: &str) {
     if !json_mode {
-        println!("{message}");
+        eprintln!("{message}");
     }
     // In JSON mode, suppress all session messages completely
 }

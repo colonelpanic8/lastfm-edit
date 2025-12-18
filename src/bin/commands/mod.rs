@@ -17,6 +17,8 @@ pub enum SearchType {
     Tracks,
     /// Search for albums
     Albums,
+    /// Search for artists
+    Artists,
 }
 
 #[derive(Subcommand)]
@@ -307,11 +309,11 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Search tracks and albums in your library
+    /// Search tracks, albums, and artists in your library
     ///
-    /// This command allows you to search through your Last.fm library for tracks or albums
-    /// that match a specific query. You can limit the number of results and specify whether
-    /// to search for tracks or albums.
+    /// This command allows you to search through your Last.fm library for tracks, albums,
+    /// or artists that match a specific query. You can limit the number of results and
+    /// specify the type of search.
     ///
     /// Usage examples:
     /// # Search for tracks containing "remaster"
@@ -320,13 +322,16 @@ pub enum Commands {
     /// # Search for first 20 albums containing "deluxe"
     /// lastfm-edit search albums "deluxe" --limit 20
     ///
+    /// # Search for artists matching "radio"
+    /// lastfm-edit search artists "radio" --limit 10
+    ///
     /// # Search for tracks with unlimited results
     /// lastfm-edit search tracks "live" --limit 0
     ///
     /// # Skip first 10 results and show next 20
     /// lastfm-edit search tracks "live" --offset 10 --limit 20
     Search {
-        /// Type of search: tracks or albums
+        /// Type of search: tracks, albums, or artists
         #[arg(value_enum)]
         search_type: SearchType,
 

@@ -27,6 +27,7 @@ pub async fn handle_search_command(
     let search_type_str = match search_type {
         SearchType::Tracks => "tracks",
         SearchType::Albums => "albums",
+        SearchType::Artists => "artists",
     };
 
     // Emit start event
@@ -133,6 +134,61 @@ pub async fn handle_search_command(
                 handler.handle_event(SearchEvent::AlbumFound {
                     index: display_number,
                     album,
+                });
+
+                if should_limit && displayed_count >= limit {
+                    break;
+                }
+            }
+
+            if displayed_count == 0 {
+                handler.handle_event(SearchEvent::NoResults {
+                    search_type: search_type_str.to_string(),
+                    query: query.to_string(),
+                });
+            } else {
+                handler.handle_event(SearchEvent::Summary {
+                    search_type: search_type_str.to_string(),
+                    query: query.to_string(),
+                    total_displayed: displayed_count,
+                    offset,
+                    limit,
+                });
+            }
+        }
+
+        SearchType::Artists => {
+            // Create iterator starting from the calculated page
+            let mut search_iterator = if starting_page > 1 {
+                Box::new(lastfm_edit::SearchArtistsIterator::with_starting_page(
+                    client.clone(),
+                    query.to_string(),
+                    starting_page as u32,
+                ))
+            } else {
+                client.search_artists(query)
+            };
+
+            let mut total_count = 0;
+            let mut displayed_count = 0;
+            let should_limit = limit > 0;
+
+            // Process results incrementally
+            while let Some(artist) = search_iterator.next().await? {
+                total_count += 1;
+
+                // Skip items until we reach the desired within-page offset
+                if total_count <= within_page_offset {
+                    continue;
+                }
+
+                displayed_count += 1;
+                let display_number = offset + displayed_count;
+
+                // Emit artist found event
+                handler.handle_event(SearchEvent::ArtistFound {
+                    index: display_number,
+                    artist,
                 });
 
                 if should_limit && displayed_count >= limit {

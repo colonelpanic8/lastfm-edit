@@ -1,4 +1,4 @@
-use lastfm_edit::{Album, Track};
+use lastfm_edit::{Album, Artist, Track};
 use serde::{Deserialize, Serialize};
 
 /// Events emitted by search commands
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub enum SearchEvent {
     /// Starting to search for items
     Started {
-        search_type: String, // "tracks" or "albums"
+        search_type: String, // "tracks", "albums", or "artists"
         query: String,
         offset: usize,
         limit: usize,
@@ -16,6 +16,8 @@ pub enum SearchEvent {
     TrackFound { index: usize, track: Track },
     /// Found an album in search results
     AlbumFound { index: usize, album: Album },
+    /// Found an artist in search results
+    ArtistFound { index: usize, artist: Artist },
     /// Search completed with summary
     Summary {
         search_type: String,
@@ -35,18 +37,13 @@ pub trait SearchOutputHandler {
     fn handle_event(&mut self, event: SearchEvent);
 }
 
-/// Human-readable output handler for search commands
-pub struct HumanReadableSearchHandler {
-    details: bool,
-    found_any: bool,
-}
+/// Default output handler for search commands
+/// Status messages go to stderr, results go to stdout as JSON (one per line)
+pub struct HumanReadableSearchHandler;
 
 impl HumanReadableSearchHandler {
-    pub fn new(details: bool) -> Self {
-        Self {
-            details,
-            found_any: false,
-        }
+    pub fn new(_details: bool) -> Self {
+        Self
     }
 }
 
@@ -60,66 +57,29 @@ impl SearchOutputHandler for HumanReadableSearchHandler {
                 ..
             } => {
                 if offset > 0 {
-                    println!(
-                        "🔍 Searching for {} containing '{}' (starting from #{})...",
+                    eprintln!(
+                        "Searching for {} containing '{}' (starting from #{})...",
                         search_type,
                         query,
                         offset + 1
                     );
                 } else {
-                    println!("🔍 Searching for {search_type} containing '{query}'...");
+                    eprintln!("Searching for {search_type} containing '{query}'...");
                 }
             }
-            SearchEvent::TrackFound { index, track } => {
-                // Add blank line before first result
-                if !self.found_any {
-                    self.found_any = true;
-                    println!();
-                }
-
-                if self.details {
-                    println!(
-                        "{}. {} - {} (played {} time{})",
-                        index,
-                        track.artist,
-                        track.name,
-                        track.playcount,
-                        if track.playcount == 1 { "" } else { "s" }
-                    );
-
-                    if let Some(album) = &track.album {
-                        println!("   Album: {album}");
-                    }
-
-                    if let Some(album_artist) = &track.album_artist {
-                        if album_artist != &track.artist {
-                            println!("   Album Artist: {album_artist}");
-                        }
-                    }
-                    println!(); // Blank line between verbose entries
-                } else {
-                    println!("{}. {} - {}", index, track.artist, track.name);
+            SearchEvent::TrackFound { track, .. } => {
+                if let Ok(json) = serde_json::to_string(&track) {
+                    println!("{json}");
                 }
             }
-            SearchEvent::AlbumFound { index, album } => {
-                // Add blank line before first result
-                if !self.found_any {
-                    self.found_any = true;
-                    println!();
+            SearchEvent::AlbumFound { album, .. } => {
+                if let Ok(json) = serde_json::to_string(&album) {
+                    println!("{json}");
                 }
-
-                if self.details {
-                    println!(
-                        "{}. {} - {} (played {} time{})",
-                        index,
-                        album.artist,
-                        album.name,
-                        album.playcount,
-                        if album.playcount == 1 { "" } else { "s" }
-                    );
-                    println!(); // Blank line between verbose entries
-                } else {
-                    println!("{}. {} - {}", index, album.artist, album.name);
+            }
+            SearchEvent::ArtistFound { artist, .. } => {
+                if let Ok(json) = serde_json::to_string(&artist) {
+                    println!("{json}");
                 }
             }
             SearchEvent::Summary {
@@ -128,30 +88,27 @@ impl SearchOutputHandler for HumanReadableSearchHandler {
                 limit,
                 ..
             } => {
-                println!(
-                    "✅ Displayed {} result{}",
-                    total_displayed,
-                    if total_displayed == 1 { "" } else { "s" }
-                );
+                eprintln!("Displayed {total_displayed} result(s)");
 
                 if offset > 0 {
-                    println!("   (Starting from result #{})", offset + 1);
+                    eprintln!("  (Starting from result #{})", offset + 1);
                 }
                 if limit > 0 && total_displayed >= limit {
-                    println!("   (Limited to {limit} results)");
+                    eprintln!("  (Limited to {limit} results)");
                 }
             }
             SearchEvent::NoResults { query, .. } => {
-                println!("❌ No results found matching '{query}'");
+                eprintln!("No results found matching '{query}'");
             }
             SearchEvent::Finished { .. } => {
-                // Nothing needed for human-readable output - summary already printed
+                // Nothing needed - summary already printed
             }
         }
     }
 }
 
-/// JSON output handler for search commands (JSONL format)
+/// JSON output handler for search commands (full event stream)
+/// Outputs all events as JSON to stderr, results to stdout
 pub struct JsonSearchHandler;
 
 impl JsonSearchHandler {
@@ -162,11 +119,32 @@ impl JsonSearchHandler {
 
 impl SearchOutputHandler for JsonSearchHandler {
     fn handle_event(&mut self, event: SearchEvent) {
-        // Output each event as a single line of JSON
-        if let Ok(json) = serde_json::to_string(&event) {
-            println!("{json}");
-        } else {
-            eprintln!("❌ Failed to serialize event to JSON");
+        match &event {
+            // Status messages go to stderr as JSON
+            SearchEvent::Started { .. }
+            | SearchEvent::Summary { .. }
+            | SearchEvent::NoResults { .. }
+            | SearchEvent::Finished { .. } => {
+                if let Ok(json) = serde_json::to_string(&event) {
+                    eprintln!("{json}");
+                }
+            }
+            // Results go to stdout (just the item)
+            SearchEvent::TrackFound { track, .. } => {
+                if let Ok(json) = serde_json::to_string(track) {
+                    println!("{json}");
+                }
+            }
+            SearchEvent::AlbumFound { album, .. } => {
+                if let Ok(json) = serde_json::to_string(album) {
+                    println!("{json}");
+                }
+            }
+            SearchEvent::ArtistFound { artist, .. } => {
+                if let Ok(json) = serde_json::to_string(artist) {
+                    println!("{json}");
+                }
+            }
         }
     }
 }
