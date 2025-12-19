@@ -66,15 +66,14 @@
           '';
         };
 
-        # Optional: Define the package itself
-        packages.scrobble-scrubber = pkgs.rustPlatform.buildRustPackage {
-          pname = "scrobble-scrubber";
-          version = "0.1.0";
+        packages.lastfm-edit = pkgs.rustPlatform.buildRustPackage {
+          pname = "lastfm-edit";
+          version = "4.1.0";
 
-          src = ./scrobble-scrubber;
+          src = ./.;
 
           cargoLock = {
-            lockFile = ./scrobble-scrubber/Cargo.lock;
+            lockFile = ./Cargo.lock;
           };
 
           nativeBuildInputs = with pkgs; [
@@ -84,6 +83,7 @@
           buildInputs = with pkgs;
             [
               openssl
+              curl
             ]
             ++ lib.optionals stdenv.isDarwin [
               darwin.apple_sdk.frameworks.Security
@@ -92,9 +92,12 @@
             ];
 
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+
+          # Skip tests in nix build (some tests require filesystem access)
+          doCheck = false;
         };
 
-        packages.default = self.packages.${system}.scrobble-scrubber;
+        packages.default = self.packages.${system}.lastfm-edit;
       }
     );
 }
