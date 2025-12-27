@@ -2,14 +2,6 @@ use lastfm_edit::{LastFmEditClientImpl, SessionPersistence};
 use std::env;
 use std::io::{self, Write};
 
-/// Print to stderr in normal mode, suppress in JSON mode
-fn output_message(json_mode: bool, message: &str) {
-    if !json_mode {
-        eprintln!("{message}");
-    }
-    // In JSON mode, suppress all session messages completely
-}
-
 /// Load existing session or create a new client with fresh login.
 ///
 /// This function implements the session management logic:
@@ -20,36 +12,32 @@ fn output_message(json_mode: bool, message: &str) {
 pub async fn load_or_create_client(
     username: &str,
     password: &str,
-    json_mode: bool,
 ) -> Result<LastFmEditClientImpl, Box<dyn std::error::Error>> {
     // Check if we have a saved session
     if SessionPersistence::session_exists(username) {
-        output_message(
-            json_mode,
-            &format!("📁 Found existing session for user '{username}', attempting to restore..."),
-        );
+        log::info!("Found existing session for user '{username}', attempting to restore...");
 
         match SessionPersistence::load_session(username) {
             Ok(session) => {
-                output_message(json_mode, "📥 Session loaded successfully");
+                log::info!("Session loaded successfully");
 
                 // Create client with loaded session
                 let http_client = http_client::native::NativeClient::new();
                 let client = LastFmEditClientImpl::from_session(Box::new(http_client), session);
 
                 // Validate the session
-                output_message(json_mode, "🔍 Validating session...");
+                log::info!("Validating session...");
                 if client.validate_session().await {
-                    output_message(json_mode, "✅ Session is valid, using saved session");
+                    log::info!("Session is valid, using saved session");
                     return Ok(client);
                 } else {
-                    output_message(json_mode, "❌ Session is invalid or expired");
+                    log::warn!("Session is invalid or expired");
                     // Remove invalid session file
                     let _ = SessionPersistence::remove_session(username);
                 }
             }
             Err(e) => {
-                output_message(json_mode, &format!("❌ Failed to load session: {e}"));
+                log::warn!("Failed to load session: {e}");
                 // Remove corrupted session file
                 let _ = SessionPersistence::remove_session(username);
             }
@@ -57,26 +45,20 @@ pub async fn load_or_create_client(
     }
 
     // No valid session found, perform fresh login
-    output_message(
-        json_mode,
-        "🔐 No valid session found, performing fresh login...",
-    );
+    log::info!("No valid session found, performing fresh login...");
     let http_client = http_client::native::NativeClient::new();
     let client =
         LastFmEditClientImpl::login_with_credentials(Box::new(http_client), username, password)
             .await?;
 
     // Save the new session
-    output_message(json_mode, "💾 Saving session for future use...");
+    log::info!("Saving session for future use...");
     let session = client.get_session();
     if let Err(e) = SessionPersistence::save_session(&session) {
-        output_message(
-            json_mode,
-            &format!("⚠️  Warning: Failed to save session: {e}"),
-        );
-        output_message(json_mode, "   (You'll need to login again next time)");
+        log::warn!("Failed to save session: {e}");
+        log::warn!("You'll need to login again next time");
     } else {
-        output_message(json_mode, "✅ Session saved successfully");
+        log::info!("Session saved successfully");
     }
 
     Ok(client)
@@ -89,31 +71,6 @@ pub fn get_credentials() -> Result<(String, String), Box<dyn std::error::Error>>
     let password = env::var("LASTFM_EDIT_PASSWORD")
         .map_err(|_| "LASTFM_EDIT_PASSWORD environment variable not set")?;
     Ok((username, password))
-}
-
-/// Format a Unix timestamp into a human-readable string
-pub fn format_timestamp(timestamp: u64) -> String {
-    // This is a simple formatter - in a full implementation you might want to use chrono
-    // For now, just show it as "X seconds ago" or the raw timestamp
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    if timestamp <= now {
-        let ago = now - timestamp;
-        if ago < 60 {
-            format!("{ago} seconds ago")
-        } else if ago < 3600 {
-            format!("{} minutes ago", ago / 60)
-        } else if ago < 86400 {
-            format!("{} hours ago", ago / 3600)
-        } else {
-            format!("{} days ago", ago / 86400)
-        }
-    } else {
-        format!("{timestamp} (future timestamp)")
-    }
 }
 
 /// Parse a range string like "1-3" or "1640995200-1641000000"
@@ -150,7 +107,7 @@ pub fn parse_range(
 ///
 /// This function looks for all saved sessions and attempts to restore the most recent valid one.
 /// Returns Some(client) if a valid session was found and restored, None otherwise.
-pub async fn try_restore_most_recent_session(json_mode: bool) -> Option<LastFmEditClientImpl> {
+pub async fn try_restore_most_recent_session() -> Option<LastFmEditClientImpl> {
     // Get list of all saved users
     let saved_users = match SessionPersistence::list_saved_users() {
         Ok(users) => users,
@@ -164,41 +121,29 @@ pub async fn try_restore_most_recent_session(json_mode: bool) -> Option<LastFmEd
     // Try each saved user session, starting with the first one found
     // In a more sophisticated implementation, we could sort by last modified time
     for username in saved_users {
-        output_message(
-            json_mode,
-            &format!("📁 Attempting to restore session for user '{username}'..."),
-        );
+        log::info!("Attempting to restore session for user '{username}'...");
 
         match SessionPersistence::load_session(&username) {
             Ok(session) => {
-                output_message(json_mode, "📥 Session loaded successfully");
+                log::info!("Session loaded successfully");
 
                 // Create client with loaded session
                 let http_client = http_client::native::NativeClient::new();
                 let client = LastFmEditClientImpl::from_session(Box::new(http_client), session);
 
                 // Validate the session
-                output_message(json_mode, "🔍 Validating session...");
+                log::info!("Validating session...");
                 if client.validate_session().await {
-                    output_message(
-                        json_mode,
-                        &format!("✅ Session is valid for user '{username}'"),
-                    );
+                    log::info!("Session is valid for user '{username}'");
                     return Some(client);
                 } else {
-                    output_message(
-                        json_mode,
-                        &format!("❌ Session is invalid or expired for user '{username}'"),
-                    );
+                    log::warn!("Session is invalid or expired for user '{username}'");
                     // Remove invalid session file
                     let _ = SessionPersistence::remove_session(&username);
                 }
             }
             Err(e) => {
-                output_message(
-                    json_mode,
-                    &format!("❌ Failed to load session for user '{username}': {e}"),
-                );
+                log::warn!("Failed to load session for user '{username}': {e}");
                 // Remove corrupted session file
                 let _ = SessionPersistence::remove_session(&username);
             }

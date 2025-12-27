@@ -8,7 +8,7 @@ pub mod show;
 pub mod show_output;
 pub mod utils;
 
-use clap::{arg, Subcommand, ValueEnum};
+use clap::{Subcommand, ValueEnum};
 use lastfm_edit::LastFmEditClientImpl;
 
 #[derive(ValueEnum, Clone)]
@@ -26,45 +26,31 @@ pub enum ListCommands {
     /// List all artists in your library
     ///
     /// This command lists all artists in your Last.fm library, sorted by play count
-    /// (highest first). Shows artist names and scrobble counts.
+    /// (highest first). Outputs JSON with artist names and scrobble counts.
     ///
     /// Usage examples:
     /// # List all artists
     /// lastfm-edit list artists
     ///
-    /// # List first 20 artists with play counts
-    /// lastfm-edit list artists --limit 20 --details
-    ///
-    /// # List artists with formatted display
-    /// lastfm-edit list artists --format
+    /// # List first 20 artists
+    /// lastfm-edit list artists --limit 20
     Artists {
         /// Maximum number of artists to show (0 for no limit)
         #[arg(long, default_value = "0")]
         limit: usize,
-
-        /// Show additional details like play counts
-        #[arg(long)]
-        details: bool,
-
-        /// Show formatted output
-        #[arg(long)]
-        format: bool,
     },
 
     /// List albums for an artist
     ///
     /// This command lists all albums in your library for a specified artist.
-    /// The albums are sorted by play count (highest first).
+    /// The albums are sorted by play count (highest first). Outputs JSON.
     ///
     /// Usage examples:
     /// # List all albums for The Beatles
     /// lastfm-edit list albums "The Beatles"
     ///
-    /// # List first 10 albums with play counts
-    /// lastfm-edit list albums "Radiohead" --limit 10 --details
-    ///
-    /// # List albums with formatted display (Artist - Album Name)
-    /// lastfm-edit list albums "The Beatles" --format
+    /// # List first 10 albums
+    /// lastfm-edit list albums "Radiohead" --limit 10
     Albums {
         /// Artist name
         artist: String,
@@ -72,14 +58,6 @@ pub enum ListCommands {
         /// Maximum number of albums to show (0 for no limit)
         #[arg(long, default_value = "0")]
         limit: usize,
-
-        /// Show additional details like play counts
-        #[arg(long)]
-        details: bool,
-
-        /// Show formatted output (Artist - Album/Track Name [Album Name])
-        #[arg(long)]
-        format: bool,
     },
 
     /// List all tracks for an artist with album information (album-based iteration)
@@ -93,11 +71,8 @@ pub enum ListCommands {
     /// # List all tracks for The Beatles with album info
     /// lastfm-edit list tracks "The Beatles"
     ///
-    /// # List first 20 tracks with play counts and details
-    /// lastfm-edit list tracks "Radiohead" --limit 20 --details
-    ///
-    /// # List tracks with formatted display (Artist - Track Name [Album Name])
-    /// lastfm-edit list tracks "The Beatles" --format
+    /// # List first 20 tracks
+    /// lastfm-edit list tracks "Radiohead" --limit 20
     Tracks {
         /// Artist name
         artist: String,
@@ -105,14 +80,6 @@ pub enum ListCommands {
         /// Maximum number of tracks to show (0 for no limit)
         #[arg(long, default_value = "0")]
         limit: usize,
-
-        /// Show additional details like play counts and album artist
-        #[arg(long)]
-        details: bool,
-
-        /// Show formatted output (Artist - Track Name [Album Name])
-        #[arg(long)]
-        format: bool,
     },
 
     /// List all tracks for an artist using direct track iteration
@@ -127,7 +94,7 @@ pub enum ListCommands {
     /// lastfm-edit list tracks-direct "The Beatles"
     ///
     /// # Compare with regular tracks command to find missing tracks
-    /// lastfm-edit list tracks-direct "The Beatles" --limit 20 --details
+    /// lastfm-edit list tracks-direct "The Beatles" --limit 20
     TracksDirect {
         /// Artist name
         artist: String,
@@ -135,14 +102,6 @@ pub enum ListCommands {
         /// Maximum number of tracks to show (0 for no limit)
         #[arg(long, default_value = "0")]
         limit: usize,
-
-        /// Show additional details like play counts and album artist
-        #[arg(long)]
-        details: bool,
-
-        /// Show formatted output (Artist - Track Name [Album Name])
-        #[arg(long)]
-        format: bool,
     },
 
     /// List tracks organized by album for an artist
@@ -154,11 +113,8 @@ pub enum ListCommands {
     /// # List all tracks by album for The Beatles
     /// lastfm-edit list tracks-by-album "The Beatles"
     ///
-    /// # List tracks for first 5 albums with play counts
-    /// lastfm-edit list tracks-by-album "Pink Floyd" --limit 5 --details
-    ///
-    /// # List tracks with formatted display (Artist - Track Name [Album Name])
-    /// lastfm-edit list tracks-by-album "The Beatles" --format
+    /// # List tracks for first 5 albums
+    /// lastfm-edit list tracks-by-album "Pink Floyd" --limit 5
     TracksByAlbum {
         /// Artist name
         artist: String,
@@ -166,14 +122,6 @@ pub enum ListCommands {
         /// Maximum number of albums to show (0 for no limit)
         #[arg(long, default_value = "0")]
         limit: usize,
-
-        /// Show additional details like play counts
-        #[arg(long)]
-        details: bool,
-
-        /// Show formatted output (Artist - Album/Track Name [Album Name])
-        #[arg(long)]
-        format: bool,
     },
 
     /// List tracks for a specific album
@@ -184,23 +132,12 @@ pub enum ListCommands {
     /// Usage examples:
     /// # List all tracks for AC/DC's "Back in Black" album
     /// lastfm-edit list album-tracks "Back in Black" "AC/DC"
-    ///
-    /// # List tracks with details and formatted output
-    /// lastfm-edit list album-tracks "The Dark Side of the Moon" "Pink Floyd" --details --format
     AlbumTracks {
         /// Album name
         album: String,
 
         /// Artist name
         artist: String,
-
-        /// Show additional details like play counts
-        #[arg(long)]
-        details: bool,
-
-        /// Show formatted output (Artist - Track Name [Album Name])
-        #[arg(long)]
-        format: bool,
     },
 }
 
@@ -313,7 +250,7 @@ pub enum Commands {
     ///
     /// This command allows you to search through your Last.fm library for tracks, albums,
     /// or artists that match a specific query. You can limit the number of results and
-    /// specify the type of search.
+    /// specify the type of search. Outputs JSON.
     ///
     /// Usage examples:
     /// # Search for tracks containing "remaster"
@@ -345,10 +282,6 @@ pub enum Commands {
         /// Number of results to skip from the beginning (0-indexed)
         #[arg(long, default_value = "0")]
         offset: usize,
-
-        /// Show additional details like play counts
-        #[arg(long)]
-        details: bool,
     },
 
     /// Show scrobble details for specific offsets
@@ -394,7 +327,6 @@ pub enum Commands {
 pub async fn execute_command(
     command: Commands,
     client: &LastFmEditClientImpl,
-    json_output: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match command {
         Commands::Edit {
@@ -459,97 +391,32 @@ pub async fn execute_command(
             query,
             limit,
             offset,
-            details,
-        } => {
-            search::handle_search_command(
-                client,
-                search_type,
-                &query,
-                limit,
-                offset,
-                details,
-                json_output,
-            )
-            .await
-        }
+        } => search::handle_search_command(client, search_type, &query, limit, offset).await,
 
         Commands::Show { offsets } => {
             if offsets.is_empty() {
                 return Err("Must specify at least one offset to show".into());
             }
 
-            show::handle_show_scrobbles(client, &offsets, json_output).await
+            show::handle_show_scrobbles(client, &offsets).await
         }
 
         Commands::List { command } => match command {
-            ListCommands::Artists {
-                limit,
-                details,
-                format,
-            } => list::handle_list_artists(client, limit, details, format, json_output).await,
-            ListCommands::Albums {
-                artist,
-                limit,
-                details,
-                format,
-            } => {
-                list::handle_list_albums(client, &artist, limit, details, format, json_output).await
+            ListCommands::Artists { limit } => list::handle_list_artists(client, limit).await,
+            ListCommands::Albums { artist, limit } => {
+                list::handle_list_albums(client, &artist, limit).await
             }
-            ListCommands::Tracks {
-                artist,
-                limit,
-                details,
-                format,
-            } => {
-                list::handle_list_tracks(client, &artist, limit, details, format, json_output).await
+            ListCommands::Tracks { artist, limit } => {
+                list::handle_list_tracks(client, &artist, limit).await
             }
-            ListCommands::TracksDirect {
-                artist,
-                limit,
-                details,
-                format,
-            } => {
-                list::handle_list_tracks_direct(
-                    client,
-                    &artist,
-                    limit,
-                    details,
-                    format,
-                    json_output,
-                )
-                .await
+            ListCommands::TracksDirect { artist, limit } => {
+                list::handle_list_tracks_direct(client, &artist, limit).await
             }
-            ListCommands::TracksByAlbum {
-                artist,
-                limit,
-                details,
-                format,
-            } => {
-                list::handle_list_tracks_by_album(
-                    client,
-                    &artist,
-                    limit,
-                    details,
-                    format,
-                    json_output,
-                )
-                .await
+            ListCommands::TracksByAlbum { artist, limit } => {
+                list::handle_list_tracks_by_album(client, &artist, limit).await
             }
-            ListCommands::AlbumTracks {
-                album,
-                artist,
-                details,
-                format,
-            } => {
-                list::handle_list_album_tracks(
-                    client,
-                    &album,
-                    &artist,
-                    details,
-                    format,
-                    json_output,
-                )
-                .await
+            ListCommands::AlbumTracks { album, artist } => {
+                list::handle_list_album_tracks(client, &album, &artist).await
             }
         },
     }

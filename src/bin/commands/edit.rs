@@ -1,4 +1,44 @@
-use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
+use lastfm_edit::{ExactScrobbleEdit, LastFmEditClient, LastFmEditClientImpl, ScrobbleEdit};
+use serde::{Deserialize, Serialize};
+
+/// Events emitted by edit commands (JSON output to stdout)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum EditEvent {
+    /// Found a scrobble variation to edit
+    VariationFound {
+        index: usize,
+        variation: ExactScrobbleEdit,
+    },
+    /// Edit was applied successfully
+    EditApplied {
+        index: usize,
+        variation: ExactScrobbleEdit,
+        success: bool,
+        message: Option<String>,
+    },
+    /// Dry run - would have edited this
+    DryRunVariation {
+        index: usize,
+        variation: ExactScrobbleEdit,
+    },
+    /// Summary of edit operation
+    Summary {
+        total_found: usize,
+        successful_edits: usize,
+        failed_edits: usize,
+        dry_run: bool,
+    },
+}
+
+/// Output an edit event as JSON to stdout
+fn output_event(event: &EditEvent) {
+    if let Ok(json) = serde_json::to_string(event) {
+        println!("{json}");
+    } else {
+        log::error!("Failed to serialize event to JSON");
+    }
+}
 
 /// Create a ScrobbleEdit from command line arguments
 #[allow(clippy::too_many_arguments)]
@@ -37,11 +77,7 @@ pub async fn handle_edit_command(
     edit: &ScrobbleEdit,
     dry_run: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Show the ScrobbleEdit that will be sent
-    println!("\n📦 ScrobbleEdit to be sent:");
-    println!("{edit:#?}");
-
-    // Discover and apply/show variations
+    log::info!("Edit request: {edit:?}");
     discover_and_handle_edits(client, edit, dry_run).await
 }
 
@@ -50,45 +86,31 @@ async fn discover_and_handle_edits(
     edit: &ScrobbleEdit,
     dry_run: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n🔍 Discovering scrobble edit variations...");
+    log::info!("Discovering scrobble edit variations...");
 
-    // Use the discovery iterator for incremental results
     let mut discovery_iterator = client.discover_scrobbles(edit.clone());
-    let mut discovered_edits = Vec::new();
-    let mut edit_results = Vec::new();
     let mut count = 0;
     let mut successful_edits = 0;
     let mut failed_edits = 0;
 
-    // Process results incrementally
     while let Some(discovered_edit) = discovery_iterator.next().await? {
         count += 1;
-        println!("\n  {count}. Found scrobble:");
-        println!("     Track: '{}'", discovered_edit.track_name_original);
-        println!("     Album: '{}'", discovered_edit.album_name_original);
-        println!("     Artist: '{}'", discovered_edit.artist_name_original);
-        println!(
-            "     Album Artist: '{}'",
-            discovered_edit.album_artist_name_original
-        );
-        println!("     Timestamp: {}", discovered_edit.timestamp);
 
-        // Show what this would change to
-        println!("     Would change to:");
-        println!("       Track: '{}'", discovered_edit.track_name);
-        println!("       Album: '{}'", discovered_edit.album_name);
-        println!("       Artist: '{}'", discovered_edit.artist_name);
-        println!(
-            "       Album Artist: '{}'",
-            discovered_edit.album_artist_name
+        log::debug!(
+            "Found variation {}: '{}' by '{}' on '{}'",
+            count,
+            discovered_edit.track_name_original,
+            discovered_edit.artist_name_original,
+            discovered_edit.album_name_original
         );
 
         if dry_run {
-            println!("     DRY RUN - proceeding without submitting edit");
-            discovered_edits.push(discovered_edit);
+            output_event(&EditEvent::DryRunVariation {
+                index: count,
+                variation: discovered_edit.clone(),
+            });
         } else {
-            // Apply edit immediately
-            println!("     🔄 Applying edit...");
+            log::info!("Applying edit {count}...");
 
             // Apply the user's changes to create the final exact edit
             let mut final_edit = discovered_edit.clone();
@@ -106,66 +128,65 @@ async fn discover_and_handle_edits(
 
             match client.edit_scrobble_single(&final_edit, 3).await {
                 Ok(response) => {
-                    if response.all_successful() {
+                    let success = response.all_successful();
+                    let message = if success {
+                        None
+                    } else {
+                        Some(response.summary_message())
+                    };
+
+                    if success {
                         successful_edits += 1;
-                        println!("     ✅ Edit applied successfully!");
+                        log::info!("Edit {count} applied successfully");
                     } else {
                         failed_edits += 1;
-                        println!("     ❌ Edit failed: {}", response.summary_message());
+                        log::warn!("Edit {} failed: {}", count, response.summary_message());
                     }
-                    edit_results.push(response);
+
+                    output_event(&EditEvent::EditApplied {
+                        index: count,
+                        variation: discovered_edit.clone(),
+                        success,
+                        message,
+                    });
                 }
                 Err(e) => {
                     failed_edits += 1;
-                    println!("     ❌ Error applying edit: {e}");
+                    log::error!("Error applying edit {count}: {e}");
+
+                    output_event(&EditEvent::EditApplied {
+                        index: count,
+                        variation: discovered_edit.clone(),
+                        success: false,
+                        message: Some(e.to_string()),
+                    });
                 }
             }
         }
     }
 
     if count == 0 {
-        println!("No matching scrobbles found. This might mean:");
-        println!("  - The specified metadata is not in your recent scrobbles");
-        println!("  - The names don't match exactly");
-        println!("  - There's a network or parsing issue");
-        return Ok(());
+        log::info!("No matching scrobbles found");
+        log::info!("This might mean:");
+        log::info!("  - The specified metadata is not in your recent scrobbles");
+        log::info!("  - The names don't match exactly");
+        log::info!("  - There's a network or parsing issue");
     }
 
-    println!("\n📊 Summary:");
-    println!("  Total variations found: {count}");
+    output_event(&EditEvent::Summary {
+        total_found: count,
+        successful_edits,
+        failed_edits,
+        dry_run,
+    });
 
     if dry_run {
-        // Group by unique original metadata combinations for dry run summary
-        let mut unique_tracks = std::collections::HashSet::new();
-        let mut unique_albums = std::collections::HashSet::new();
-
-        for edit in &discovered_edits {
-            unique_tracks.insert(&edit.track_name_original);
-            unique_albums.insert(&edit.album_name_original);
-        }
-
-        println!("  Unique tracks: {}", unique_tracks.len());
-        println!("  Unique albums: {}", unique_albums.len());
-        println!("\n🔍 DRY RUN - No actual edits performed");
-        println!("Use --apply to execute these edits");
+        log::info!("DRY RUN - Found {count} variation(s), no edits performed");
+        log::info!("Use --apply to execute these edits");
     } else {
-        println!("  Successful edits: {successful_edits}");
-        println!("  Failed edits: {failed_edits}");
-
-        if successful_edits > 0 {
-            println!("\n✅ Edit session completed!");
-        } else if failed_edits > 0 {
-            println!("\n❌ All edits failed!");
-        }
-
-        if failed_edits > 0 {
-            println!("\n⚠️  Failed edit details:");
-            for (i, response) in edit_results.iter().enumerate() {
-                if !response.all_successful() {
-                    println!("    {}: {}", i + 1, response.summary_message());
-                }
-            }
-        }
+        log::info!(
+            "Edit complete: {successful_edits} successful, {failed_edits} failed out of {count} total"
+        );
     }
 
     Ok(())

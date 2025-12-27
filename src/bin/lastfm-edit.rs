@@ -15,9 +15,14 @@ use commands::{
     long_about = None
 )]
 struct Cli {
+    /// Decrease verbosity level (use multiple times for less verbose output)
+    /// Default is info level. -q: warn only, -qq: error only, -qqq: off
+    #[arg(short, long, action = clap::ArgAction::Count, global = true)]
+    quiet: u8,
+
     /// Increase verbosity level (use multiple times for more verbose output)
-    /// -v: info for lastfm-edit, -vv: debug for lastfm-edit, -vvv: trace for lastfm-edit
-    /// -vvvv: trace for lastfm-edit + info for all, -vvvvv: trace for lastfm-edit + debug for all, -vvvvvv: trace for all
+    /// -v: debug for lastfm-edit, -vv: trace for lastfm-edit, -vvv: trace for lastfm-edit + info for all
+    /// -vvvv: trace for lastfm-edit + debug for all, -vvvvv: trace for all
     #[arg(short, long, action = clap::ArgAction::Count, global = true)]
     verbose: u8,
 
@@ -29,10 +34,6 @@ struct Cli {
     #[arg(short, long, global = true)]
     password: Option<String>,
 
-    /// Output results in JSON format instead of human-readable text
-    #[arg(long, global = true)]
-    json: bool,
-
     #[command(subcommand)]
     command: Commands,
 }
@@ -41,55 +42,66 @@ struct Cli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
 
-    // Configure logging based on verbosity level (cumulative)
+    // Configure logging based on verbosity level
+    // Default is Info for lastfm-edit, Warn for everything else
+    // -q decreases verbosity, -v increases it
     let mut builder = env_logger::Builder::from_default_env();
-    builder.filter_level(LevelFilter::Off); // Start with everything off
 
-    match args.verbose {
-        0 => {
-            // Default: only warnings and errors for all
+    // Calculate effective verbosity: positive = more verbose, negative = less verbose
+    let effective_level = args.verbose as i8 - args.quiet as i8;
+
+    match effective_level {
+        i8::MIN..=-3 => {
+            // -qqq or more: completely silent
+            builder.filter_level(LevelFilter::Off);
+        }
+        -2 => {
+            // -qq: errors only
+            builder.filter_level(LevelFilter::Error);
+        }
+        -1 => {
+            // -q: warnings only
             builder.filter_level(LevelFilter::Warn);
         }
-        1 => {
-            // Info for lastfm-edit
+        0 => {
+            // Default: info for lastfm-edit, warn for others
+            builder.filter_level(LevelFilter::Warn);
             builder.filter_module("lastfm_edit", LevelFilter::Info);
         }
-        2 => {
-            // Info + Debug for lastfm-edit
+        1 => {
+            // -v: debug for lastfm-edit
+            builder.filter_level(LevelFilter::Warn);
             builder.filter_module("lastfm_edit", LevelFilter::Debug);
         }
+        2 => {
+            // -vv: trace for lastfm-edit
+            builder.filter_level(LevelFilter::Warn);
+            builder.filter_module("lastfm_edit", LevelFilter::Trace);
+        }
         3 => {
-            // Info + Debug + Trace for lastfm-edit
+            // -vvv: trace for lastfm-edit + info for all others
+            builder.filter_level(LevelFilter::Info);
             builder.filter_module("lastfm_edit", LevelFilter::Trace);
         }
         4 => {
-            // Trace for lastfm-edit + Info for all others
-            builder.filter_module("lastfm_edit", LevelFilter::Trace);
-            builder.filter_level(LevelFilter::Info);
-        }
-        5 => {
-            // Trace for lastfm-edit + Debug for all others
-            builder.filter_module("lastfm_edit", LevelFilter::Trace);
+            // -vvvv: trace for lastfm-edit + debug for all others
             builder.filter_level(LevelFilter::Debug);
+            builder.filter_module("lastfm_edit", LevelFilter::Trace);
         }
         _ => {
-            // Trace for everything (6+)
+            // -vvvvv or more: trace for everything
             builder.filter_level(LevelFilter::Trace);
         }
     }
 
     builder.init();
 
-    if args.verbose > 0 {
-        log::info!("🔍 Verbose mode enabled (level {})", args.verbose);
-    }
-
     // Try to get credentials from command line args or environment first
     let (username, password) = if let (Some(u), Some(p)) = (&args.username, &args.password) {
         (Some(u.clone()), Some(p.clone()))
     } else if args.username.is_some() || args.password.is_some() {
-        eprintln!("❌ Error: Both username and password must be provided together");
-        eprintln!("Either provide both --username and --password, or set environment variables");
+        log::error!("Both username and password must be provided together");
+        log::error!("Either provide both --username and --password, or set environment variables");
         std::process::exit(1);
     } else {
         match get_credentials() {
@@ -100,26 +112,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // First, try to restore the most recent session if no credentials were provided
     let client = if username.is_none() && password.is_none() {
-        match try_restore_most_recent_session(args.json).await {
+        match try_restore_most_recent_session().await {
             Some(client) => {
-                if !args.json {
-                    eprintln!("✅ Restored most recent session");
-                }
+                log::info!("Restored most recent session");
                 client
             }
             None => {
                 // No valid session found, prompt for credentials
-                if !args.json {
-                    eprintln!("🔐 No valid saved session found. Please provide credentials:");
-                }
+                log::info!("No valid saved session found. Please provide credentials:");
                 let (prompted_username, prompted_password) = prompt_for_credentials();
-                log::info!("🔐 Using username: {prompted_username}");
+                log::info!("Using username: {prompted_username}");
 
-                match load_or_create_client(&prompted_username, &prompted_password, args.json).await
-                {
+                match load_or_create_client(&prompted_username, &prompted_password).await {
                     Ok(client) => client,
                     Err(e) => {
-                        eprintln!("❌ Failed to create client: {e}");
+                        log::error!("Failed to create client: {e}");
                         std::process::exit(1);
                     }
                 }
@@ -129,22 +136,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Credentials were provided, use them directly
         let username = username.unwrap();
         let password = password.unwrap();
-        log::info!("🔐 Using username: {username}");
+        log::info!("Using username: {username}");
 
-        match load_or_create_client(&username, &password, args.json).await {
+        match load_or_create_client(&username, &password).await {
             Ok(client) => client,
             Err(e) => {
-                eprintln!("❌ Failed to create client: {e}");
+                log::error!("Failed to create client: {e}");
                 std::process::exit(1);
             }
         }
     };
 
-    log::info!("✅ Client ready");
+    log::info!("Client ready");
 
     // Execute the command
-    if let Err(e) = execute_command(args.command, &client, args.json).await {
-        eprintln!("❌ Command failed: {e}");
+    if let Err(e) = execute_command(args.command, &client).await {
+        log::error!("Command failed: {e}");
         std::process::exit(1);
     }
 

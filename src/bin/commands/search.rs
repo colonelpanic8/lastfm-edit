@@ -1,6 +1,4 @@
-use super::search_output::{
-    HumanReadableSearchHandler, JsonSearchHandler, SearchEvent, SearchOutputHandler,
-};
+use super::search_output::{log_no_results, log_started, log_summary, output_event, SearchEvent};
 use super::SearchType;
 use lastfm_edit::{LastFmEditClient, LastFmEditClientImpl};
 
@@ -14,29 +12,14 @@ pub async fn handle_search_command(
     query: &str,
     limit: usize,
     offset: usize,
-    details: bool,
-    json_output: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Create appropriate handler based on output format
-    let mut handler: Box<dyn SearchOutputHandler> = if json_output {
-        Box::new(JsonSearchHandler::new())
-    } else {
-        Box::new(HumanReadableSearchHandler::new(details))
-    };
-
     let search_type_str = match search_type {
         SearchType::Tracks => "tracks",
         SearchType::Albums => "albums",
         SearchType::Artists => "artists",
     };
 
-    // Emit start event
-    handler.handle_event(SearchEvent::Started {
-        search_type: search_type_str.to_string(),
-        query: query.to_string(),
-        offset,
-        limit,
-    });
+    log_started(search_type_str, query, offset);
 
     // Calculate starting page and within-page offset
     let starting_page = if offset > 0 {
@@ -75,8 +58,7 @@ pub async fn handle_search_command(
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
 
-                // Emit track found event
-                handler.handle_event(SearchEvent::TrackFound {
+                output_event(&SearchEvent::TrackFound {
                     index: display_number,
                     track,
                 });
@@ -87,18 +69,9 @@ pub async fn handle_search_command(
             }
 
             if displayed_count == 0 {
-                handler.handle_event(SearchEvent::NoResults {
-                    search_type: search_type_str.to_string(),
-                    query: query.to_string(),
-                });
+                log_no_results(query);
             } else {
-                handler.handle_event(SearchEvent::Summary {
-                    search_type: search_type_str.to_string(),
-                    query: query.to_string(),
-                    total_displayed: displayed_count,
-                    offset,
-                    limit,
-                });
+                log_summary(displayed_count, offset, limit);
             }
         }
 
@@ -130,8 +103,7 @@ pub async fn handle_search_command(
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
 
-                // Emit album found event
-                handler.handle_event(SearchEvent::AlbumFound {
+                output_event(&SearchEvent::AlbumFound {
                     index: display_number,
                     album,
                 });
@@ -142,18 +114,9 @@ pub async fn handle_search_command(
             }
 
             if displayed_count == 0 {
-                handler.handle_event(SearchEvent::NoResults {
-                    search_type: search_type_str.to_string(),
-                    query: query.to_string(),
-                });
+                log_no_results(query);
             } else {
-                handler.handle_event(SearchEvent::Summary {
-                    search_type: search_type_str.to_string(),
-                    query: query.to_string(),
-                    total_displayed: displayed_count,
-                    offset,
-                    limit,
-                });
+                log_summary(displayed_count, offset, limit);
             }
         }
 
@@ -185,8 +148,7 @@ pub async fn handle_search_command(
                 displayed_count += 1;
                 let display_number = offset + displayed_count;
 
-                // Emit artist found event
-                handler.handle_event(SearchEvent::ArtistFound {
+                output_event(&SearchEvent::ArtistFound {
                     index: display_number,
                     artist,
                 });
@@ -197,27 +159,12 @@ pub async fn handle_search_command(
             }
 
             if displayed_count == 0 {
-                handler.handle_event(SearchEvent::NoResults {
-                    search_type: search_type_str.to_string(),
-                    query: query.to_string(),
-                });
+                log_no_results(query);
             } else {
-                handler.handle_event(SearchEvent::Summary {
-                    search_type: search_type_str.to_string(),
-                    query: query.to_string(),
-                    total_displayed: displayed_count,
-                    offset,
-                    limit,
-                });
+                log_summary(displayed_count, offset, limit);
             }
         }
     }
-
-    // Emit finished event
-    handler.handle_event(SearchEvent::Finished {
-        search_type: search_type_str.to_string(),
-        query: query.to_string(),
-    });
 
     Ok(())
 }

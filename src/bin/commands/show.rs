@@ -1,28 +1,17 @@
-use super::show_output::{HumanReadableShowHandler, JsonShowHandler, ShowEvent, ShowOutputHandler};
+use super::show_output::{
+    log_collecting_page, log_collection_complete, log_finished, log_started, output_event,
+    ShowEvent,
+};
 use lastfm_edit::LastFmEditClientImpl;
 
 /// Handle showing details for specific scrobbles by offset
 pub async fn handle_show_scrobbles(
     client: &LastFmEditClientImpl,
     offsets: &[u64],
-    json_output: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // No validation needed for 0-based indexing - all u64 values are valid
-
-    // Create appropriate handler based on output format
-    let mut handler: Box<dyn ShowOutputHandler> = if json_output {
-        Box::new(JsonShowHandler::new())
-    } else {
-        Box::new(HumanReadableShowHandler::new())
-    };
-
     let max_offset = *offsets.iter().max().unwrap();
 
-    // Emit start event
-    handler.handle_event(ShowEvent::Started {
-        offsets: offsets.to_vec(),
-        max_offset,
-    });
+    log_started(offsets, max_offset);
 
     // Sort offsets for better output organization
     let mut sorted_offsets = offsets.to_vec();
@@ -39,20 +28,12 @@ pub async fn handle_show_scrobbles(
             Ok(scrobbles) => {
                 let scrobbles_found = scrobbles.len();
                 if scrobbles_found == 0 {
-                    handler.handle_event(ShowEvent::CollectingPage {
-                        page,
-                        scrobbles_found: 0,
-                        total_collected: all_scrobbles.len(),
-                    });
+                    log_collecting_page(page, 0, all_scrobbles.len());
                     break;
                 }
 
                 all_scrobbles.extend(scrobbles);
-                handler.handle_event(ShowEvent::CollectingPage {
-                    page,
-                    scrobbles_found,
-                    total_collected: all_scrobbles.len(),
-                });
+                log_collecting_page(page, scrobbles_found, all_scrobbles.len());
                 page += 1;
 
                 // Stop if we've collected enough
@@ -61,11 +42,7 @@ pub async fn handle_show_scrobbles(
                 }
             }
             Err(_e) => {
-                handler.handle_event(ShowEvent::CollectingPage {
-                    page,
-                    scrobbles_found: 0,
-                    total_collected: all_scrobbles.len(),
-                });
+                log_collecting_page(page, 0, all_scrobbles.len());
                 break;
             }
         }
@@ -78,11 +55,7 @@ pub async fn handle_show_scrobbles(
         .copied()
         .collect();
 
-    // Emit collection complete event
-    handler.handle_event(ShowEvent::CollectionComplete {
-        total_scrobbles: all_scrobbles.len(),
-        unavailable_offsets: unavailable_offsets.clone(),
-    });
+    log_collection_complete(all_scrobbles.len(), &unavailable_offsets);
 
     let mut shown_count = 0;
 
@@ -90,19 +63,20 @@ pub async fn handle_show_scrobbles(
     for &offset in &sorted_offsets {
         if offset < all_scrobbles.len() as u64 {
             let scrobble = &all_scrobbles[offset as usize];
-            handler.handle_event(ShowEvent::ScrobbleDetails {
+            output_event(&ShowEvent::ScrobbleDetails {
                 offset,
                 scrobble: scrobble.clone(),
             });
             shown_count += 1;
+        } else {
+            output_event(&ShowEvent::OffsetUnavailable {
+                offset,
+                total_available: all_scrobbles.len(),
+            });
         }
     }
 
-    // Emit finished event
-    handler.handle_event(ShowEvent::Finished {
-        total_shown: shown_count,
-        unavailable_count: unavailable_offsets.len(),
-    });
+    log_finished(shown_count, unavailable_offsets.len());
 
     Ok(())
 }

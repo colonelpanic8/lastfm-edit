@@ -1,17 +1,64 @@
 use super::utils::parse_range;
-use lastfm_edit::LastFmEditClientImpl;
+use lastfm_edit::{LastFmEditClientImpl, Track};
+use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
 
-/// Utility function to ask for user confirmation
+/// Events emitted by delete commands (JSON output to stdout)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum DeleteEvent {
+    /// Found a scrobble that would be deleted (dry run)
+    ScrobbleFound {
+        index: usize,
+        offset: Option<u64>,
+        artist: String,
+        track: String,
+        timestamp: Option<u64>,
+    },
+    /// Scrobble was deleted
+    ScrobbleDeleted {
+        index: usize,
+        artist: String,
+        track: String,
+        timestamp: u64,
+        success: bool,
+        message: Option<String>,
+    },
+    /// Summary of delete operation
+    Summary {
+        total_found: usize,
+        successful_deletions: usize,
+        failed_deletions: usize,
+        dry_run: bool,
+    },
+}
+
+/// Output a delete event as JSON to stdout
+fn output_event(event: &DeleteEvent) {
+    if let Ok(json) = serde_json::to_string(event) {
+        println!("{json}");
+    } else {
+        log::error!("Failed to serialize event to JSON");
+    }
+}
+
+/// Utility function to ask for user confirmation (goes to stderr)
 fn ask_for_confirmation(message: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    print!("{message} (y/N): ");
-    io::stdout().flush()?;
+    eprint!("{message} (y/N): ");
+    io::stderr().flush()?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
     let response = input.trim().to_lowercase();
     Ok(response == "y" || response == "yes")
+}
+
+/// Struct to hold scrobble info for deletion
+struct ScrobbleToDelete {
+    artist: String,
+    track: String,
+    timestamp: u64,
 }
 
 /// Handle deletion of scrobbles from recent pages
@@ -22,140 +69,60 @@ pub async fn handle_delete_recent_pages(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (start_page, end_page) = parse_range(pages_range, "pages")?;
 
-    println!("🗑️  Delete recent scrobbles from pages {start_page}-{end_page}");
+    log::info!("Delete recent scrobbles from pages {start_page}-{end_page}");
     if dry_run {
-        println!("🔍 DRY RUN - No actual deletions will be performed");
+        log::info!("DRY RUN - No actual deletions will be performed");
     }
 
-    let mut total_scrobbles = 0;
-    let mut successful_deletions = 0;
-    let mut failed_deletions = 0;
     let mut scrobbles_to_delete = Vec::new();
+    let mut index = 0;
 
     // Collect scrobbles from the specified pages
     for page in start_page..=end_page {
-        println!("\n📄 Processing page {page}...");
+        log::info!("Processing page {page}...");
 
         match client.get_recent_scrobbles(page.try_into().unwrap()).await {
             Ok(scrobbles) => {
                 if scrobbles.is_empty() {
-                    println!("  No scrobbles found on page {page}");
-                    break; // No more pages
+                    log::info!("No scrobbles found on page {page}");
+                    break;
                 }
 
-                println!("  Found {} scrobbles on page {page}", scrobbles.len());
-                total_scrobbles += scrobbles.len();
+                log::info!("Found {} scrobbles on page {page}", scrobbles.len());
 
                 for scrobble in scrobbles {
+                    index += 1;
                     if let Some(timestamp) = scrobble.timestamp {
-                        scrobbles_to_delete.push((
-                            scrobble.artist.clone(),
-                            scrobble.name.clone(),
-                            timestamp,
-                        ));
+                        output_event(&DeleteEvent::ScrobbleFound {
+                            index,
+                            offset: None,
+                            artist: scrobble.artist.clone(),
+                            track: scrobble.name.clone(),
+                            timestamp: Some(timestamp),
+                        });
 
-                        if dry_run {
-                            println!(
-                                "    Would delete: '{}' by '{}' ({})",
-                                scrobble.name, scrobble.artist, timestamp
-                            );
-                        }
+                        scrobbles_to_delete.push(ScrobbleToDelete {
+                            artist: scrobble.artist,
+                            track: scrobble.name,
+                            timestamp,
+                        });
                     } else {
-                        println!(
-                            "    ⚠️  Skipping scrobble without timestamp: '{}' by '{}'",
-                            scrobble.name, scrobble.artist
+                        log::warn!(
+                            "Skipping scrobble without timestamp: '{}' by '{}'",
+                            scrobble.name,
+                            scrobble.artist
                         );
                     }
                 }
             }
             Err(e) => {
-                println!("  ❌ Error fetching page {page}: {e}");
+                log::error!("Error fetching page {page}: {e}");
                 break;
             }
         }
     }
 
-    if scrobbles_to_delete.is_empty() {
-        println!("\n❌ No scrobbles with timestamps found in the specified page range");
-        return Ok(());
-    }
-
-    println!("\n📊 Summary:");
-    println!("  Total scrobbles found: {total_scrobbles}");
-    println!("  Scrobbles with timestamps: {}", scrobbles_to_delete.len());
-
-    if dry_run {
-        println!("\n🔍 DRY RUN - No actual deletions performed");
-        println!("Use --apply to execute these deletions");
-        return Ok(());
-    }
-
-    // Show first and last tracks that will be deleted
-    if !scrobbles_to_delete.is_empty() {
-        println!("\n🎵 Range of tracks to delete:");
-        let first = &scrobbles_to_delete[0];
-        let last = &scrobbles_to_delete[scrobbles_to_delete.len() - 1];
-
-        println!(
-            "  📍 Starting: '{}' by '{}' ({})",
-            first.1, first.0, first.2
-        );
-        if scrobbles_to_delete.len() > 1 {
-            println!("  📍 Ending:   '{}' by '{}' ({})", last.1, last.0, last.2);
-        }
-        println!("  📊 Total tracks: {}", scrobbles_to_delete.len());
-
-        // Ask for confirmation
-        if !ask_for_confirmation("\n❓ Do you want to proceed with deleting these scrobbles?")? {
-            println!("❌ Deletion cancelled by user");
-            return Ok(());
-        }
-    }
-
-    // Actually delete the scrobbles
-    println!("\n🗑️  Deleting scrobbles...");
-
-    for (i, (artist, track, timestamp)) in scrobbles_to_delete.iter().enumerate() {
-        println!(
-            "  {}/{}: Deleting '{}' by '{}'",
-            i + 1,
-            scrobbles_to_delete.len(),
-            track,
-            artist
-        );
-
-        match client.delete_scrobble(artist, track, *timestamp).await {
-            Ok(true) => {
-                successful_deletions += 1;
-                println!("    ✅ Deleted successfully");
-            }
-            Ok(false) => {
-                failed_deletions += 1;
-                println!("    ❌ Deletion failed");
-            }
-            Err(e) => {
-                failed_deletions += 1;
-                println!("    ❌ Error: {e}");
-            }
-        }
-
-        // Add delay between deletions to be respectful to the server
-        if i < scrobbles_to_delete.len() - 1 {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-    }
-
-    println!("\n📊 Final Summary:");
-    println!("  Successful deletions: {successful_deletions}");
-    println!("  Failed deletions: {failed_deletions}");
-
-    if successful_deletions > 0 {
-        println!("\n✅ Deletion session completed!");
-    } else if failed_deletions > 0 {
-        println!("\n❌ All deletions failed!");
-    }
-
-    Ok(())
+    execute_deletions(client, scrobbles_to_delete, dry_run).await
 }
 
 /// Handle deletion of scrobbles from timestamp range
@@ -166,145 +133,54 @@ pub async fn handle_delete_timestamp_range(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (start_ts, end_ts) = parse_range(timestamp_range, "timestamp")?;
 
-    println!("🗑️  Delete scrobbles from timestamp range {start_ts}-{end_ts}");
+    log::info!("Delete scrobbles from timestamp range {start_ts}-{end_ts}");
     if dry_run {
-        println!("🔍 DRY RUN - No actual deletions will be performed");
+        log::info!("DRY RUN - No actual deletions will be performed");
     }
 
-    let mut successful_deletions = 0;
-    let mut failed_deletions = 0;
     let mut scrobbles_to_delete = Vec::new();
-
-    // Search through recent scrobbles to find ones in the timestamp range
-    let max_pages = 20; // Search up to 20 pages of recent scrobbles
+    let mut index = 0;
+    let max_pages = 20;
 
     for page in 1..=max_pages {
-        println!("📄 Searching page {page} for scrobbles in timestamp range...");
+        log::debug!("Searching page {page} for scrobbles in timestamp range...");
 
         match client.get_recent_scrobbles(page).await {
             Ok(scrobbles) => {
                 if scrobbles.is_empty() {
-                    println!("  No more scrobbles found, stopping search");
+                    log::info!("No more scrobbles found, stopping search");
                     break;
                 }
 
-                let mut found_in_range = 0;
                 for scrobble in scrobbles {
                     if let Some(timestamp) = scrobble.timestamp {
                         if timestamp >= start_ts && timestamp <= end_ts {
-                            found_in_range += 1;
-                            scrobbles_to_delete.push((
-                                scrobble.artist.clone(),
-                                scrobble.name.clone(),
-                                timestamp,
-                            ));
+                            index += 1;
+                            output_event(&DeleteEvent::ScrobbleFound {
+                                index,
+                                offset: None,
+                                artist: scrobble.artist.clone(),
+                                track: scrobble.name.clone(),
+                                timestamp: Some(timestamp),
+                            });
 
-                            if dry_run {
-                                println!(
-                                    "    Would delete: '{}' by '{}' ({})",
-                                    scrobble.name, scrobble.artist, timestamp
-                                );
-                            }
+                            scrobbles_to_delete.push(ScrobbleToDelete {
+                                artist: scrobble.artist,
+                                track: scrobble.name,
+                                timestamp,
+                            });
                         }
                     }
                 }
-
-                if found_in_range > 0 {
-                    println!("  Found {found_in_range} scrobbles in range on page {page}");
-                } else {
-                    println!("  No scrobbles in range on page {page}");
-                }
             }
             Err(e) => {
-                println!("  ❌ Error fetching page {page}: {e}");
+                log::error!("Error fetching page {page}: {e}");
                 break;
             }
         }
     }
 
-    if scrobbles_to_delete.is_empty() {
-        println!("\n❌ No scrobbles found in the specified timestamp range");
-        return Ok(());
-    }
-
-    println!("\n📊 Summary:");
-    println!(
-        "  Scrobbles in timestamp range: {}",
-        scrobbles_to_delete.len()
-    );
-
-    if dry_run {
-        println!("\n🔍 DRY RUN - No actual deletions performed");
-        println!("Use --apply to execute these deletions");
-        return Ok(());
-    }
-
-    // Show first and last tracks that will be deleted
-    if !scrobbles_to_delete.is_empty() {
-        println!("\n🎵 Range of tracks to delete:");
-        let first = &scrobbles_to_delete[0];
-        let last = &scrobbles_to_delete[scrobbles_to_delete.len() - 1];
-
-        println!(
-            "  📍 Starting: '{}' by '{}' ({})",
-            first.1, first.0, first.2
-        );
-        if scrobbles_to_delete.len() > 1 {
-            println!("  📍 Ending:   '{}' by '{}' ({})", last.1, last.0, last.2);
-        }
-        println!("  📊 Total tracks: {}", scrobbles_to_delete.len());
-
-        // Ask for confirmation
-        if !ask_for_confirmation("\n❓ Do you want to proceed with deleting these scrobbles?")? {
-            println!("❌ Deletion cancelled by user");
-            return Ok(());
-        }
-    }
-
-    // Actually delete the scrobbles
-    println!("\n🗑️  Deleting scrobbles...");
-
-    for (i, (artist, track, timestamp)) in scrobbles_to_delete.iter().enumerate() {
-        println!(
-            "  {}/{}: Deleting '{}' by '{}'",
-            i + 1,
-            scrobbles_to_delete.len(),
-            track,
-            artist
-        );
-
-        match client.delete_scrobble(artist, track, *timestamp).await {
-            Ok(true) => {
-                successful_deletions += 1;
-                println!("    ✅ Deleted successfully");
-            }
-            Ok(false) => {
-                failed_deletions += 1;
-                println!("    ❌ Deletion failed");
-            }
-            Err(e) => {
-                failed_deletions += 1;
-                println!("    ❌ Error: {e}");
-            }
-        }
-
-        // Add delay between deletions to be respectful to the server
-        if i < scrobbles_to_delete.len() - 1 {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-    }
-
-    println!("\n📊 Final Summary:");
-    println!("  Successful deletions: {successful_deletions}");
-    println!("  Failed deletions: {failed_deletions}");
-
-    if successful_deletions > 0 {
-        println!("\n✅ Deletion session completed!");
-    } else if failed_deletions > 0 {
-        println!("\n❌ All deletions failed!");
-    }
-
-    Ok(())
+    execute_deletions(client, scrobbles_to_delete, dry_run).await
 }
 
 /// Handle deletion of scrobbles by offset from most recent
@@ -315,197 +191,220 @@ pub async fn handle_delete_recent_offset(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (start_offset, end_offset) = parse_range(offset_range, "offset")?;
 
-    // Offsets are already 0-based, so use directly
-    let start_index = start_offset;
-    let end_index = end_offset;
-
-    println!("🗑️  Delete scrobbles by offset: {start_offset}-{end_offset} ({start_offset}th to {end_offset}th most recent, 0-indexed)");
+    log::info!("Delete scrobbles by offset: {start_offset}-{end_offset} (0-indexed)");
     if dry_run {
-        println!("🔍 DRY RUN - No actual deletions will be performed");
+        log::info!("DRY RUN - No actual deletions will be performed");
     }
 
-    let mut all_scrobbles = Vec::new();
-    let mut successful_deletions = 0;
-    let mut failed_deletions = 0;
-
-    // Collect scrobbles until we have enough to cover the offset range
+    let mut all_scrobbles: Vec<Track> = Vec::new();
     let mut page = 1;
-    let needed_scrobbles = (end_offset + 1) as usize; // +1 because 0-indexed
+    let needed_scrobbles = (end_offset + 1) as usize;
 
-    println!("\n📄 Collecting recent scrobbles to reach offset {end_offset}...");
+    log::info!("Collecting recent scrobbles to reach offset {end_offset}...");
 
     while all_scrobbles.len() < needed_scrobbles {
         match client.get_recent_scrobbles(page.try_into().unwrap()).await {
             Ok(scrobbles) => {
                 if scrobbles.is_empty() {
-                    println!("  No more scrobbles found on page {page}");
+                    log::info!("No more scrobbles found on page {page}");
                     break;
                 }
 
-                println!(
-                    "  Page {page}: Found {} scrobbles (total: {})",
+                log::debug!(
+                    "Page {page}: Found {} scrobbles (total: {})",
                     scrobbles.len(),
                     all_scrobbles.len() + scrobbles.len()
                 );
                 all_scrobbles.extend(scrobbles);
                 page += 1;
 
-                // Stop if we've collected enough
                 if all_scrobbles.len() >= needed_scrobbles {
                     break;
                 }
             }
             Err(e) => {
-                println!("  ❌ Error fetching page {page}: {e}");
+                log::error!("Error fetching page {page}: {e}");
                 break;
             }
         }
     }
 
     if all_scrobbles.len() <= start_offset as usize {
-        println!("\n❌ Not enough recent scrobbles found. You have {} scrobbles, but requested offset starts at {} (0-indexed)", all_scrobbles.len(), start_offset);
+        log::error!(
+            "Not enough recent scrobbles found. You have {} scrobbles, but requested offset starts at {} (0-indexed)",
+            all_scrobbles.len(),
+            start_offset
+        );
+        output_event(&DeleteEvent::Summary {
+            total_found: 0,
+            successful_deletions: 0,
+            failed_deletions: 0,
+            dry_run,
+        });
         return Ok(());
     }
 
-    // Extract the scrobbles in the specified offset range
-    let actual_end_index = std::cmp::min(end_index as usize, all_scrobbles.len() - 1);
-    let scrobbles_in_range = &all_scrobbles[start_index as usize..=actual_end_index];
+    // Extract scrobbles in range
+    let actual_end_index = std::cmp::min(end_offset as usize, all_scrobbles.len() - 1);
+    let scrobbles_in_range = &all_scrobbles[start_offset as usize..=actual_end_index];
 
-    println!("\n📊 Summary:");
-    println!(
-        "  Total recent scrobbles collected: {}",
-        all_scrobbles.len()
-    );
-    println!(
-        "  Scrobbles in offset range {}-{}: {}",
-        start_offset,
-        std::cmp::min(end_offset, (all_scrobbles.len() as u64).saturating_sub(1)),
-        scrobbles_in_range.len()
-    );
-
-    if dry_run {
-        println!("\n🔍 Scrobbles that would be deleted:");
-        for (i, scrobble) in scrobbles_in_range.iter().enumerate() {
-            let offset_number = start_offset + i as u64;
-            if let Some(timestamp) = scrobble.timestamp {
-                println!(
-                    "    {}: '{}' by '{}' ({})",
-                    offset_number, scrobble.name, scrobble.artist, timestamp
-                );
-            } else {
-                println!(
-                    "    {}: '{}' by '{}' (no timestamp - cannot delete)",
-                    offset_number, scrobble.name, scrobble.artist
-                );
-            }
-        }
-
-        println!("\n🔍 DRY RUN - No actual deletions performed");
-        println!("Use --apply to execute these deletions");
-        return Ok(());
-    }
-
-    // Show first and last tracks that will be deleted
-    if !scrobbles_in_range.is_empty() {
-        println!("\n🎵 Range of tracks to delete:");
-        let first = &scrobbles_in_range[0];
-        let last = &scrobbles_in_range[scrobbles_in_range.len() - 1];
-
-        if let Some(first_timestamp) = first.timestamp {
-            println!(
-                "  📍 Starting (offset {}): '{}' by '{}' ({})",
-                start_offset, first.name, first.artist, first_timestamp
-            );
-        } else {
-            println!(
-                "  📍 Starting (offset {}): '{}' by '{}' (no timestamp)",
-                start_offset, first.name, first.artist
-            );
-        }
-
-        if scrobbles_in_range.len() > 1 {
-            let end_offset_actual = start_offset + (scrobbles_in_range.len() as u64) - 1;
-            if let Some(last_timestamp) = last.timestamp {
-                println!(
-                    "  📍 Ending   (offset {}): '{}' by '{}' ({})",
-                    end_offset_actual, last.name, last.artist, last_timestamp
-                );
-            } else {
-                println!(
-                    "  📍 Ending   (offset {}): '{}' by '{}' (no timestamp)",
-                    end_offset_actual, last.name, last.artist
-                );
-            }
-        }
-        println!("  📊 Total tracks: {}", scrobbles_in_range.len());
-
-        // Ask for confirmation
-        if !ask_for_confirmation("\n❓ Do you want to proceed with deleting these scrobbles?")? {
-            println!("❌ Deletion cancelled by user");
-            return Ok(());
-        }
-    }
-
-    // Actually delete the scrobbles
-    println!("\n🗑️  Deleting scrobbles by offset...");
+    let mut scrobbles_to_delete = Vec::new();
 
     for (i, scrobble) in scrobbles_in_range.iter().enumerate() {
-        let offset_number = start_offset + i as u64;
-
+        let offset = start_offset + i as u64;
         if let Some(timestamp) = scrobble.timestamp {
-            println!(
-                "  {}/{}: Deleting offset {} - '{}' by '{}'",
-                i + 1,
-                scrobbles_in_range.len(),
-                offset_number,
-                scrobble.name,
-                scrobble.artist
-            );
+            output_event(&DeleteEvent::ScrobbleFound {
+                index: i + 1,
+                offset: Some(offset),
+                artist: scrobble.artist.clone(),
+                track: scrobble.name.clone(),
+                timestamp: Some(timestamp),
+            });
 
-            match client
-                .delete_scrobble(&scrobble.artist, &scrobble.name, timestamp)
-                .await
-            {
-                Ok(true) => {
-                    successful_deletions += 1;
-                    println!("    ✅ Deleted successfully");
-                }
-                Ok(false) => {
-                    failed_deletions += 1;
-                    println!("    ❌ Deletion failed");
-                }
-                Err(e) => {
-                    failed_deletions += 1;
-                    println!("    ❌ Error: {e}");
-                }
-            }
+            scrobbles_to_delete.push(ScrobbleToDelete {
+                artist: scrobble.artist.clone(),
+                track: scrobble.name.clone(),
+                timestamp,
+            });
         } else {
-            failed_deletions += 1;
-            println!(
-                "  {}/{}: Skipping offset {} - '{}' by '{}' (no timestamp)",
-                i + 1,
-                scrobbles_in_range.len(),
-                offset_number,
+            log::warn!(
+                "Skipping scrobble at offset {} without timestamp: '{}' by '{}'",
+                offset,
                 scrobble.name,
                 scrobble.artist
             );
+        }
+    }
+
+    execute_deletions(client, scrobbles_to_delete, dry_run).await
+}
+
+/// Common deletion execution logic
+async fn execute_deletions(
+    client: &LastFmEditClientImpl,
+    scrobbles: Vec<ScrobbleToDelete>,
+    dry_run: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if scrobbles.is_empty() {
+        log::info!("No scrobbles with timestamps found to delete");
+        output_event(&DeleteEvent::Summary {
+            total_found: 0,
+            successful_deletions: 0,
+            failed_deletions: 0,
+            dry_run,
+        });
+        return Ok(());
+    }
+
+    log::info!("Found {} scrobbles to delete", scrobbles.len());
+
+    if dry_run {
+        log::info!("DRY RUN - No actual deletions performed");
+        log::info!("Use --apply to execute these deletions");
+        output_event(&DeleteEvent::Summary {
+            total_found: scrobbles.len(),
+            successful_deletions: 0,
+            failed_deletions: 0,
+            dry_run: true,
+        });
+        return Ok(());
+    }
+
+    // Ask for confirmation
+    eprintln!();
+    eprintln!("About to delete {} scrobble(s):", scrobbles.len());
+    if let Some(first) = scrobbles.first() {
+        eprintln!("  First: '{}' by '{}'", first.track, first.artist);
+    }
+    if scrobbles.len() > 1 {
+        if let Some(last) = scrobbles.last() {
+            eprintln!("  Last:  '{}' by '{}'", last.track, last.artist);
+        }
+    }
+
+    if !ask_for_confirmation("\nDo you want to proceed with deleting these scrobbles?")? {
+        log::info!("Deletion cancelled by user");
+        output_event(&DeleteEvent::Summary {
+            total_found: scrobbles.len(),
+            successful_deletions: 0,
+            failed_deletions: 0,
+            dry_run: false,
+        });
+        return Ok(());
+    }
+
+    log::info!("Deleting scrobbles...");
+
+    let mut successful_deletions = 0;
+    let mut failed_deletions = 0;
+
+    for (i, scrobble) in scrobbles.iter().enumerate() {
+        log::debug!(
+            "Deleting {}/{}: '{}' by '{}'",
+            i + 1,
+            scrobbles.len(),
+            scrobble.track,
+            scrobble.artist
+        );
+
+        match client
+            .delete_scrobble(&scrobble.artist, &scrobble.track, scrobble.timestamp)
+            .await
+        {
+            Ok(true) => {
+                successful_deletions += 1;
+                output_event(&DeleteEvent::ScrobbleDeleted {
+                    index: i + 1,
+                    artist: scrobble.artist.clone(),
+                    track: scrobble.track.clone(),
+                    timestamp: scrobble.timestamp,
+                    success: true,
+                    message: None,
+                });
+            }
+            Ok(false) => {
+                failed_deletions += 1;
+                output_event(&DeleteEvent::ScrobbleDeleted {
+                    index: i + 1,
+                    artist: scrobble.artist.clone(),
+                    track: scrobble.track.clone(),
+                    timestamp: scrobble.timestamp,
+                    success: false,
+                    message: Some("Deletion failed".to_string()),
+                });
+            }
+            Err(e) => {
+                failed_deletions += 1;
+                output_event(&DeleteEvent::ScrobbleDeleted {
+                    index: i + 1,
+                    artist: scrobble.artist.clone(),
+                    track: scrobble.track.clone(),
+                    timestamp: scrobble.timestamp,
+                    success: false,
+                    message: Some(e.to_string()),
+                });
+            }
         }
 
         // Add delay between deletions to be respectful to the server
-        if i < scrobbles_in_range.len() - 1 {
+        if i < scrobbles.len() - 1 {
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
 
-    println!("\n📊 Final Summary:");
-    println!("  Successful deletions: {successful_deletions}");
-    println!("  Failed deletions: {failed_deletions}");
+    output_event(&DeleteEvent::Summary {
+        total_found: scrobbles.len(),
+        successful_deletions,
+        failed_deletions,
+        dry_run: false,
+    });
 
-    if successful_deletions > 0 {
-        println!("\n✅ Deletion session completed!");
-    } else if failed_deletions > 0 {
-        println!("\n❌ All deletions failed!");
-    }
+    log::info!(
+        "Deletion complete: {} successful, {} failed out of {} total",
+        successful_deletions,
+        failed_deletions,
+        scrobbles.len()
+    );
 
     Ok(())
 }
