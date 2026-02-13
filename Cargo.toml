@@ -1,6 +1,6 @@
 [package]
 name = "lastfm-edit"
-version = "5.0.0"
+version = "5.0.1"
 edition = "2021"
 description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
 license = "MIT"
@@ -93,5 +93,4 @@ path = "examples/custom_session_manager.rs"
 [[example]]
 name = "artist_tracks_direct"
 path = "examples/artist_tracks_direct.rs"
-
 

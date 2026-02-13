@@ -1350,6 +1350,17 @@ pub enum RateLimitType {
     ResponsePattern,
 }
 
+/// Reason why the client is intentionally delaying.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DelayReason {
+    /// Exponential backoff / retry delay (typically after rate limiting).
+    RetryBackoff,
+    /// Intentional pacing between multiple edit operations.
+    OperationalEditDelay,
+    /// Intentional pacing between multiple delete operations.
+    OperationalDeleteDelay,
+}
+
 /// Event type to describe internal HTTP client activity
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ClientEvent {
@@ -1386,6 +1397,20 @@ pub enum ClientEvent {
         rate_limit_type: RateLimitType,
         /// Total duration the rate limiting was active in seconds
         total_rate_limit_duration_seconds: u64,
+    },
+    /// Client is intentionally delaying before continuing.
+    ///
+    /// This is used to surface internal sleeps (backoff, pacing) to callers so that UIs/CLIs
+    /// can display clear "waiting" state rather than appearing stuck.
+    Delaying {
+        /// Duration to wait in milliseconds.
+        delay_ms: u64,
+        /// Why we're delaying.
+        reason: DelayReason,
+        /// Optional request context associated with this delay.
+        request: Option<RequestInfo>,
+        /// Timestamp when the delay started (seconds since Unix epoch).
+        delay_timestamp: u64,
     },
     /// Scrobble edit attempt completed
     EditAttempted {

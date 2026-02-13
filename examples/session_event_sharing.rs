@@ -77,6 +77,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         request.short_description()
                     );
                 }
+                ClientEvent::Delaying {
+                    delay_ms,
+                    reason,
+                    request,
+                    delay_timestamp,
+                } => {
+                    let req_desc = request
+                        .as_ref()
+                        .map(|r| r.short_description())
+                        .unwrap_or_else(|| "unknown request".to_string());
+                    println!(
+                        "⏳ Client1 monitor: Delaying ({reason:?}) for {delay_ms}ms - {req_desc} (at timestamp {delay_timestamp})"
+                    );
+                }
                 ClientEvent::EditAttempted {
                     edit,
                     success,
@@ -147,6 +161,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!(
                         "🎉 Client2 monitor: Rate limiting ended ({rate_limit_type:?}) after {total_rate_limit_duration_seconds} seconds - {}",
                         request.short_description()
+                    );
+                }
+                ClientEvent::Delaying {
+                    delay_ms,
+                    reason,
+                    request,
+                    delay_timestamp,
+                } => {
+                    let req_desc = request
+                        .as_ref()
+                        .map(|r| r.short_description())
+                        .unwrap_or_else(|| "unknown request".to_string());
+                    println!(
+                        "⏳ Client2 monitor: Delaying ({reason:?}) for {delay_ms}ms - {req_desc} (at timestamp {delay_timestamp})"
                     );
                 }
                 ClientEvent::EditAttempted {

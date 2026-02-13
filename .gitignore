@@ -1,1 +1,6 @@
 /target
+/.direnv/
+/.dir-locals.el
+/artists.txt
+/python/target/
+/python/**/__pycache__/

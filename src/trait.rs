@@ -463,11 +463,15 @@ pub trait LastFmEditClient {
     ///             ClientEvent::RateLimitEnded { total_rate_limit_duration_seconds, .. } => {
     ///                 println!("Rate limiting ended after {} seconds", total_rate_limit_duration_seconds);
     ///             }
+    ///             ClientEvent::Delaying { delay_ms, reason, .. } => {
+    ///                 println!("Delaying ({reason:?}) for {delay_ms}ms");
+    ///             }
     ///             ClientEvent::EditAttempted { edit, success, .. } => {
     ///                 println!("Edit attempt: '{}' -> '{}' - {}",
     ///                          edit.track_name_original, edit.track_name,
     ///                          if success { "Success" } else { "Failed" });
     ///             }
+    ///             _ => {}
     ///         }
     ///     }
     /// });

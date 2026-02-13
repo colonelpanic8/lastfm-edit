@@ -5,9 +5,9 @@ use crate::parsing::LastFmParser;
 use crate::r#trait::LastFmEditClient;
 use crate::retry;
 use crate::types::{
-    AlbumPage, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver, EditResponse,
-    ExactScrobbleEdit, LastFmEditSession, LastFmError, OperationalDelayConfig, RateLimitConfig,
-    RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
+    AlbumPage, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver, DelayReason,
+    EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, OperationalDelayConfig,
+    RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
     SingleEditResponse, Track, TrackPage,
 };
 use crate::Result;
@@ -268,6 +268,12 @@ impl LastFmEditClientImpl {
                     request: None,
                     rate_limit_type: RateLimitType::ResponsePattern,
                     rate_limit_timestamp,
+                });
+                self.broadcast_event(ClientEvent::Delaying {
+                    delay_ms: delay * 1000,
+                    reason: DelayReason::RetryBackoff,
+                    request: None,
+                    delay_timestamp: rate_limit_timestamp,
                 });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
             },
@@ -530,6 +536,20 @@ impl LastFmEditClientImpl {
             if index < discovered_edits.len() - 1
                 && self.config.operational_delays.edit_delay_ms > 0
             {
+                log::info!(
+                    "Operational edit delay: waiting {}ms before next edit",
+                    self.config.operational_delays.edit_delay_ms
+                );
+                let delay_timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                self.broadcast_event(ClientEvent::Delaying {
+                    delay_ms: self.config.operational_delays.edit_delay_ms,
+                    reason: DelayReason::OperationalEditDelay,
+                    request: None,
+                    delay_timestamp,
+                });
                 tokio::time::sleep(std::time::Duration::from_millis(
                     self.config.operational_delays.edit_delay_ms,
                 ))
@@ -579,6 +599,12 @@ impl LastFmEditClientImpl {
                     request: None, // No specific request context in retry callback
                     rate_limit_type: RateLimitType::ResponsePattern,
                     rate_limit_timestamp,
+                });
+                self.broadcast_event(ClientEvent::Delaying {
+                    delay_ms: delay * 1000,
+                    reason: DelayReason::RetryBackoff,
+                    request: None,
+                    delay_timestamp: rate_limit_timestamp,
                 });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
             },
@@ -1046,6 +1072,12 @@ impl LastFmEditClientImpl {
                     request: None, // No specific request context in retry callback
                     rate_limit_type: RateLimitType::ResponsePattern,
                     rate_limit_timestamp,
+                });
+                self.broadcast_event(ClientEvent::Delaying {
+                    delay_ms: delay * 1000,
+                    reason: DelayReason::RetryBackoff,
+                    request: None,
+                    delay_timestamp: rate_limit_timestamp,
                 });
                 log::debug!("{operation_name} rate limited, waiting {delay} seconds");
             },
