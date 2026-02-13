@@ -11,6 +11,7 @@ use crate::types::{
     SingleEditResponse, Track, TrackPage,
 };
 use crate::Result;
+use crate::{cancel, CancellationState};
 use async_trait::async_trait;
 use http_client::{HttpClient, Request, Response};
 use http_types::{Method, Url};
@@ -24,6 +25,7 @@ pub struct LastFmEditClientImpl {
     parser: LastFmParser,
     broadcaster: Arc<SharedEventBroadcaster>,
     config: ClientConfig,
+    cancel: CancellationState,
 }
 
 impl LastFmEditClientImpl {
@@ -188,11 +190,36 @@ impl LastFmEditClientImpl {
             parser: LastFmParser::new(),
             broadcaster,
             config,
+            cancel: CancellationState::new(),
         }
     }
 
     pub fn get_session(&self) -> LastFmEditSession {
         self.session.lock().unwrap().clone()
+    }
+
+    pub fn cancel(&self) {
+        self.cancel.cancel();
+    }
+
+    pub fn reset_cancel(&self) {
+        self.cancel.reset();
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
+    }
+
+    fn cancel_rx(&self) -> tokio::sync::watch::Receiver<bool> {
+        self.cancel.subscribe()
+    }
+
+    async fn sleep_ms(&self, delay_ms: u64) -> Result<()> {
+        if delay_ms == 0 {
+            return Ok(());
+        }
+        cancel::sleep_with_cancel(self.cancel_rx(), std::time::Duration::from_millis(delay_ms))
+            .await
     }
 
     pub fn with_shared_broadcaster(&self, client: Box<dyn HttpClient + Send + Sync>) -> Self {
@@ -258,7 +285,7 @@ impl LastFmEditClientImpl {
         let track_name = track_name.to_string();
         let client = self.clone();
 
-        match retry::retry_with_backoff(
+        match retry::retry_with_backoff_cancelable(
             config,
             "Delete scrobble",
             || client.delete_scrobble_impl(&artist_name, &track_name, timestamp),
@@ -287,6 +314,7 @@ impl LastFmEditClientImpl {
                     total_rate_limit_duration_seconds: total_duration,
                 });
             },
+            Some(self.cancel_rx()),
         )
         .await
         {
@@ -550,10 +578,8 @@ impl LastFmEditClientImpl {
                     request: None,
                     delay_timestamp,
                 });
-                tokio::time::sleep(std::time::Duration::from_millis(
-                    self.config.operational_delays.edit_delay_ms,
-                ))
-                .await;
+                self.sleep_ms(self.config.operational_delays.edit_delay_ms)
+                    .await?;
             }
         }
 
@@ -589,7 +615,7 @@ impl LastFmEditClientImpl {
         let edit_clone = exact_edit.clone();
         let client = self.clone();
 
-        match retry::retry_with_backoff(
+        match retry::retry_with_backoff_cancelable(
             config,
             "Edit scrobble",
             || client.edit_scrobble_impl(&edit_clone),
@@ -621,6 +647,7 @@ impl LastFmEditClientImpl {
                     total_rate_limit_duration_seconds: total_duration,
                 });
             },
+            Some(self.cancel_rx()),
         )
         .await
         {
@@ -1062,7 +1089,7 @@ impl LastFmEditClientImpl {
         let url_string = url.to_string();
         let client = self.clone();
 
-        let retry_result = retry::retry_with_backoff(
+        let retry_result = retry::retry_with_backoff_cancelable(
             config,
             &format!("GET {url}"),
             || client.get_without_retry(&url_string),
@@ -1088,6 +1115,7 @@ impl LastFmEditClientImpl {
                     total_rate_limit_duration_seconds: total_duration,
                 });
             },
+            Some(self.cancel_rx()),
         )
         .await?;
 
@@ -1702,5 +1730,17 @@ impl LastFmEditClient for LastFmEditClientImpl {
     ) -> Result<bool> {
         self.delete_scrobble(artist_name, track_name, timestamp)
             .await
+    }
+
+    fn cancel(&self) {
+        self.cancel.cancel();
+    }
+
+    fn reset_cancel(&self) {
+        self.cancel.reset();
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
     }
 }

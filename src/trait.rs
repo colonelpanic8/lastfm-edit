@@ -511,4 +511,22 @@ pub trait LastFmEditClient {
     /// Returns `true` if the session is valid and can be used for authenticated operations,
     /// `false` if the session is invalid or expired.
     async fn validate_session(&self) -> bool;
+
+    // =============================================================================
+    // CANCELLATION - Cooperative cancellation for long-running operations
+    // =============================================================================
+
+    /// Request cooperative cancellation of ongoing operations (best-effort).
+    ///
+    /// Implementations should interrupt internal waits (retry backoff, operational delays)
+    /// and return `LastFmError::Io(ErrorKind::Interrupted)` where appropriate.
+    fn cancel(&self) {}
+
+    /// Clear the cancellation request so future operations can run again.
+    fn reset_cancel(&self) {}
+
+    /// Whether cancellation has been requested.
+    fn is_cancelled(&self) -> bool {
+        false
+    }
 }

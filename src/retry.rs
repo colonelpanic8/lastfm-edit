@@ -3,6 +3,8 @@ use crate::Result;
 use std::future::Future;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use crate::cancel;
+
 /// Execute an async operation with retry logic for rate limiting
 ///
 /// This function handles the common pattern of retrying operations that may fail
@@ -20,9 +22,38 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 pub async fn retry_with_backoff<T, F, Fut, OnRateLimit, OnRateLimitEnd>(
     config: RetryConfig,
     operation_name: &str,
+    operation: F,
+    on_rate_limit: OnRateLimit,
+    on_rate_limit_end: OnRateLimitEnd,
+) -> Result<RetryResult<T>>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T>>,
+    OnRateLimit: FnMut(u64, u64, &str),
+    OnRateLimitEnd: FnMut(u64, &str),
+{
+    retry_with_backoff_cancelable(
+        config,
+        operation_name,
+        operation,
+        on_rate_limit,
+        on_rate_limit_end,
+        None,
+    )
+    .await
+}
+
+/// Like [`retry_with_backoff`], but allows callers to cooperatively cancel during backoff sleeps.
+///
+/// Cancellation returns `LastFmError::Io(ErrorKind::Interrupted)` so downstream crates do not need
+/// to handle a new `LastFmError` variant.
+pub async fn retry_with_backoff_cancelable<T, F, Fut, OnRateLimit, OnRateLimitEnd>(
+    config: RetryConfig,
+    operation_name: &str,
     mut operation: F,
     mut on_rate_limit: OnRateLimit,
     mut on_rate_limit_end: OnRateLimitEnd,
+    cancel_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) -> Result<RetryResult<T>>
 where
     F: FnMut() -> Fut,
@@ -89,7 +120,11 @@ where
                     .as_secs();
                 on_rate_limit(delay, timestamp, operation_name);
 
-                tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                if let Some(rx) = cancel_rx.clone() {
+                    cancel::sleep_with_cancel(rx, std::time::Duration::from_secs(delay)).await?;
+                } else {
+                    tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+                }
                 retries += 1;
                 total_retry_time += delay;
             }

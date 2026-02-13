@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+pub mod cancel;
 pub mod client;
 pub mod discovery;
 pub mod edit_analysis;
@@ -15,6 +16,7 @@ pub mod vcr_form_data;
 pub mod vcr_matcher;
 pub mod vcr_test_utils;
 
+pub use cancel::CancellationState;
 pub use client::LastFmEditClientImpl;
 pub use discovery::{
     AlbumTracksDiscovery, ArtistTracksDiscovery, AsyncDiscoveryIterator, ExactMatchDiscovery,
