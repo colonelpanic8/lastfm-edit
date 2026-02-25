@@ -1,3 +1,4 @@
+use crate::api::LastFmApiClient;
 use crate::r#trait::LastFmEditClient;
 use crate::{Album, AlbumPage, Result, Track, TrackPage};
 
@@ -460,6 +461,96 @@ impl<C: LastFmEditClient> RecentTracksIterator<C> {
     /// # Arguments
     ///
     /// * `timestamp` - Unix timestamp to stop at
+    pub fn with_stop_timestamp(mut self, timestamp: u64) -> Self {
+        self.stop_at_timestamp = Some(timestamp);
+        self
+    }
+}
+
+/// Iterator for browsing a user's recent tracks via the Last.fm JSON API.
+///
+/// This iterator uses the `user.getRecentTracks` API endpoint which supports
+/// up to 200 items per page and is less aggressively rate-limited than web scraping.
+/// It supports optional timestamp-based filtering identical to [`RecentTracksIterator`].
+pub struct ApiRecentTracksIterator<C: LastFmApiClient> {
+    client: C,
+    current_page: u32,
+    has_more: bool,
+    buffer: Vec<Track>,
+    stop_at_timestamp: Option<u64>,
+    total_pages: Option<u32>,
+}
+
+#[async_trait(?Send)]
+impl<C: LastFmApiClient> AsyncPaginatedIterator<Track> for ApiRecentTracksIterator<C> {
+    async fn next(&mut self) -> Result<Option<Track>> {
+        if self.buffer.is_empty() {
+            if !self.has_more {
+                return Ok(None);
+            }
+
+            let page = self
+                .client
+                .api_get_recent_tracks_page(self.current_page)
+                .await?;
+
+            if page.tracks.is_empty() {
+                self.has_more = false;
+                return Ok(None);
+            }
+
+            self.has_more = page.has_next_page;
+            self.total_pages = page.total_pages;
+
+            if let Some(stop_timestamp) = self.stop_at_timestamp {
+                let mut filtered_tracks = Vec::new();
+                for track in page.tracks {
+                    if let Some(track_timestamp) = track.timestamp {
+                        if track_timestamp <= stop_timestamp {
+                            self.has_more = false;
+                            break;
+                        }
+                    }
+                    filtered_tracks.push(track);
+                }
+                self.buffer = filtered_tracks;
+            } else {
+                self.buffer = page.tracks;
+            }
+
+            self.buffer.reverse();
+            self.current_page += 1;
+        }
+
+        Ok(self.buffer.pop())
+    }
+
+    fn current_page(&self) -> u32 {
+        self.current_page.saturating_sub(1)
+    }
+
+    fn total_pages(&self) -> Option<u32> {
+        self.total_pages
+    }
+}
+
+impl<C: LastFmApiClient> ApiRecentTracksIterator<C> {
+    pub fn new(client: C) -> Self {
+        Self::with_starting_page(client, 1)
+    }
+
+    pub fn with_starting_page(client: C, starting_page: u32) -> Self {
+        let page = std::cmp::max(1, starting_page);
+        Self {
+            client,
+            current_page: page,
+            has_more: true,
+            buffer: Vec::new(),
+            stop_at_timestamp: None,
+            total_pages: None,
+        }
+    }
+
     pub fn with_stop_timestamp(mut self, timestamp: u64) -> Self {
         self.stop_at_timestamp = Some(timestamp);
         self

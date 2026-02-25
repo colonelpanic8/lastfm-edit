@@ -76,11 +76,34 @@ impl LastFmPasswordOnlyFilter {
     }
 }
 
+/// Test placeholder for API keys in recorded cassettes
+pub const TEST_API_KEY: &str = "TEST_API_KEY";
+
+/// Filter that replaces the real Last.fm API key in request URLs with a test placeholder.
+#[derive(Debug)]
+pub struct LastFmApiKeyFilter;
+
+impl Filter for LastFmApiKeyFilter {
+    fn filter_request(&self, request: &mut SerializableRequest) {
+        if let Some(real_key) = std::env::var("LASTFM_EDIT_API_KEY")
+            .ok()
+            .filter(|k| !k.is_empty())
+        {
+            request.url = request.url.replace(&real_key, TEST_API_KEY);
+        }
+    }
+
+    fn filter_response(&self, _response: &mut SerializableResponse) {}
+}
+
 /// Create a Last.fm test filter chain that:
 /// - Keeps usernames and CSRF tokens intact (needed for proper request matching)
 /// - Filters passwords from request bodies with predictable test values
 /// - Filters session tokens with predictable test values
+/// - Filters API keys from request URLs with predictable test values
 pub fn create_lastfm_test_filter_chain() -> Result<FilterChain, regex::Error> {
-    let filter_chain = FilterChain::new().add_filter(Box::new(LastFmPasswordOnlyFilter));
+    let filter_chain = FilterChain::new()
+        .add_filter(Box::new(LastFmPasswordOnlyFilter))
+        .add_filter(Box::new(LastFmApiKeyFilter));
     Ok(filter_chain)
 }

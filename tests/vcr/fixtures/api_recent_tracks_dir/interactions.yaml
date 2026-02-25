@@ -1,0 +1,30 @@
+- request:
+    method: GET
+    url: https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=IvanMalison&api_key=TEST_API_KEY&format=json&page=1&limit=200
+    headers:
+      content-type:
+      - application/octet-stream
+    version: None
+  response:
+    status: 200
+    headers:
+      content-type:
+      - application/json
+      access-control-max-age:
+      - '86400'
+      server:
+      - openresty/1.13.6.2
+      access-control-allow-methods:
+      - POST, GET, OPTIONS
+      date:
+      - Tue, 24 Feb 2026 22:58:27 GMT
+      access-control-allow-origin:
+      - '*'
+      via:
+      - 1.1 google
+      content-length:
+      - '166502'
+      alt-svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+    body_file: resp_001.txt
+    version: None

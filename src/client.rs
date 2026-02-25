@@ -6,8 +6,8 @@ use crate::r#trait::LastFmEditClient;
 use crate::retry;
 use crate::types::{
     AlbumPage, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver, DelayReason,
-    EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, OperationalDelayConfig,
-    RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
+    EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, RateLimitConfig,
+    RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
     SingleEditResponse, Track, TrackPage,
 };
 use crate::Result;
@@ -26,6 +26,7 @@ pub struct LastFmEditClientImpl {
     broadcaster: Arc<SharedEventBroadcaster>,
     config: ClientConfig,
     cancel: CancellationState,
+    api_key: Option<String>,
 }
 
 impl LastFmEditClientImpl {
@@ -160,7 +161,7 @@ impl LastFmEditClientImpl {
         let config = ClientConfig {
             retry: retry_config,
             rate_limit: rate_limit_config,
-            operational_delays: OperationalDelayConfig::default(),
+            ..Default::default()
         };
         Self::from_session_with_client_config_arc(client, session, config)
     }
@@ -184,6 +185,7 @@ impl LastFmEditClientImpl {
         config: ClientConfig,
         broadcaster: Arc<SharedEventBroadcaster>,
     ) -> Self {
+        let api_key = config.api_key.clone();
         Self {
             client,
             session: Arc::new(Mutex::new(session)),
@@ -191,6 +193,7 @@ impl LastFmEditClientImpl {
             broadcaster,
             config,
             cancel: CancellationState::new(),
+            api_key,
         }
     }
 
@@ -460,15 +463,36 @@ impl LastFmEditClientImpl {
     }
 
     pub async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
-        let tracks = self.get_recent_scrobbles(page).await?;
+        let url = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library?page={}",
+                session.base_url, session.username, page
+            )
+        };
 
-        let has_next_page = !tracks.is_empty();
+        log::debug!("Fetching recent tracks page {page}");
+        let mut response = self.get(&url).await?;
+        let content = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        log::debug!(
+            "Recent tracks response: {} status, {} chars",
+            response.status(),
+            content.len()
+        );
+
+        let document = Html::parse_document(&content);
+        let tracks = self.parser.parse_recent_scrobbles(&document)?;
+        let (has_next_page, total_pages) = self.parser.parse_pagination(&document, page)?;
 
         Ok(TrackPage {
             tracks,
             page_number: page,
             has_next_page,
-            total_pages: None,
+            total_pages,
         })
     }
 
@@ -795,7 +819,7 @@ impl LastFmEditClientImpl {
     ) -> Result<Vec<ExactScrobbleEdit>> {
         log::debug!("Loading edit form values for '{track_name}' by '{artist_name}'");
 
-        let base_track_url = {
+        let noredirect_track_url_root = {
             let session = self.session.lock().unwrap();
             format!(
                 "{}/user/{}/library/music/+noredirect/{}/_/{}",
@@ -806,27 +830,116 @@ impl LastFmEditClientImpl {
             )
         };
 
-        log::debug!("Fetching track page: {base_track_url}");
-
-        let mut response = self.get(&base_track_url).await?;
-        let html = response
-            .body_string()
-            .await
-            .map_err(|e| crate::LastFmError::Http(e.to_string()))?;
-
-        let document = Html::parse_document(&html);
+        let redirect_track_url_root = {
+            let session = self.session.lock().unwrap();
+            format!(
+                "{}/user/{}/library/music/{}/_/{}",
+                session.base_url,
+                session.username,
+                urlencoding::encode(artist_name),
+                urlencoding::encode(track_name)
+            )
+        };
 
         let mut all_scrobble_edits = Vec::new();
-        let mut unique_albums = std::collections::HashSet::new();
         let max_pages = 5;
 
-        let page_edits = self.extract_scrobble_edits_from_page(
-            &document,
-            track_name,
-            artist_name,
-            &mut unique_albums,
-        )?;
-        all_scrobble_edits.extend(page_edits);
+        let build_track_page_url = |root: &str, page: u32, ajax_param: Option<&str>| -> String {
+            if page <= 1 {
+                if let Some(param) = ajax_param {
+                    format!("{root}?{param}")
+                } else {
+                    root.to_string()
+                }
+            } else if let Some(param) = ajax_param {
+                format!("{root}?page={page}&{param}")
+            } else {
+                format!("{root}?page={page}")
+            }
+        };
+
+        // Prefer +noredirect to avoid Last.fm canonicalization changing the target, but fall back
+        // to the redirecting URL and/or the ajax variant when the HTML doesn't include the
+        // chartlist containing edit forms (Last.fm can serve placeholder HTML + async loads).
+        //
+        // Note: some endpoints use `ajax=true`, others use `ajax=1`, so try both.
+        let candidates = [
+            (&noredirect_track_url_root, None),
+            (&redirect_track_url_root, None),
+            (&noredirect_track_url_root, Some("ajax=true")),
+            (&redirect_track_url_root, Some("ajax=true")),
+            (&noredirect_track_url_root, Some("ajax=1")),
+            (&redirect_track_url_root, Some("ajax=1")),
+        ];
+
+        let mut base_track_url_root = None::<String>;
+        let mut base_track_url_ajax_param = None::<String>;
+        let mut document = None::<Html>;
+        let mut unique_albums = None::<std::collections::HashSet<(String, String)>>;
+        let mut page_edits = None::<Vec<ExactScrobbleEdit>>;
+        let mut last_tried_url = None::<String>;
+        let mut last_tried_html = None::<String>;
+
+        for (root, ajax_param) in candidates {
+            let url = build_track_page_url(root, 1, ajax_param);
+            log::debug!("Fetching track page: {url}");
+
+            let mut response = self.get(&url).await?;
+            let html = response
+                .body_string()
+                .await
+                .map_err(|e| crate::LastFmError::Http(e.to_string()))?;
+            last_tried_url = Some(url.clone());
+            last_tried_html = Some(html.clone());
+            let parsed = Html::parse_document(&html);
+
+            let mut attempt_unique_albums = std::collections::HashSet::new();
+            match self.extract_scrobble_edits_from_page(
+                &parsed,
+                track_name,
+                artist_name,
+                &mut attempt_unique_albums,
+            ) {
+                Ok(edits) if !edits.is_empty() => {
+                    base_track_url_root = Some((*root).to_string());
+                    base_track_url_ajax_param = ajax_param.map(|s| s.to_string());
+                    document = Some(parsed);
+                    unique_albums = Some(attempt_unique_albums);
+                    page_edits = Some(edits);
+                    break;
+                }
+                Ok(_) => {
+                    // Chartlist exists, but no edit forms were extractable. Try the next candidate
+                    // (e.g. ajax=true variant) before giving up.
+                }
+                Err(crate::LastFmError::Parse(msg))
+                    if msg == "No chartlist table found on track page" =>
+                {
+                    // Try next candidate.
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        let base_track_url_root = base_track_url_root.ok_or_else(|| {
+            // Try to leave breadcrumbs for debugging Last.fm page-shape changes.
+            if let (Some(url), Some(html)) = (&last_tried_url, &last_tried_html) {
+                let _ = std::fs::write("/tmp/lastfm-edit-track-page-no-forms.html", html);
+                log::warn!(
+                    "Failed to locate scrobble edit forms for '{track_name}' by '{artist_name}'. Last URL tried: {url}. Wrote HTML to /tmp/lastfm-edit-track-page-no-forms.html"
+                );
+            }
+
+            crate::LastFmError::Parse(format!(
+                "No scrobble forms found for track '{track_name}' by '{artist_name}'"
+            ))
+        })?;
+        let document = document.ok_or_else(|| {
+            crate::LastFmError::Parse("No chartlist table found on track page".to_string())
+        })?;
+        let mut unique_albums = unique_albums.unwrap_or_default();
+
+        all_scrobble_edits.extend(page_edits.unwrap_or_default());
 
         log::debug!(
             "Page 1: found {} unique album variations",
@@ -838,16 +951,11 @@ impl LastFmEditClientImpl {
         let mut page = 2;
 
         while has_next_page && page <= max_pages {
-            let page_url = {
-                let session = self.session.lock().unwrap();
-                format!(
-                    "{}/user/{}/library/music/{}/_/{}?page={page}",
-                    session.base_url,
-                    session.username,
-                    urlencoding::encode(artist_name),
-                    urlencoding::encode(track_name)
-                )
-            };
+            let page_url = build_track_page_url(
+                &base_track_url_root,
+                page,
+                base_track_url_ajax_param.as_deref(),
+            );
 
             log::debug!("Fetching page {page} for additional album variations");
 
@@ -913,7 +1021,7 @@ impl LastFmEditClientImpl {
         })?;
 
         let row_selector = Selector::parse("tr").unwrap();
-        let scrobble_edits = table
+        let mut scrobble_edits: Vec<ExactScrobbleEdit> = table
             .select(&row_selector)
             .filter_map(|row| {
                 Self::extract_scrobble_edit_from_row(
@@ -921,9 +1029,32 @@ impl LastFmEditClientImpl {
                     expected_track,
                     expected_artist,
                     unique_albums,
+                    true,
                 )
             })
             .collect();
+
+        // Some track pages (especially when Last.fm redirects/canonicalizes artist or track names)
+        // still contain valid edit forms, but their hidden `track_name`/`artist_name` values don't
+        // exactly match the requested URL params. In that case, fall back to "any form on page"
+        // so the caller can still apply edits rather than failing hard.
+        if scrobble_edits.is_empty() {
+            log::debug!(
+                "No exact-match scrobble forms found for '{expected_track}' by '{expected_artist}'; falling back to unfiltered forms on page"
+            );
+            scrobble_edits = table
+                .select(&row_selector)
+                .filter_map(|row| {
+                    Self::extract_scrobble_edit_from_row(
+                        row,
+                        expected_track,
+                        expected_artist,
+                        unique_albums,
+                        false,
+                    )
+                })
+                .collect();
+        }
 
         Ok(scrobble_edits)
     }
@@ -933,6 +1064,7 @@ impl LastFmEditClientImpl {
         expected_track: &str,
         expected_artist: &str,
         unique_albums: &mut std::collections::HashSet<(String, String)>,
+        require_exact_match: bool,
     ) -> Option<ExactScrobbleEdit> {
         let count_bar_link_selector = Selector::parse(".chartlist-count-bar-link").unwrap();
         if row.select(&count_bar_link_selector).next().is_some() {
@@ -954,7 +1086,7 @@ impl LastFmEditClientImpl {
         let form_track = extract_form_value("track_name").unwrap_or_default();
         let form_artist = extract_form_value("artist_name").unwrap_or_default();
 
-        if form_track != expected_track || form_artist != expected_artist {
+        if require_exact_match && (form_track != expected_track || form_artist != expected_artist) {
             return None;
         }
 
@@ -1137,7 +1269,7 @@ impl LastFmEditClientImpl {
             }
         }
 
-        let is_ajax = url.contains("ajax=true");
+        let is_ajax = url.contains("ajax=true") || url.contains("ajax=1");
         let referer_url = if url.contains("page=") {
             Some(url.split('?').next().unwrap_or(url))
         } else {
@@ -1152,6 +1284,12 @@ impl LastFmEditClientImpl {
         self.broadcast_event(ClientEvent::RequestStarted {
             request: request_info.clone(),
         });
+
+        // Optional throttle for heavy library scanning. Kept cancelable so callers can stop.
+        if self.config.operational_delays.get_delay_ms > 0 {
+            self.sleep_ms(self.config.operational_delays.get_delay_ms)
+                .await?;
+        }
 
         let response = self
             .client
@@ -1531,6 +1669,19 @@ impl LastFmEditClientImpl {
         })
     }
 
+    /// Construct a standalone `LastFmApiClientImpl` from this edit client's fields.
+    ///
+    /// Returns `None` if no API key is configured.
+    pub fn api_client(&self) -> Option<crate::api::LastFmApiClientImpl> {
+        self.api_key.as_ref().map(|key| {
+            crate::api::LastFmApiClientImpl::new(
+                Box::new(ArcHttpClient(self.client.clone())),
+                self.username(),
+                key.clone(),
+            )
+        })
+    }
+
     /// Expose the inner HTTP client for advanced use cases like VCR cassette management
     pub fn inner_client(&self) -> Arc<dyn HttpClient + Send + Sync> {
         self.client.clone()
@@ -1742,5 +1893,67 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn is_cancelled(&self) -> bool {
         self.cancel.is_cancelled()
+    }
+}
+
+#[async_trait(?Send)]
+impl crate::api::LastFmApiClient for LastFmEditClientImpl {
+    async fn api_get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
+        let api_key = self
+            .api_key
+            .as_ref()
+            .ok_or_else(|| LastFmError::Auth("No API key configured".to_string()))?;
+
+        let username = self.username();
+        let url = format!(
+            "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&format=json&page={}&limit=200",
+            urlencoding::encode(&username),
+            urlencoding::encode(api_key),
+            page
+        );
+
+        let request_info = RequestInfo::from_url_and_method(&url, "GET");
+        let request_start = std::time::Instant::now();
+
+        self.broadcast_event(ClientEvent::RequestStarted {
+            request: request_info.clone(),
+        });
+
+        let request = Request::new(Method::Get, url.parse::<Url>().unwrap());
+        let mut response = self
+            .client
+            .send(request)
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        self.broadcast_event(ClientEvent::RequestCompleted {
+            request: request_info,
+            status_code: response.status().into(),
+            duration_ms: request_start.elapsed().as_millis() as u64,
+        });
+
+        let body = response
+            .body_string()
+            .await
+            .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        crate::api::parse_api_recent_tracks_response(&body)
+    }
+}
+
+/// Wrapper that turns an `Arc<dyn HttpClient>` into `Box<dyn HttpClient>`.
+///
+/// This is used by `api_client()` so that the standalone `LastFmApiClientImpl`
+/// can share the same underlying HTTP client as the edit client.
+#[derive(Debug)]
+struct ArcHttpClient(Arc<dyn HttpClient + Send + Sync>);
+
+#[async_trait::async_trait]
+impl HttpClient for ArcHttpClient {
+    async fn send(
+        &self,
+        req: http_client::Request,
+    ) -> std::result::Result<http_client::Response, http_types::Error> {
+        self.0.send(req).await
     }
 }

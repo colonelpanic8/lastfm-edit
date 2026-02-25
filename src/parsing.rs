@@ -616,12 +616,21 @@ impl LastFmParser {
         document: &Html,
         _current_page: u32,
     ) -> Result<(bool, Option<u32>)> {
-        let pagination_selector = Selector::parse(".pagination-list").unwrap();
+        // Different parts of Last.fm use slightly different pagination wrappers.
+        // Prefer the more specific `.pagination-list` when present, otherwise fall back to `.pagination`.
+        let pagination = [
+            Selector::parse(".pagination-list").unwrap(),
+            Selector::parse(".pagination").unwrap(),
+        ]
+        .into_iter()
+        .find_map(|sel| document.select(&sel).next());
 
-        if let Some(pagination) = document.select(&pagination_selector).next() {
+        if let Some(pagination) = pagination {
             // Try multiple possible selectors for next page link
             let next_selectors = [
                 "a[aria-label=\"Next\"]",
+                "a[aria-label=\"Next page\"]",
+                "a[rel=\"next\"]",
                 ".pagination-next a",
                 "a:contains(\"Next\")",
                 ".next a",
@@ -661,7 +670,36 @@ impl LastFmParser {
                 return Some(total);
             }
         }
-        None
+
+        let extract_page_param = |href: &str| -> Option<u32> {
+            let idx = href.find("page=")?;
+            let after = &href[idx + "page=".len()..];
+            let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if digits.is_empty() {
+                return None;
+            }
+            digits.parse::<u32>().ok()
+        };
+
+        // Fall back to extracting the maximum `page=` value found in pagination links.
+        let link_selector = Selector::parse("a[href*=\"page=\"]").unwrap();
+        let mut max_page = None::<u32>;
+        for a in pagination.select(&link_selector) {
+            if let Some(href) = a.value().attr("href") {
+                if let Some(p) = extract_page_param(href) {
+                    max_page = Some(max_page.map_or(p, |m| m.max(p)));
+                }
+            }
+
+            let label = a.text().collect::<String>().trim().to_string();
+            if !label.is_empty() && label.chars().all(|c| c.is_ascii_digit()) {
+                if let Ok(p) = label.parse::<u32>() {
+                    max_page = Some(max_page.map_or(p, |m| m.max(p)));
+                }
+            }
+        }
+
+        max_page
     }
 
     // === JSON PARSING METHODS ===

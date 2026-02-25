@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+pub mod api;
 pub mod cancel;
 pub mod client;
 pub mod discovery;
@@ -16,6 +17,7 @@ pub mod vcr_form_data;
 pub mod vcr_matcher;
 pub mod vcr_test_utils;
 
+pub use api::{LastFmApiClient, LastFmApiClientImpl};
 pub use cancel::CancellationState;
 pub use client::LastFmEditClientImpl;
 pub use discovery::{
@@ -41,6 +43,7 @@ pub type ArtistTracksDirectIterator = iterator::ArtistTracksDirectIterator<LastF
 pub type ArtistAlbumsIterator = iterator::ArtistAlbumsIterator<LastFmEditClientImpl>;
 pub type AlbumTracksIterator = iterator::AlbumTracksIterator<LastFmEditClientImpl>;
 pub type RecentTracksIterator = iterator::RecentTracksIterator<LastFmEditClientImpl>;
+pub type ApiRecentTracksIterator = iterator::ApiRecentTracksIterator<api::LastFmApiClientImpl>;
 pub type SearchTracksIterator = iterator::SearchTracksIterator<LastFmEditClientImpl>;
 pub type SearchAlbumsIterator = iterator::SearchAlbumsIterator<LastFmEditClientImpl>;
 pub type SearchArtistsIterator = iterator::SearchArtistsIterator<LastFmEditClientImpl>;

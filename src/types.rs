@@ -1049,6 +1049,11 @@ impl RateLimitConfig {
 /// Configuration for operational delays between requests
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationalDelayConfig {
+    /// Optional delay before each GET request (in milliseconds).
+    ///
+    /// This is a pragmatic throttle to avoid triggering Last.fm's HTML page rate limits when
+    /// scanning libraries (e.g. `.../library?page=N`).
+    pub get_delay_ms: u64,
     /// Delay between multiple edit operations (in milliseconds)
     pub edit_delay_ms: u64,
     /// Delay between delete operations (in milliseconds)
@@ -1058,6 +1063,7 @@ pub struct OperationalDelayConfig {
 impl Default for OperationalDelayConfig {
     fn default() -> Self {
         Self {
+            get_delay_ms: 0,
             edit_delay_ms: 1000,   // 1 second
             delete_delay_ms: 1000, // 1 second
         }
@@ -1068,6 +1074,7 @@ impl OperationalDelayConfig {
     /// Create config with no delays (useful for testing)
     pub fn no_delays() -> Self {
         Self {
+            get_delay_ms: 0,
             edit_delay_ms: 0,
             delete_delay_ms: 0,
         }
@@ -1076,9 +1083,16 @@ impl OperationalDelayConfig {
     /// Create config with custom delays
     pub fn with_delays(edit_delay_ms: u64, delete_delay_ms: u64) -> Self {
         Self {
+            get_delay_ms: 0,
             edit_delay_ms,
             delete_delay_ms,
         }
+    }
+
+    /// Set GET request delay (in milliseconds).
+    pub fn with_get_delay_ms(mut self, get_delay_ms: u64) -> Self {
+        self.get_delay_ms = get_delay_ms;
+        self
     }
 }
 
@@ -1091,6 +1105,8 @@ pub struct ClientConfig {
     pub rate_limit: RateLimitConfig,
     /// Operational delay configuration
     pub operational_delays: OperationalDelayConfig,
+    /// Last.fm API key for read-only API access (optional)
+    pub api_key: Option<String>,
 }
 
 impl ClientConfig {
@@ -1103,17 +1119,15 @@ impl ClientConfig {
     pub fn with_retries_disabled() -> Self {
         Self {
             retry: RetryConfig::disabled(),
-            rate_limit: RateLimitConfig::default(),
-            operational_delays: OperationalDelayConfig::default(),
+            ..Default::default()
         }
     }
 
     /// Create config with rate limit detection disabled
     pub fn with_rate_limiting_disabled() -> Self {
         Self {
-            retry: RetryConfig::default(),
             rate_limit: RateLimitConfig::disabled(),
-            operational_delays: OperationalDelayConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -1122,7 +1136,7 @@ impl ClientConfig {
         Self {
             retry: RetryConfig::disabled(),
             rate_limit: RateLimitConfig::disabled(),
-            operational_delays: OperationalDelayConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -1135,8 +1149,8 @@ impl ClientConfig {
                 max_delay: 0,  // No delay for fast tests
                 enabled: true,
             },
-            rate_limit: RateLimitConfig::default(), // Keep detection enabled
             operational_delays: OperationalDelayConfig::no_delays(),
+            ..Default::default()
         }
     }
 
@@ -1187,6 +1201,12 @@ impl ClientConfig {
     /// Enable/disable response pattern rate limit detection
     pub fn with_pattern_detection(mut self, enabled: bool) -> Self {
         self.rate_limit.detect_by_patterns = enabled;
+        self
+    }
+
+    /// Set the Last.fm API key for read-only API access
+    pub fn with_api_key(mut self, api_key: String) -> Self {
+        self.api_key = Some(api_key);
         self
     }
 }
@@ -1240,6 +1260,21 @@ impl RetryConfig {
         Self {
             base_delay,
             max_delay,
+            ..Default::default()
+        }
+    }
+
+    /// Create a config that retries indefinitely on `RateLimit` errors.
+    ///
+    /// This is intended for long-running background workflows that prefer
+    /// forward progress over failing fast (e.g. scanners/scrubbers).
+    ///
+    /// Cancellation is still honored by `retry_with_backoff_cancelable` when a
+    /// `cancel_rx` is provided.
+    pub fn unbounded() -> Self {
+        Self {
+            max_retries: u32::MAX,
+            enabled: true,
             ..Default::default()
         }
     }

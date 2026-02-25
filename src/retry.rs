@@ -64,6 +64,7 @@ where
     let mut retries = 0;
     let mut total_retry_time = 0;
     let mut rate_limit_start_time: Option<Instant> = None;
+    let unbounded = config.enabled && config.max_retries == u32::MAX;
 
     loop {
         match operation().await {
@@ -86,7 +87,7 @@ where
                     rate_limit_start_time = Some(Instant::now());
                 }
 
-                if !config.enabled || retries >= config.max_retries {
+                if !config.enabled || (!unbounded && retries >= config.max_retries) {
                     if !config.enabled {
                         log::debug!("Retries disabled for {operation_name} operation");
                     } else {
@@ -99,19 +100,28 @@ where
                 }
 
                 // Calculate delay with exponential backoff
-                let base_backoff = config.base_delay * 2_u64.pow(retries);
-                let delay = std::cmp::min(
-                    std::cmp::min(retry_after + base_backoff, config.max_delay),
-                    retry_after + (retries as u64 * 30), // Legacy backoff for compatibility
-                );
+                let pow = 2u64.checked_pow(retries).unwrap_or(u64::MAX);
+                let base_backoff = config.base_delay.saturating_mul(pow);
+                let delay_exp = retry_after.saturating_add(base_backoff);
+                let delay_legacy = retry_after.saturating_add((retries as u64).saturating_mul(30));
+                let delay = std::cmp::min(std::cmp::min(delay_exp, config.max_delay), delay_legacy);
 
-                log::info!(
-                    "{} rate limited. Waiting {} seconds before retry {} of {}",
-                    operation_name,
-                    delay,
-                    retries + 1,
-                    config.max_retries
-                );
+                if unbounded {
+                    log::info!(
+                        "{} rate limited. Waiting {} seconds before retry {} (unbounded)",
+                        operation_name,
+                        delay,
+                        retries + 1
+                    );
+                } else {
+                    log::info!(
+                        "{} rate limited. Waiting {} seconds before retry {} of {}",
+                        operation_name,
+                        delay,
+                        retries + 1,
+                        config.max_retries
+                    );
+                }
 
                 // Notify caller about rate limit
                 let timestamp = SystemTime::now()
@@ -125,8 +135,8 @@ where
                 } else {
                     tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
                 }
-                retries += 1;
-                total_retry_time += delay;
+                retries = retries.saturating_add(1);
+                total_retry_time = total_retry_time.saturating_add(delay);
             }
             Err(other_error) => {
                 return Err(other_error);

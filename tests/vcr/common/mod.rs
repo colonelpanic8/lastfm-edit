@@ -226,6 +226,43 @@ pub async fn create_lastfm_vcr_test_client(
     create_lastfm_vcr_test_client_without_login_recording(test_name).await
 }
 
+/// Helper for creating Last.fm VCR test clients that use the JSON API (not web scraping).
+///
+/// API tests don't need login/cookies — they only need an `api_key` in the URL.
+/// During recording, the real API key from `LASTFM_EDIT_API_KEY` is used, then
+/// scrubbed by the VCR filter. During replay, `TEST_API_KEY` is used in the client
+/// config so URLs match the filtered cassette.
+pub async fn create_lastfm_api_vcr_test_client(
+    test_name: &str,
+) -> Result<lastfm_edit::LastFmApiClientImpl, Box<dyn std::error::Error>> {
+    let setup = VcrTestSetup::new(test_name)?;
+
+    let api_key = match setup.mode {
+        VcrMode::Record => env::var("LASTFM_EDIT_API_KEY")
+            .expect("LASTFM_EDIT_API_KEY required for API VCR recording"),
+        _ => lastfm_edit::vcr_test_utils::TEST_API_KEY.to_string(),
+    };
+
+    let vcr_client = if matches!(setup.mode, VcrMode::Record) {
+        let filter_chain = create_lastfm_test_filter_chain()?;
+        VcrClient::builder(&setup.cassette_path)
+            .inner_client(Box::new(http_client::native::NativeClient::new()))
+            .mode(VcrMode::Record)
+            .matcher(Box::new(LastFmEditVcrMatcher::new()))
+            .filter_chain(filter_chain)
+            .build()
+            .await?
+    } else {
+        setup.create_vcr_client().await?
+    };
+
+    Ok(lastfm_edit::LastFmApiClientImpl::new(
+        Box::new(vcr_client),
+        "IvanMalison".to_string(),
+        api_key,
+    ))
+}
+
 pub async fn create_vcr_client(
     cassette_path: &str,
     mode: VcrMode,

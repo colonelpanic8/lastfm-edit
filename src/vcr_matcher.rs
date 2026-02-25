@@ -67,6 +67,8 @@ impl RequestMatcher for LastFmEditVcrMatcher {
             "x-session-id",
             "x-auth-token",
             "auth-token",
+            "accept",
+            "upgrade-insecure-requests",
         ];
 
         // Match on all headers EXCEPT the unstable ones
@@ -146,6 +148,8 @@ impl RequestMatcher for LastFmEditVcrMatcher {
             "x-session-id",
             "x-auth-token",
             "auth-token",
+            "accept",
+            "upgrade-insecure-requests",
         ];
 
         // Match on all headers EXCEPT the unstable ones

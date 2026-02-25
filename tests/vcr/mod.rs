@@ -1,5 +1,6 @@
 mod album_search;
 mod album_tracks;
+mod api_recent_tracks;
 mod artist_albums;
 mod artist_tracks;
 mod beatles_page4;
