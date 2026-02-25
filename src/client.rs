@@ -2,7 +2,7 @@ use crate::edit_analysis;
 use crate::headers;
 use crate::login::extract_cookies_from_response;
 use crate::parsing::LastFmParser;
-use crate::r#trait::LastFmEditClient;
+use crate::r#trait::{LastFmBaseClient, LastFmEditClient};
 use crate::retry;
 use crate::types::{
     AlbumPage, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver, DelayReason,
@@ -1689,31 +1689,47 @@ impl LastFmEditClientImpl {
 }
 
 #[async_trait(?Send)]
-impl LastFmEditClient for LastFmEditClientImpl {
-    fn username(&self) -> String {
-        self.username()
+impl LastFmBaseClient for LastFmEditClientImpl {
+    async fn get_artists_page(&self, page: u32) -> Result<crate::ArtistPage> {
+        self.get_artists_page(page).await
     }
 
-    async fn find_recent_scrobble_for_track(
+    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
+        self.get_artist_tracks_page(artist, page).await
+    }
+
+    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
+        self.get_artist_albums_page(artist, page).await
+    }
+
+    async fn get_album_tracks_page(
         &self,
-        track_name: &str,
+        album_name: &str,
         artist_name: &str,
-        max_pages: u32,
-    ) -> Result<Option<Track>> {
-        self.find_recent_scrobble_for_track(track_name, artist_name, max_pages)
+        page: u32,
+    ) -> Result<TrackPage> {
+        self.get_album_tracks_page(album_name, artist_name, page)
             .await
     }
 
-    async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
-        self.edit_scrobble(edit).await
+    async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
+        self.get_recent_tracks_page(page).await
     }
 
-    async fn edit_scrobble_single(
-        &self,
-        exact_edit: &ExactScrobbleEdit,
-        max_retries: u32,
-    ) -> Result<EditResponse> {
-        self.edit_scrobble_single(exact_edit, max_retries).await
+    async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage> {
+        self.search_tracks_page(query, page).await
+    }
+
+    async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage> {
+        self.search_albums_page(query, page).await
+    }
+
+    async fn search_artists_page(&self, query: &str, page: u32) -> Result<crate::ArtistPage> {
+        self.search_artists_page(query, page).await
+    }
+
+    fn username(&self) -> String {
+        self.username()
     }
 
     fn get_session(&self) -> LastFmEditSession {
@@ -1726,6 +1742,57 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
     fn latest_event(&self) -> Option<ClientEvent> {
         self.latest_event()
+    }
+
+    async fn validate_session(&self) -> bool {
+        self.validate_session().await
+    }
+
+    async fn find_recent_scrobble_for_track(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+        max_pages: u32,
+    ) -> Result<Option<Track>> {
+        self.find_recent_scrobble_for_track(track_name, artist_name, max_pages)
+            .await
+    }
+
+    fn cancel(&self) {
+        self.cancel.cancel();
+    }
+
+    fn reset_cancel(&self) {
+        self.cancel.reset();
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
+    }
+}
+
+#[async_trait(?Send)]
+impl LastFmEditClient for LastFmEditClientImpl {
+    async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse> {
+        self.edit_scrobble(edit).await
+    }
+
+    async fn edit_scrobble_single(
+        &self,
+        exact_edit: &ExactScrobbleEdit,
+        max_retries: u32,
+    ) -> Result<EditResponse> {
+        self.edit_scrobble_single(exact_edit, max_retries).await
+    }
+
+    async fn delete_scrobble(
+        &self,
+        artist_name: &str,
+        track_name: &str,
+        timestamp: u64,
+    ) -> Result<bool> {
+        self.delete_scrobble(artist_name, track_name, timestamp)
+            .await
     }
 
     fn discover_scrobbles(
@@ -1757,32 +1824,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
             (None, None) => Box::new(crate::ArtistTracksDiscovery::new(self.clone(), edit)),
         }
-    }
-
-    async fn get_artists_page(&self, page: u32) -> Result<crate::ArtistPage> {
-        self.get_artists_page(page).await
-    }
-
-    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<TrackPage> {
-        self.get_artist_tracks_page(artist, page).await
-    }
-
-    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<AlbumPage> {
-        self.get_artist_albums_page(artist, page).await
-    }
-
-    async fn get_album_tracks_page(
-        &self,
-        album_name: &str,
-        artist_name: &str,
-        page: u32,
-    ) -> Result<TrackPage> {
-        self.get_album_tracks_page(album_name, artist_name, page)
-            .await
-    }
-
-    async fn get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
-        self.get_recent_tracks_page(page).await
     }
 
     fn artists(&self) -> Box<dyn crate::AsyncPaginatedIterator<crate::Artist>> {
@@ -1855,44 +1896,6 @@ impl LastFmEditClient for LastFmEditClientImpl {
             self.clone(),
             query.to_string(),
         ))
-    }
-
-    async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage> {
-        self.search_tracks_page(query, page).await
-    }
-
-    async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage> {
-        self.search_albums_page(query, page).await
-    }
-
-    async fn search_artists_page(&self, query: &str, page: u32) -> Result<crate::ArtistPage> {
-        self.search_artists_page(query, page).await
-    }
-
-    async fn validate_session(&self) -> bool {
-        self.validate_session().await
-    }
-
-    async fn delete_scrobble(
-        &self,
-        artist_name: &str,
-        track_name: &str,
-        timestamp: u64,
-    ) -> Result<bool> {
-        self.delete_scrobble(artist_name, track_name, timestamp)
-            .await
-    }
-
-    fn cancel(&self) {
-        self.cancel.cancel();
-    }
-
-    fn reset_cancel(&self) {
-        self.cancel.reset();
-    }
-
-    fn is_cancelled(&self) -> bool {
-        self.cancel.is_cancelled()
     }
 }
 

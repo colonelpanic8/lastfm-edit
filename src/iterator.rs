@@ -1,5 +1,5 @@
 use crate::api::LastFmApiClient;
-use crate::r#trait::LastFmEditClient;
+use crate::r#trait::LastFmBaseClient;
 use crate::{Album, AlbumPage, Result, Track, TrackPage};
 
 use async_trait::async_trait;
@@ -79,7 +79,7 @@ pub trait AsyncPaginatedIterator<T> {
 ///
 /// The iterator loads albums and their tracks as needed and handles rate limiting
 /// automatically to be respectful to Last.fm's servers.
-pub struct ArtistTracksIterator<C: LastFmEditClient> {
+pub struct ArtistTracksIterator<C: LastFmBaseClient> {
     client: C,
     artist: String,
     album_iterator: Option<ArtistAlbumsIterator<C>>,
@@ -89,7 +89,7 @@ pub struct ArtistTracksIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracksIterator<C> {
+impl<C: LastFmBaseClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // If we're finished, return None
         if self.finished {
@@ -170,10 +170,10 @@ impl<C: LastFmEditClient + Clone> AsyncPaginatedIterator<Track> for ArtistTracks
     }
 }
 
-impl<C: LastFmEditClient + Clone> ArtistTracksIterator<C> {
+impl<C: LastFmBaseClient + Clone> ArtistTracksIterator<C> {
     /// Create a new artist tracks iterator.
     ///
-    /// This is typically called via [`LastFmEditClient::artist_tracks`](crate::LastFmEditClient::artist_tracks).
+    /// This is typically called via [`LastFmBaseClient::artist_tracks`](crate::LastFmBaseClient::artist_tracks).
     pub fn new(client: C, artist: String) -> Self {
         Self {
             client,
@@ -193,7 +193,7 @@ impl<C: LastFmEditClient + Clone> ArtistTracksIterator<C> {
 /// `/user/{username}/library/music/{artist}/+tracks` endpoint with pagination.
 /// This is more efficient than the album-based approach as it doesn't need to
 /// iterate through albums first.
-pub struct ArtistTracksDirectIterator<C: LastFmEditClient> {
+pub struct ArtistTracksDirectIterator<C: LastFmBaseClient> {
     client: C,
     artist: String,
     current_page: u32,
@@ -204,7 +204,7 @@ pub struct ArtistTracksDirectIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for ArtistTracksDirectIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<Track> for ArtistTracksDirectIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -231,10 +231,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for ArtistTracksDirectIt
     }
 }
 
-impl<C: LastFmEditClient> ArtistTracksDirectIterator<C> {
+impl<C: LastFmBaseClient> ArtistTracksDirectIterator<C> {
     /// Create a new direct artist tracks iterator.
     ///
-    /// This is typically called via [`LastFmEditClient::artist_tracks_direct`](crate::LastFmEditClient::artist_tracks_direct).
+    /// This is typically called via [`LastFmBaseClient::artist_tracks_direct`](crate::LastFmBaseClient::artist_tracks_direct).
     pub fn new(client: C, artist: String) -> Self {
         Self {
             client,
@@ -286,7 +286,7 @@ impl<C: LastFmEditClient> ArtistTracksDirectIterator<C> {
 ///
 /// This iterator provides paginated access to all albums by a specific artist
 /// in the authenticated user's Last.fm library, ordered by play count.
-pub struct ArtistAlbumsIterator<C: LastFmEditClient> {
+pub struct ArtistAlbumsIterator<C: LastFmBaseClient> {
     client: C,
     artist: String,
     current_page: u32,
@@ -296,7 +296,7 @@ pub struct ArtistAlbumsIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for ArtistAlbumsIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<Album> for ArtistAlbumsIterator<C> {
     async fn next(&mut self) -> Result<Option<Album>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -318,10 +318,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for ArtistAlbumsIterator
     }
 }
 
-impl<C: LastFmEditClient> ArtistAlbumsIterator<C> {
+impl<C: LastFmBaseClient> ArtistAlbumsIterator<C> {
     /// Create a new artist albums iterator.
     ///
-    /// This is typically called via [`LastFmEditClient::artist_albums`](crate::LastFmEditClient::artist_albums).
+    /// This is typically called via [`LastFmBaseClient::artist_albums`](crate::LastFmBaseClient::artist_albums).
     pub fn new(client: C, artist: String) -> Self {
         Self {
             client,
@@ -366,7 +366,7 @@ impl<C: LastFmEditClient> ArtistAlbumsIterator<C> {
 /// This iterator provides access to the user's recent listening history with timestamps,
 /// which is essential for finding tracks that can be edited. It supports optional
 /// timestamp-based filtering to avoid reprocessing old data.
-pub struct RecentTracksIterator<C: LastFmEditClient> {
+pub struct RecentTracksIterator<C: LastFmBaseClient> {
     client: C,
     current_page: u32,
     has_more: bool,
@@ -375,7 +375,7 @@ pub struct RecentTracksIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for RecentTracksIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<Track> for RecentTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -424,10 +424,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for RecentTracksIterator
     }
 }
 
-impl<C: LastFmEditClient> RecentTracksIterator<C> {
+impl<C: LastFmBaseClient> RecentTracksIterator<C> {
     /// Create a new recent tracks iterator starting from page 1.
     ///
-    /// This is typically called via [`LastFmEditClient::recent_tracks`](crate::LastFmEditClient::recent_tracks).
+    /// This is typically called via [`LastFmBaseClient::recent_tracks`](crate::LastFmBaseClient::recent_tracks).
     pub fn new(client: C) -> Self {
         Self::with_starting_page(client, 1)
     }
@@ -439,7 +439,7 @@ impl<C: LastFmEditClient> RecentTracksIterator<C> {
     ///
     /// # Arguments
     ///
-    /// * `client` - The LastFmEditClient to use for API calls
+    /// * `client` - The LastFmBaseClient to use for API calls
     /// * `starting_page` - The page number to start from (1-indexed)
     pub fn with_starting_page(client: C, starting_page: u32) -> Self {
         let page = std::cmp::max(1, starting_page);
@@ -562,7 +562,7 @@ impl<C: LastFmApiClient> ApiRecentTracksIterator<C> {
 /// This iterator provides access to all tracks in a specific album by an artist
 /// in the authenticated user's Last.fm library. Unlike paginated iterators,
 /// this loads tracks once and iterates through them.
-pub struct AlbumTracksIterator<C: LastFmEditClient> {
+pub struct AlbumTracksIterator<C: LastFmBaseClient> {
     client: C,
     album_name: String,
     artist_name: String,
@@ -571,7 +571,7 @@ pub struct AlbumTracksIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for AlbumTracksIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<Track> for AlbumTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // Load tracks if not already loaded
         if self.tracks.is_none() {
@@ -624,10 +624,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for AlbumTracksIterator<
     }
 }
 
-impl<C: LastFmEditClient> AlbumTracksIterator<C> {
+impl<C: LastFmBaseClient> AlbumTracksIterator<C> {
     /// Create a new album tracks iterator.
     ///
-    /// This is typically called via [`LastFmEditClient::album_tracks`](crate::LastFmEditClient::album_tracks).
+    /// This is typically called via [`LastFmBaseClient::album_tracks`](crate::LastFmBaseClient::album_tracks).
     pub fn new(client: C, album_name: String, artist_name: String) -> Self {
         Self {
             client,
@@ -643,7 +643,7 @@ impl<C: LastFmEditClient> AlbumTracksIterator<C> {
 ///
 /// This iterator provides paginated access to tracks that match a search query
 /// in the authenticated user's Last.fm library, using Last.fm's built-in search functionality.
-pub struct SearchTracksIterator<C: LastFmEditClient> {
+pub struct SearchTracksIterator<C: LastFmBaseClient> {
     client: C,
     query: String,
     current_page: u32,
@@ -653,7 +653,7 @@ pub struct SearchTracksIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for SearchTracksIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<Track> for SearchTracksIterator<C> {
     async fn next(&mut self) -> Result<Option<Track>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -675,10 +675,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Track> for SearchTracksIterator
     }
 }
 
-impl<C: LastFmEditClient> SearchTracksIterator<C> {
+impl<C: LastFmBaseClient> SearchTracksIterator<C> {
     /// Create a new search tracks iterator.
     ///
-    /// This is typically called via [`LastFmEditClient::search_tracks`](crate::LastFmEditClient::search_tracks).
+    /// This is typically called via [`LastFmBaseClient::search_tracks`](crate::LastFmBaseClient::search_tracks).
     pub fn new(client: C, query: String) -> Self {
         Self {
             client,
@@ -741,7 +741,7 @@ impl<C: LastFmEditClient> SearchTracksIterator<C> {
 /// in the authenticated user's Last.fm library, using Last.fm's built-in search functionality.
 ///
 /// # Examples
-pub struct SearchAlbumsIterator<C: LastFmEditClient> {
+pub struct SearchAlbumsIterator<C: LastFmBaseClient> {
     client: C,
     query: String,
     current_page: u32,
@@ -751,7 +751,7 @@ pub struct SearchAlbumsIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for SearchAlbumsIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<Album> for SearchAlbumsIterator<C> {
     async fn next(&mut self) -> Result<Option<Album>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -773,10 +773,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<Album> for SearchAlbumsIterator
     }
 }
 
-impl<C: LastFmEditClient> SearchAlbumsIterator<C> {
+impl<C: LastFmBaseClient> SearchAlbumsIterator<C> {
     /// Create a new search albums iterator.
     ///
-    /// This is typically called via [`LastFmEditClient::search_albums`](crate::LastFmEditClient::search_albums).
+    /// This is typically called via [`LastFmBaseClient::search_albums`](crate::LastFmBaseClient::search_albums).
     pub fn new(client: C, query: String) -> Self {
         Self {
             client,
@@ -837,7 +837,7 @@ impl<C: LastFmEditClient> SearchAlbumsIterator<C> {
 ///
 /// This iterator provides paginated access to artists that match a search query
 /// in the authenticated user's Last.fm library, using Last.fm's built-in search functionality.
-pub struct SearchArtistsIterator<C: LastFmEditClient> {
+pub struct SearchArtistsIterator<C: LastFmBaseClient> {
     client: C,
     query: String,
     current_page: u32,
@@ -847,7 +847,7 @@ pub struct SearchArtistsIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<crate::Artist> for SearchArtistsIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<crate::Artist> for SearchArtistsIterator<C> {
     async fn next(&mut self) -> Result<Option<crate::Artist>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -869,10 +869,10 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<crate::Artist> for SearchArtist
     }
 }
 
-impl<C: LastFmEditClient> SearchArtistsIterator<C> {
+impl<C: LastFmBaseClient> SearchArtistsIterator<C> {
     /// Create a new search artists iterator.
     ///
-    /// This is typically called via [`LastFmEditClient::search_artists`](crate::LastFmEditClient::search_artists).
+    /// This is typically called via [`LastFmBaseClient::search_artists`](crate::LastFmBaseClient::search_artists).
     pub fn new(client: C, query: String) -> Self {
         Self {
             client,
@@ -938,7 +938,7 @@ impl<C: LastFmEditClient> SearchArtistsIterator<C> {
 /// This iterator provides access to all artists in the authenticated user's Last.fm library,
 /// sorted by play count (highest first). The iterator loads artists as needed and handles
 /// rate limiting automatically to be respectful to Last.fm's servers.
-pub struct ArtistsIterator<C: LastFmEditClient> {
+pub struct ArtistsIterator<C: LastFmBaseClient> {
     client: C,
     current_page: u32,
     has_more: bool,
@@ -947,7 +947,7 @@ pub struct ArtistsIterator<C: LastFmEditClient> {
 }
 
 #[async_trait(?Send)]
-impl<C: LastFmEditClient> AsyncPaginatedIterator<crate::Artist> for ArtistsIterator<C> {
+impl<C: LastFmBaseClient> AsyncPaginatedIterator<crate::Artist> for ArtistsIterator<C> {
     async fn next(&mut self) -> Result<Option<crate::Artist>> {
         // If buffer is empty, try to load next page
         if self.buffer.is_empty() {
@@ -969,7 +969,7 @@ impl<C: LastFmEditClient> AsyncPaginatedIterator<crate::Artist> for ArtistsItera
     }
 }
 
-impl<C: LastFmEditClient> ArtistsIterator<C> {
+impl<C: LastFmBaseClient> ArtistsIterator<C> {
     /// Create a new artists iterator.
     ///
     /// This iterator will start from page 1 and load all artists in the user's library.

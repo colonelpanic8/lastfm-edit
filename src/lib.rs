@@ -25,7 +25,7 @@ pub use discovery::{
     TrackVariationsDiscovery,
 };
 pub use login::LoginManager;
-pub use r#trait::LastFmEditClient;
+pub use r#trait::{LastFmBaseClient, LastFmEditClient};
 
 // Re-export all types from the consolidated types module
 pub use iterator::AsyncPaginatedIterator;
@@ -48,7 +48,7 @@ pub type SearchTracksIterator = iterator::SearchTracksIterator<LastFmEditClientI
 pub type SearchAlbumsIterator = iterator::SearchAlbumsIterator<LastFmEditClientImpl>;
 pub type SearchArtistsIterator = iterator::SearchArtistsIterator<LastFmEditClientImpl>;
 #[cfg(feature = "mock")]
-pub use r#trait::MockLastFmEditClient;
+pub use r#trait::{MockLastFmBaseClient, MockLastFmEditClient};
 
 // Re-export the mock iterator when the mock feature is enabled
 #[cfg(feature = "mock")]

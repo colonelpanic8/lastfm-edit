@@ -6,20 +6,235 @@ use crate::types::{
 use crate::Result;
 use async_trait::async_trait;
 
-/// Trait for Last.fm client operations that can be mocked for testing.
+/// Low-level trait for individual Last.fm page fetches, search, and session management.
 ///
-/// This trait abstracts the core functionality needed for Last.fm scrobble editing
-/// to enable easy mocking and testing. All methods that perform network operations or
-/// state changes are included to support comprehensive test coverage.
+/// This trait abstracts single-request operations: fetching a page of data,
+/// performing a search query, and managing session/cancellation state.
+/// It serves as the foundation that higher-level traits like [`LastFmEditClient`]
+/// build upon.
+///
+/// # Mocking Support
+///
+/// When the `mock` feature is enabled, this crate provides `MockLastFmBaseClient`
+/// that implements this trait using the `mockall` library.
+#[cfg_attr(feature = "mock", mockall::automock)]
+#[async_trait(?Send)]
+pub trait LastFmBaseClient {
+    // =============================================================================
+    // PAGE FETCHING - Single page data access
+    // =============================================================================
+
+    /// Get a page of artists from the user's library.
+    async fn get_artists_page(&self, page: u32) -> Result<ArtistPage>;
+
+    /// Get a page of tracks from the user's library for the specified artist.
+    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<crate::TrackPage>;
+
+    /// Get a page of albums from the user's library for the specified artist.
+    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<crate::AlbumPage>;
+
+    /// Get a page of tracks from a specific album in the user's library.
+    async fn get_album_tracks_page(
+        &self,
+        album_name: &str,
+        artist_name: &str,
+        page: u32,
+    ) -> Result<crate::TrackPage>;
+
+    /// Get a page of tracks from the user's recent listening history.
+    async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage>;
+
+    // =============================================================================
+    // SEARCH PAGES - Single page search results
+    // =============================================================================
+
+    /// Get a single page of track search results from the user's library.
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of tracks that match the provided query string.
+    /// For iterator-based access, use [`LastFmEditClient::search_tracks`] instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "live", artist name, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `TrackPage` containing the search results with pagination information.
+    async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage>;
+
+    /// Get a single page of album search results from the user's library.
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of albums that match the provided query string.
+    /// For iterator-based access, use [`LastFmEditClient::search_albums`] instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., "remaster", "deluxe", artist name, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns an `AlbumPage` containing the search results with pagination information.
+    async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage>;
+
+    /// Get a single page of artist search results from the user's library.
+    ///
+    /// This performs a search using Last.fm's library search functionality,
+    /// returning one page of artists that match the provided query string.
+    /// For iterator-based access, use [`LastFmEditClient::search_artists`] instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query (e.g., artist name, partial match, etc.)
+    /// * `page` - The page number to retrieve (1-based)
+    ///
+    /// # Returns
+    ///
+    /// Returns an `ArtistPage` containing the search results with pagination information.
+    async fn search_artists_page(&self, query: &str, page: u32) -> Result<crate::ArtistPage>;
+
+    // =============================================================================
+    // INFRASTRUCTURE - Session, events, and authentication
+    // =============================================================================
+
+    /// Get the currently authenticated username.
+    fn username(&self) -> String;
+
+    /// Extract the current session state for persistence.
+    ///
+    /// This allows you to save the authentication state and restore it later
+    /// without requiring the user to log in again.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`LastFmEditSession`] that can be serialized and saved.
+    fn get_session(&self) -> LastFmEditSession;
+
+    /// Subscribe to internal client events.
+    ///
+    /// Returns a broadcast receiver that can be used to listen to events like rate limiting.
+    /// Multiple subscribers can listen simultaneously.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
+    ///
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
+    /// let mut events = client.subscribe();
+    ///
+    /// // Listen for events in a background task
+    /// tokio::spawn(async move {
+    ///     while let Ok(event) = events.recv().await {
+    ///         match event {
+    ///             ClientEvent::RequestStarted { request } => {
+    ///                 println!("Request started: {}", request.short_description());
+    ///             }
+    ///             ClientEvent::RequestCompleted { request, status_code, duration_ms } => {
+    ///                 println!("Request completed: {} - {} ({} ms)", request.short_description(), status_code, duration_ms);
+    ///             }
+    ///             ClientEvent::RateLimited { delay_seconds, .. } => {
+    ///                 println!("Rate limited! Waiting {} seconds", delay_seconds);
+    ///             }
+    ///             ClientEvent::RateLimitEnded { total_rate_limit_duration_seconds, .. } => {
+    ///                 println!("Rate limiting ended after {} seconds", total_rate_limit_duration_seconds);
+    ///             }
+    ///             ClientEvent::Delaying { delay_ms, reason, .. } => {
+    ///                 println!("Delaying ({reason:?}) for {delay_ms}ms");
+    ///             }
+    ///             ClientEvent::EditAttempted { edit, success, .. } => {
+    ///                 println!("Edit attempt: '{}' -> '{}' - {}",
+    ///                          edit.track_name_original, edit.track_name,
+    ///                          if success { "Success" } else { "Failed" });
+    ///             }
+    ///             _ => {}
+    ///         }
+    ///     }
+    /// });
+    /// ```
+    fn subscribe(&self) -> ClientEventReceiver;
+
+    /// Get the latest client event without subscribing to future events.
+    ///
+    /// This returns the most recent event that occurred, or `None` if no events have occurred yet.
+    /// Unlike `subscribe()`, this provides instant access to the current state without waiting.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
+    ///
+    /// let http_client = http_client::native::NativeClient::new();
+    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
+    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
+    ///
+    /// if let Some(ClientEvent::RateLimited { delay_seconds, .. }) = client.latest_event() {
+    ///     println!("Currently rate limited for {} seconds", delay_seconds);
+    /// }
+    /// ```
+    fn latest_event(&self) -> Option<ClientEvent>;
+
+    /// Validate if the current session is still working.
+    ///
+    /// This method makes a test request to a protected Last.fm settings page to verify
+    /// that the current session is still valid. If the session has expired or become
+    /// invalid, Last.fm will redirect to the login page.
+    ///
+    /// This is useful for checking session validity before attempting operations that
+    /// require authentication, especially after loading a previously saved session.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the session is valid and can be used for authenticated operations,
+    /// `false` if the session is invalid or expired.
+    async fn validate_session(&self) -> bool;
+
+    // =============================================================================
+    // READ HELPER
+    // =============================================================================
+
+    /// Find the most recent scrobble for a specific track.
+    async fn find_recent_scrobble_for_track(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+        max_pages: u32,
+    ) -> Result<Option<Track>>;
+
+    // =============================================================================
+    // CANCELLATION - Cooperative cancellation for long-running operations
+    // =============================================================================
+
+    /// Request cooperative cancellation of ongoing operations (best-effort).
+    ///
+    /// Implementations should interrupt internal waits (retry backoff, operational delays)
+    /// and return `LastFmError::Io(ErrorKind::Interrupted)` where appropriate.
+    fn cancel(&self) {}
+
+    /// Clear the cancellation request so future operations can run again.
+    fn reset_cancel(&self) {}
+
+    /// Whether cancellation has been requested.
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+}
+
+/// High-level trait for Last.fm client operations including iterators, discovery, and editing.
+///
+/// This trait builds on [`LastFmBaseClient`] to provide composite operations:
+/// iterator factories for paginated browsing, scrobble discovery, and editing workflows.
 ///
 /// # Mocking Support
 ///
 /// When the `mock` feature is enabled, this crate provides `MockLastFmEditClient`
 /// that implements this trait using the `mockall` library.
 ///
-#[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait(?Send)]
-pub trait LastFmEditClient {
+pub trait LastFmEditClient: LastFmBaseClient {
     // =============================================================================
     // CORE EDITING METHODS - Most important functionality
     // =============================================================================
@@ -246,93 +461,6 @@ pub trait LastFmEditClient {
     fn search_artists(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Artist>>;
 
     // =============================================================================
-    // SEARCH METHODS - Library search functionality
-    // =============================================================================
-
-    /// Get a single page of track search results from the user's library.
-    ///
-    /// This performs a search using Last.fm's library search functionality,
-    /// returning one page of tracks that match the provided query string.
-    /// For iterator-based access, use [`search_tracks`](Self::search_tracks) instead.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The search query (e.g., "remaster", "live", artist name, etc.)
-    /// * `page` - The page number to retrieve (1-based)
-    ///
-    /// # Returns
-    ///
-    /// Returns a `TrackPage` containing the search results with pagination information.
-    async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage>;
-
-    /// Get a single page of album search results from the user's library.
-    ///
-    /// This performs a search using Last.fm's library search functionality,
-    /// returning one page of albums that match the provided query string.
-    /// For iterator-based access, use [`search_albums`](Self::search_albums) instead.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The search query (e.g., "remaster", "deluxe", artist name, etc.)
-    /// * `page` - The page number to retrieve (1-based)
-    ///
-    /// # Returns
-    ///
-    /// Returns an `AlbumPage` containing the search results with pagination information.
-    async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage>;
-
-    /// Get a single page of artist search results from the user's library.
-    ///
-    /// This performs a search using Last.fm's library search functionality,
-    /// returning one page of artists that match the provided query string.
-    /// For iterator-based access, use [`search_artists`](Self::search_artists) instead.
-    ///
-    /// # Arguments
-    ///
-    /// * `query` - The search query (e.g., artist name, partial match, etc.)
-    /// * `page` - The page number to retrieve (1-based)
-    ///
-    /// # Returns
-    ///
-    /// Returns an `ArtistPage` containing the search results with pagination information.
-    async fn search_artists_page(&self, query: &str, page: u32) -> Result<crate::ArtistPage>;
-
-    // =============================================================================
-    // CORE DATA METHODS - Essential data access
-    // =============================================================================
-
-    /// Get the currently authenticated username.
-    fn username(&self) -> String;
-
-    /// Find the most recent scrobble for a specific track.
-    async fn find_recent_scrobble_for_track(
-        &self,
-        track_name: &str,
-        artist_name: &str,
-        max_pages: u32,
-    ) -> Result<Option<Track>>;
-
-    /// Get a page of artists from the user's library.
-    async fn get_artists_page(&self, page: u32) -> Result<ArtistPage>;
-
-    /// Get a page of tracks from the user's library for the specified artist.
-    async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<crate::TrackPage>;
-
-    /// Get a page of albums from the user's library for the specified artist.
-    async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<crate::AlbumPage>;
-
-    /// Get a page of tracks from a specific album in the user's library.
-    async fn get_album_tracks_page(
-        &self,
-        album_name: &str,
-        artist_name: &str,
-        page: u32,
-    ) -> Result<crate::TrackPage>;
-
-    /// Get a page of tracks from the user's recent listening history.
-    async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage>;
-
-    // =============================================================================
     // CONVENIENCE METHODS - Higher-level helpers and shortcuts
     // =============================================================================
 
@@ -418,115 +546,75 @@ pub trait LastFmEditClient {
 
         self.edit_scrobble(&edit).await
     }
+}
 
-    // =============================================================================
-    // SESSION & EVENT MANAGEMENT - Authentication and monitoring
-    // =============================================================================
+#[cfg(feature = "mock")]
+mockall::mock! {
+    pub LastFmEditClient {}
 
-    /// Extract the current session state for persistence.
-    ///
-    /// This allows you to save the authentication state and restore it later
-    /// without requiring the user to log in again.
-    ///
-    /// # Returns
-    ///
-    /// Returns a [`LastFmEditSession`] that can be serialized and saved.
-    fn get_session(&self) -> LastFmEditSession;
+    #[async_trait(?Send)]
+    impl LastFmBaseClient for LastFmEditClient {
+        async fn get_artists_page(&self, page: u32) -> Result<ArtistPage>;
+        async fn get_artist_tracks_page(&self, artist: &str, page: u32) -> Result<crate::TrackPage>;
+        async fn get_artist_albums_page(&self, artist: &str, page: u32) -> Result<crate::AlbumPage>;
+        async fn get_album_tracks_page(
+            &self,
+            album_name: &str,
+            artist_name: &str,
+            page: u32,
+        ) -> Result<crate::TrackPage>;
+        async fn get_recent_tracks_page(&self, page: u32) -> Result<crate::TrackPage>;
+        async fn search_tracks_page(&self, query: &str, page: u32) -> Result<crate::TrackPage>;
+        async fn search_albums_page(&self, query: &str, page: u32) -> Result<crate::AlbumPage>;
+        async fn search_artists_page(&self, query: &str, page: u32) -> Result<crate::ArtistPage>;
+        fn username(&self) -> String;
+        fn get_session(&self) -> LastFmEditSession;
+        fn subscribe(&self) -> ClientEventReceiver;
+        fn latest_event(&self) -> Option<ClientEvent>;
+        async fn validate_session(&self) -> bool;
+        async fn find_recent_scrobble_for_track(
+            &self,
+            track_name: &str,
+            artist_name: &str,
+            max_pages: u32,
+        ) -> Result<Option<Track>>;
+        fn cancel(&self);
+        fn reset_cancel(&self);
+        fn is_cancelled(&self) -> bool;
+    }
 
-    /// Subscribe to internal client events.
-    ///
-    /// Returns a broadcast receiver that can be used to listen to events like rate limiting.
-    /// Multiple subscribers can listen simultaneously.
-    ///
-    /// # Example
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
-    ///
-    /// let http_client = http_client::native::NativeClient::new();
-    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
-    /// let mut events = client.subscribe();
-    ///
-    /// // Listen for events in a background task
-    /// tokio::spawn(async move {
-    ///     while let Ok(event) = events.recv().await {
-    ///         match event {
-    ///             ClientEvent::RequestStarted { request } => {
-    ///                 println!("Request started: {}", request.short_description());
-    ///             }
-    ///             ClientEvent::RequestCompleted { request, status_code, duration_ms } => {
-    ///                 println!("Request completed: {} - {} ({} ms)", request.short_description(), status_code, duration_ms);
-    ///             }
-    ///             ClientEvent::RateLimited { delay_seconds, .. } => {
-    ///                 println!("Rate limited! Waiting {} seconds", delay_seconds);
-    ///             }
-    ///             ClientEvent::RateLimitEnded { total_rate_limit_duration_seconds, .. } => {
-    ///                 println!("Rate limiting ended after {} seconds", total_rate_limit_duration_seconds);
-    ///             }
-    ///             ClientEvent::Delaying { delay_ms, reason, .. } => {
-    ///                 println!("Delaying ({reason:?}) for {delay_ms}ms");
-    ///             }
-    ///             ClientEvent::EditAttempted { edit, success, .. } => {
-    ///                 println!("Edit attempt: '{}' -> '{}' - {}",
-    ///                          edit.track_name_original, edit.track_name,
-    ///                          if success { "Success" } else { "Failed" });
-    ///             }
-    ///             _ => {}
-    ///         }
-    ///     }
-    /// });
-    /// ```
-    fn subscribe(&self) -> ClientEventReceiver;
-
-    /// Get the latest client event without subscribing to future events.
-    ///
-    /// This returns the most recent event that occurred, or `None` if no events have occurred yet.
-    /// Unlike `subscribe()`, this provides instant access to the current state without waiting.
-    ///
-    /// # Example
-    /// ```rust,no_run
-    /// use lastfm_edit::{LastFmEditClientImpl, LastFmEditSession, ClientEvent};
-    ///
-    /// let http_client = http_client::native::NativeClient::new();
-    /// let test_session = LastFmEditSession::new("test".to_string(), vec!["sessionid=.test123".to_string()], Some("csrf".to_string()), "https://www.last.fm".to_string());
-    /// let client = LastFmEditClientImpl::from_session(Box::new(http_client), test_session);
-    ///
-    /// if let Some(ClientEvent::RateLimited { delay_seconds, .. }) = client.latest_event() {
-    ///     println!("Currently rate limited for {} seconds", delay_seconds);
-    /// }
-    /// ```
-    fn latest_event(&self) -> Option<ClientEvent>;
-
-    /// Validate if the current session is still working.
-    ///
-    /// This method makes a test request to a protected Last.fm settings page to verify
-    /// that the current session is still valid. If the session has expired or become
-    /// invalid, Last.fm will redirect to the login page.
-    ///
-    /// This is useful for checking session validity before attempting operations that
-    /// require authentication, especially after loading a previously saved session.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if the session is valid and can be used for authenticated operations,
-    /// `false` if the session is invalid or expired.
-    async fn validate_session(&self) -> bool;
-
-    // =============================================================================
-    // CANCELLATION - Cooperative cancellation for long-running operations
-    // =============================================================================
-
-    /// Request cooperative cancellation of ongoing operations (best-effort).
-    ///
-    /// Implementations should interrupt internal waits (retry backoff, operational delays)
-    /// and return `LastFmError::Io(ErrorKind::Interrupted)` where appropriate.
-    fn cancel(&self) {}
-
-    /// Clear the cancellation request so future operations can run again.
-    fn reset_cancel(&self) {}
-
-    /// Whether cancellation has been requested.
-    fn is_cancelled(&self) -> bool {
-        false
+    #[async_trait(?Send)]
+    impl LastFmEditClient for LastFmEditClient {
+        async fn edit_scrobble(&self, edit: &ScrobbleEdit) -> Result<EditResponse>;
+        async fn edit_scrobble_single(
+            &self,
+            exact_edit: &ExactScrobbleEdit,
+            max_retries: u32,
+        ) -> Result<EditResponse>;
+        async fn delete_scrobble(
+            &self,
+            artist_name: &str,
+            track_name: &str,
+            timestamp: u64,
+        ) -> Result<bool>;
+        fn discover_scrobbles(
+            &self,
+            edit: ScrobbleEdit,
+        ) -> Box<dyn crate::AsyncDiscoveryIterator<crate::ExactScrobbleEdit>>;
+        fn artists(&self) -> Box<dyn AsyncPaginatedIterator<Artist>>;
+        fn artist_tracks(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
+        fn artist_tracks_direct(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
+        fn artist_albums(&self, artist: &str) -> Box<dyn AsyncPaginatedIterator<Album>>;
+        fn album_tracks(
+            &self,
+            album_name: &str,
+            artist_name: &str,
+        ) -> Box<dyn AsyncPaginatedIterator<Track>>;
+        fn recent_tracks(&self) -> Box<dyn AsyncPaginatedIterator<Track>>;
+        fn recent_tracks_from_page(&self, starting_page: u32)
+            -> Box<dyn AsyncPaginatedIterator<Track>>;
+        fn search_tracks(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Track>>;
+        fn search_albums(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Album>>;
+        fn search_artists(&self, query: &str) -> Box<dyn AsyncPaginatedIterator<Artist>>;
     }
 }
