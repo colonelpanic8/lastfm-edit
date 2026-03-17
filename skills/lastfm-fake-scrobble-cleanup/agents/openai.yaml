@@ -1,0 +1,4 @@
+interface:
+  display_name: "Last.fm Fake Scrobble Cleanup"
+  short_description: "Find and delete fake scrobbles safely."
+  default_prompt: "Use $lastfm-fake-scrobble-cleanup to identify the correct recent-offset delete range for fake scrobbles, preview it, and apply it while preserving known-good plays."
