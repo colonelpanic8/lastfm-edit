@@ -82,12 +82,10 @@ impl AsyncDiscoveryIterator<ExactScrobbleEdit> for ExactMatchDiscovery {
 
                         self.result = Some(modified_edit);
                     } else {
-                        let album_artist_filter = if self.edit.album_artist_name_original.is_some()
+                        let album_artist_filter = if let Some(album_artist_name_original) =
+                            self.edit.album_artist_name_original.as_ref()
                         {
-                            format!(
-                                " with album artist '{}'",
-                                self.edit.album_artist_name_original.as_ref().unwrap()
-                            )
+                            format!(" with album artist '{album_artist_name_original}'")
                         } else {
                             String::new()
                         };
