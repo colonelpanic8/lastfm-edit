@@ -1,0 +1,266 @@
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/Dave%20Brubeck/Time%20Out%20-%20HD%20Digital%20Remastered%202009?page=1&ajax=true
+    headers:
+      referer:
+      - https://www.last.fm/user/IvanMalison/library/music/Dave%20Brubeck/Time%20Out%20-%20HD%20Digital%20Remastered%202009
+      connection:
+      - keep-alive
+      sec-ch-ua-mobile:
+      - ?0
+      accept-encoding:
+      - gzip, deflate, br
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      content-type:
+      - application/octet-stream
+      dnt:
+      - '1'
+      cookie:
+      - csrftoken=iQK00IifCTrS00LYX3ecVdYkBVt23rWM; lpfrmo=1; lfmanon=0; not_first_visit=1; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept:
+      - '*/*'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      accept-language:
+      - en-US,en;q=0.9
+      x-requested-with:
+      - XMLHttpRequest
+    version: None
+  response:
+    status: 200
+    headers:
+      x-timer:
+      - S1778194776.035861,VS0,VE1272
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-lfm-upstream-type:
+      - PASS
+      strict-transport-security:
+      - max-age=300
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/Dave%20Brubeck/Time%20Out%20-%20HD%20Digital%20Remastered%202009?page=1&ajax=true
+      x-cache-hits:
+      - 0, 0
+      x-cache:
+      - MISS, MISS
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Thu, 07 May 2026 23:00:37 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=iQK00IifCTrS00LYX3ecVdYkBVt23rWM; expires=Thu, 06 May 2027 22:59:37 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Fri, 07 May 2027 22:59:37 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      etag:
+      - W/"2628b6e25ab62037f17cdc9c0a12bd38"
+      via:
+      - 1.1 google, 1.1 varnish
+      cache-control:
+      - max-age=0, must-revalidate
+      content-type:
+      - text/html; charset=utf-8
+      x-served-by:
+      - cache-pao-kpao1770062-PAO, cache-pao-kpao1770052-PAO
+      content-encoding:
+      - gzip
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      date:
+      - Thu, 07 May 2026 22:59:37 GMT
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      accept-ranges:
+      - bytes
+      x-lfm-cacheable-page:
+      - '0'
+      x-frame-options:
+      - DENY
+      x-request-category:
+      - page
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/Dave%20Brubeck/Time%20Out%20-%20HD%20Digital%20Remastered%202009?page=1&ajax=true
+      server:
+      - nginx
+      content-language:
+      - en
+    body_file: resp_001.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/Dave%20Brubeck%20Quartet/_/Blue%20Rondo%20a%27%20la%20Turk%20%28Digitally%20Re-Mastered%202009%29
+    headers:
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      dnt:
+      - '1'
+      sec-ch-ua-platform:
+      - '"Linux"'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=iQK00IifCTrS00LYX3ecVdYkBVt23rWM; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept-encoding:
+      - gzip, deflate, br
+      accept-language:
+      - en-US,en;q=0.9
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      content-type:
+      - application/octet-stream
+      connection:
+      - keep-alive
+      sec-ch-ua-mobile:
+      - ?0
+      upgrade-insecure-requests:
+      - '1'
+    version: None
+  response:
+    status: 200
+    headers:
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      content-security-policy:
+      - upgrade-insecure-requests;
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      x-cache-hits:
+      - 0, 0
+      x-lfm-cacheable-page:
+      - '0'
+      date:
+      - Thu, 07 May 2026 22:59:37 GMT
+      etag:
+      - W/"9cf7ccf9ef90697d47cde26fc547129e"
+      x-served-by:
+      - cache-pao-kpao1770045-PAO, cache-pao-kpao1770052-PAO
+      cache-control:
+      - max-age=0, must-revalidate
+      x-timer:
+      - S1778194777.432000,VS0,VE489
+      content-encoding:
+      - gzip
+      via:
+      - 1.1 google, 1.1 varnish
+      server:
+      - nginx
+      x-lfm-upstream-type:
+      - PASS
+      x-cache:
+      - MISS, MISS
+      x-request-category:
+      - page
+      x-frame-options:
+      - DENY
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/Dave%20Brubeck%20Quartet/_/Blue%20Rondo%20a%27%20la%20Turk%20%28Digitally%20Re-Mastered%202009%29
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/Dave%20Brubeck%20Quartet/_/Blue%20Rondo%20a%27%20la%20Turk%20%28Digitally%20Re-Mastered%202009%29
+      accept-ranges:
+      - bytes
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Thu, 07 May 2026 23:00:37 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=iQK00IifCTrS00LYX3ecVdYkBVt23rWM; expires=Thu, 06 May 2027 22:59:37 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Fri, 07 May 2027 22:59:37 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      content-type:
+      - text/html; charset=utf-8
+      strict-transport-security:
+      - max-age=300
+      content-language:
+      - en
+    body_file: resp_002.txt
+    version: None
+- request:
+    method: GET
+    url: https://www.last.fm/user/IvanMalison/library/music/+noredirect/The%20Dave%20Brubeck%20Quartet/_/Blue%20Rondo%20%C3%A0%20la%20turk
+    headers:
+      sec-ch-ua-platform:
+      - '"Linux"'
+      cookie:
+      - lpfrmo=1; lfmanon=0; not_first_visit=1; csrftoken=iQK00IifCTrS00LYX3ecVdYkBVt23rWM; sessionid=test_session_id; X-UA-Device-Type=desktop; X-UA-Country-Code=US
+      sec-ch-ua:
+      - '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"'
+      accept:
+      - text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+      dnt:
+      - '1'
+      user-agent:
+      - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+      upgrade-insecure-requests:
+      - '1'
+      connection:
+      - keep-alive
+      content-type:
+      - application/octet-stream
+      sec-ch-ua-mobile:
+      - ?0
+      accept-language:
+      - en-US,en;q=0.9
+      accept-encoding:
+      - gzip, deflate, br
+    version: None
+  response:
+    status: 200
+    headers:
+      content-type:
+      - text/html; charset=utf-8
+      x-timer:
+      - S1778194778.170385,VS0,VE878
+      vary:
+      - Accept-Encoding,Cookie, Accept-Language
+      content-encoding:
+      - gzip
+      cache-control:
+      - max-age=0, must-revalidate
+      date:
+      - Thu, 07 May 2026 22:59:39 GMT
+      content-security-policy:
+      - upgrade-insecure-requests;
+      x-served-by:
+      - cache-pao-kpao1770072-PAO, cache-pao-kpao1770052-PAO
+      etag:
+      - W/"a23a77de3a2711d5fd3e1b6b76e09f3a"
+      content-security-policy-report-only:
+      - 'default-src https: ''unsafe-inline'' ''unsafe-eval'' wss: ;img-src https: data: blob: ; font-src https: data:; form-action https: http://www.last.fm; report-uri https://cbsi.report-uri.io/r/default/csp/enforce'
+      x-cache:
+      - MISS, MISS
+      content-language:
+      - en
+      via:
+      - 1.1 google, 1.1 varnish
+      x-lfm-upstream-type:
+      - PASS
+      set-cookie:
+      - lpfrmo=1; Domain=last.fm; expires=Thu, 07 May 2026 23:00:39 GMT; Max-Age=60; Path=/; Secure
+      - lfmanon=0; Path=/
+      - not_first_visit=1; Path=/
+      - csrftoken=iQK00IifCTrS00LYX3ecVdYkBVt23rWM; expires=Thu, 06 May 2027 22:59:39 GMT; Max-Age=31449600; Path=/; SameSite=Lax; Secure
+      - sessionid=test_session_id; Domain=.last.fm; expires=Fri, 07 May 2027 22:59:39 GMT; HttpOnly; Max-Age=31536000; Path=/; SameSite=Lax; Secure
+      - X-UA-Device-Type=desktop; max-age=60; secure; same-site=strict; Path=/
+      - X-UA-Country-Code=US; max-age=60; secure; same-site=strict; Path=/
+      strict-transport-security:
+      - max-age=300
+      x-cache-hits:
+      - 0, 0
+      x-lfm-upstream:
+      - /user/IvanMalison/library/music/+noredirect/The%20Dave%20Brubeck%20Quartet/_/Blue%20Rondo%20%C3%A0%20la%20turk
+      accept-ranges:
+      - bytes
+      x-lfm-cacheable-page:
+      - '0'
+      x-frame-options:
+      - DENY
+      x-pjax-url:
+      - https://www.last.fm/user/IvanMalison/library/music/+noredirect/The%20Dave%20Brubeck%20Quartet/_/Blue%20Rondo%20%C3%A0%20la%20turk
+      server:
+      - nginx
+      x-request-category:
+      - page
+    body_file: resp_003.txt
+    version: None

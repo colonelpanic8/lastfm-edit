@@ -50,17 +50,23 @@ impl AsyncDiscoveryIterator<ExactScrobbleEdit> for AlbumTracksDiscovery {
 
         // Get the next track from the iterator
         while let Some(track) = self.tracks_iterator.next().await? {
+            let lookup_artist = if track.artist.is_empty() {
+                &self.edit.artist_name_original
+            } else {
+                &track.artist
+            };
+
             log::debug!(
                 "Getting scrobble data for track '{}' from album '{}' by '{}'",
                 track.name,
                 self.album_name,
-                self.edit.artist_name_original
+                lookup_artist
             );
 
             // Get scrobble data for this track
             match self
                 .client
-                .load_edit_form_values_internal(&track.name, &self.edit.artist_name_original)
+                .load_edit_form_values_internal(&track.name, lookup_artist)
                 .await
             {
                 Ok(track_scrobbles) => {

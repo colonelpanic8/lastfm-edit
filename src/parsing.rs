@@ -221,9 +221,10 @@ impl LastFmParser {
             match self.find_playcount_for_track(document, track_name) {
                 Ok(playcount) => {
                     let timestamp = self.find_timestamp_for_track(document, track_name);
+                    let track_artist = element.value().attr("data-artist-name").unwrap_or(artist);
                     let track = Track {
                         name: track_name.to_string(),
-                        artist: artist.to_string(),
+                        artist: track_artist.to_string(),
                         playcount,
                         timestamp,
                         album: album.map(|a| a.to_string()),
@@ -249,7 +250,9 @@ impl LastFmParser {
             for row in rows.iter() {
                 // Try to parse as track row
                 if let Ok(mut track) = self.parse_track_row(row) {
-                    track.artist = artist.to_string();
+                    if track.artist.is_empty() {
+                        track.artist = artist.to_string();
+                    }
                     if let Some(album_name) = album {
                         track.album = Some(album_name.to_string());
                     }
@@ -277,7 +280,12 @@ impl LastFmParser {
         // Parse play count using shared method
         let playcount = self.extract_playcount_from_row(row);
 
-        let artist = "".to_string(); // Will be filled in by caller
+        let artist_selector = Selector::parse(".chartlist-artist a").unwrap();
+        let artist = row
+            .select(&artist_selector)
+            .next()
+            .map(|el| el.text().collect::<String>().trim().to_string())
+            .unwrap_or_default();
 
         Ok(Track {
             name,

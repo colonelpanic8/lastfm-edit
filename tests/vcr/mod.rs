@@ -8,6 +8,7 @@ mod common;
 mod delete;
 mod discovery;
 mod edit;
+mod edit_discovery_regressions;
 mod list_artists;
 mod login;
 mod recent_scrobbles_iterator;

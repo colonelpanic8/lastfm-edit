@@ -23,14 +23,17 @@ impl VcrTestSetup {
             fs::create_dir_all(parent_dir)?;
         }
 
-        // Ensure the cassette directory itself exists
-        if !std::path::Path::new(&cassette_path).exists() {
-            fs::create_dir_all(&cassette_path)?;
-        }
-
         let vcr_record_env = env::var("LAST_FM_VCR_RECORD").unwrap_or_default();
         let vcr_record = !vcr_record_env.is_empty();
-        let cassette_exists = std::path::Path::new(&cassette_path).exists();
+
+        let mode = match vcr_record_env.as_str() {
+            "filter" => VcrMode::Filter,
+            "" => VcrMode::Replay,
+            _ => VcrMode::Record,
+        };
+
+        let cassette_path_ref = std::path::Path::new(&cassette_path);
+        let cassette_exists = cassette_path_ref.exists();
 
         // Fail fast if we're not recording/filtering and no cassette exists
         if !vcr_record && !cassette_exists {
@@ -39,11 +42,13 @@ impl VcrTestSetup {
             ).into());
         }
 
-        let mode = match vcr_record_env.as_str() {
-            "filter" => VcrMode::Filter,
-            "" => VcrMode::Replay,
-            _ => VcrMode::Record,
-        };
+        if matches!(mode, VcrMode::Record)
+            && cassette_path_ref.is_dir()
+            && !cassette_path_ref.join("interactions.yaml").exists()
+            && fs::read_dir(cassette_path_ref)?.next().is_none()
+        {
+            fs::remove_dir(cassette_path_ref)?;
+        }
 
         Ok(Self {
             cassette_path,
@@ -178,6 +183,7 @@ pub async fn create_lastfm_vcr_test_client_without_login_recording(
         let mut builder = VcrClient::builder(&setup.cassette_path)
             .inner_client(Box::new(http_client::native::NativeClient::new()))
             .mode(setup.mode.clone())
+            .format(http_client_vcr::CassetteFormat::Directory)
             .matcher(Box::new(LastFmEditVcrMatcher::new()));
 
         // Add filter chain for recording mode
