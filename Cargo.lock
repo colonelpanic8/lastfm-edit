@@ -1284,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "lastfm-edit"
-version = "6.0.2"
+version = "6.0.3"
 dependencies = [
  "async-trait",
  "chrono",
