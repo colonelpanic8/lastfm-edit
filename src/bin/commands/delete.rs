@@ -1,7 +1,12 @@
 use super::utils::parse_range;
+use lastfm_edit::delete_manifest::{
+    execute_delete_targets, read_manifest, target_from_track, write_manifest, DeleteManifestSource,
+    DeleteTarget,
+};
 use lastfm_edit::{LastFmEditClientImpl, Track};
 use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
+use std::path::Path;
 
 /// Events emitted by delete commands (JSON output to stdout)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +36,8 @@ pub enum DeleteEvent {
         failed_deletions: usize,
         dry_run: bool,
     },
+    /// A delete manifest was written
+    ManifestWritten { path: String, total_entries: usize },
 }
 
 /// Output a delete event as JSON to stdout
@@ -54,18 +61,13 @@ fn ask_for_confirmation(message: &str) -> Result<bool, Box<dyn std::error::Error
     Ok(response == "y" || response == "yes")
 }
 
-/// Struct to hold scrobble info for deletion
-struct ScrobbleToDelete {
-    artist: String,
-    track: String,
-    timestamp: u64,
-}
-
 /// Handle deletion of scrobbles from recent pages
 pub async fn handle_delete_recent_pages(
     client: &LastFmEditClientImpl,
     pages_range: &str,
     dry_run: bool,
+    manifest_output: Option<&Path>,
+    delete_delay_ms: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (start_page, end_page) = parse_range(pages_range, "pages")?;
 
@@ -101,11 +103,7 @@ pub async fn handle_delete_recent_pages(
                             timestamp: Some(timestamp),
                         });
 
-                        scrobbles_to_delete.push(ScrobbleToDelete {
-                            artist: scrobble.artist,
-                            track: scrobble.name,
-                            timestamp,
-                        });
+                        scrobbles_to_delete.push(target_from_track(&scrobble, None, timestamp));
                     } else {
                         log::warn!(
                             "Skipping scrobble without timestamp: '{}' by '{}'",
@@ -122,7 +120,18 @@ pub async fn handle_delete_recent_pages(
         }
     }
 
-    execute_deletions(client, scrobbles_to_delete, dry_run).await
+    handle_collected_scrobbles(
+        client,
+        scrobbles_to_delete,
+        dry_run,
+        manifest_output,
+        DeleteManifestSource {
+            kind: "recent-pages".to_string(),
+            range: Some(pages_range.to_string()),
+        },
+        delete_delay_ms,
+    )
+    .await
 }
 
 /// Handle deletion of scrobbles from timestamp range
@@ -130,6 +139,8 @@ pub async fn handle_delete_timestamp_range(
     client: &LastFmEditClientImpl,
     timestamp_range: &str,
     dry_run: bool,
+    manifest_output: Option<&Path>,
+    delete_delay_ms: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (start_ts, end_ts) = parse_range(timestamp_range, "timestamp")?;
 
@@ -164,11 +175,7 @@ pub async fn handle_delete_timestamp_range(
                                 timestamp: Some(timestamp),
                             });
 
-                            scrobbles_to_delete.push(ScrobbleToDelete {
-                                artist: scrobble.artist,
-                                track: scrobble.name,
-                                timestamp,
-                            });
+                            scrobbles_to_delete.push(target_from_track(&scrobble, None, timestamp));
                         }
                     }
                 }
@@ -180,7 +187,18 @@ pub async fn handle_delete_timestamp_range(
         }
     }
 
-    execute_deletions(client, scrobbles_to_delete, dry_run).await
+    handle_collected_scrobbles(
+        client,
+        scrobbles_to_delete,
+        dry_run,
+        manifest_output,
+        DeleteManifestSource {
+            kind: "timestamp-range".to_string(),
+            range: Some(timestamp_range.to_string()),
+        },
+        delete_delay_ms,
+    )
+    .await
 }
 
 /// Handle deletion of scrobbles by offset from most recent
@@ -188,6 +206,8 @@ pub async fn handle_delete_recent_offset(
     client: &LastFmEditClientImpl,
     offset_range: &str,
     dry_run: bool,
+    manifest_output: Option<&Path>,
+    delete_delay_ms: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (start_offset, end_offset) = parse_range(offset_range, "offset")?;
 
@@ -261,11 +281,7 @@ pub async fn handle_delete_recent_offset(
                 timestamp: Some(timestamp),
             });
 
-            scrobbles_to_delete.push(ScrobbleToDelete {
-                artist: scrobble.artist.clone(),
-                track: scrobble.name.clone(),
-                timestamp,
-            });
+            scrobbles_to_delete.push(target_from_track(scrobble, Some(offset), timestamp));
         } else {
             log::warn!(
                 "Skipping scrobble at offset {} without timestamp: '{}' by '{}'",
@@ -276,14 +292,70 @@ pub async fn handle_delete_recent_offset(
         }
     }
 
-    execute_deletions(client, scrobbles_to_delete, dry_run).await
+    handle_collected_scrobbles(
+        client,
+        scrobbles_to_delete,
+        dry_run,
+        manifest_output,
+        DeleteManifestSource {
+            kind: "recent-offset".to_string(),
+            range: Some(offset_range.to_string()),
+        },
+        delete_delay_ms,
+    )
+    .await
+}
+
+pub async fn handle_delete_manifest(
+    client: &LastFmEditClientImpl,
+    manifest_path: &Path,
+    dry_run: bool,
+    delete_delay_ms: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let manifest = read_manifest(manifest_path)?;
+    let scrobbles_to_delete = manifest.targets();
+
+    for (i, scrobble) in scrobbles_to_delete.iter().enumerate() {
+        output_event(&DeleteEvent::ScrobbleFound {
+            index: i + 1,
+            offset: scrobble.offset,
+            artist: scrobble.artist.clone(),
+            track: scrobble.track.clone(),
+            timestamp: Some(scrobble.timestamp),
+        });
+    }
+
+    execute_deletions(client, scrobbles_to_delete, dry_run, delete_delay_ms).await
+}
+
+async fn handle_collected_scrobbles(
+    client: &LastFmEditClientImpl,
+    scrobbles: Vec<DeleteTarget>,
+    dry_run: bool,
+    manifest_output: Option<&Path>,
+    source: DeleteManifestSource,
+    delete_delay_ms: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(path) = manifest_output {
+        write_manifest(path, source, &scrobbles)?;
+        output_event(&DeleteEvent::Summary {
+            total_found: scrobbles.len(),
+            successful_deletions: 0,
+            failed_deletions: 0,
+            dry_run: true,
+        });
+        return Ok(());
+    }
+
+    execute_deletions(client, scrobbles, dry_run, delete_delay_ms).await
 }
 
 /// Common deletion execution logic
 async fn execute_deletions(
     client: &LastFmEditClientImpl,
-    scrobbles: Vec<ScrobbleToDelete>,
+    scrobbles: Vec<DeleteTarget>,
     dry_run: bool,
+    delete_delay_ms: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if scrobbles.is_empty() {
         log::info!("No scrobbles with timestamps found to delete");
@@ -335,75 +407,43 @@ async fn execute_deletions(
 
     log::info!("Deleting scrobbles...");
 
-    let mut successful_deletions = 0;
-    let mut failed_deletions = 0;
+    let summary = execute_delete_targets(
+        client,
+        &scrobbles,
+        std::time::Duration::from_millis(delete_delay_ms),
+        |index, scrobble, result| {
+            log::debug!(
+                "Deleting {}/{}: '{}' by '{}'",
+                index,
+                scrobbles.len(),
+                scrobble.track,
+                scrobble.artist
+            );
 
-    for (i, scrobble) in scrobbles.iter().enumerate() {
-        log::debug!(
-            "Deleting {}/{}: '{}' by '{}'",
-            i + 1,
-            scrobbles.len(),
-            scrobble.track,
-            scrobble.artist
-        );
-
-        match client
-            .delete_scrobble(&scrobble.artist, &scrobble.track, scrobble.timestamp)
-            .await
-        {
-            Ok(true) => {
-                successful_deletions += 1;
-                output_event(&DeleteEvent::ScrobbleDeleted {
-                    index: i + 1,
-                    artist: scrobble.artist.clone(),
-                    track: scrobble.track.clone(),
-                    timestamp: scrobble.timestamp,
-                    success: true,
-                    message: None,
-                });
-            }
-            Ok(false) => {
-                failed_deletions += 1;
-                output_event(&DeleteEvent::ScrobbleDeleted {
-                    index: i + 1,
-                    artist: scrobble.artist.clone(),
-                    track: scrobble.track.clone(),
-                    timestamp: scrobble.timestamp,
-                    success: false,
-                    message: Some("Deletion failed".to_string()),
-                });
-            }
-            Err(e) => {
-                failed_deletions += 1;
-                output_event(&DeleteEvent::ScrobbleDeleted {
-                    index: i + 1,
-                    artist: scrobble.artist.clone(),
-                    track: scrobble.track.clone(),
-                    timestamp: scrobble.timestamp,
-                    success: false,
-                    message: Some(e.to_string()),
-                });
-            }
-        }
-
-        // Add delay between deletions to be respectful to the server
-        if i < scrobbles.len() - 1 {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-    }
+            output_event(&DeleteEvent::ScrobbleDeleted {
+                index,
+                artist: scrobble.artist.clone(),
+                track: scrobble.track.clone(),
+                timestamp: scrobble.timestamp,
+                success: result.success(),
+                message: result.message().map(str::to_string),
+            });
+        },
+    )
+    .await?;
 
     output_event(&DeleteEvent::Summary {
-        total_found: scrobbles.len(),
-        successful_deletions,
-        failed_deletions,
+        total_found: summary.total_found,
+        successful_deletions: summary.successful_deletions,
+        failed_deletions: summary.failed_deletions,
         dry_run: false,
     });
 
     log::info!(
         "Deletion complete: {} successful, {} failed out of {} total",
-        successful_deletions,
-        failed_deletions,
-        scrobbles.len()
+        summary.successful_deletions,
+        summary.failed_deletions,
+        summary.total_found
     );
 
     Ok(())

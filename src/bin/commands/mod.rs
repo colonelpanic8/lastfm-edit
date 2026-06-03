@@ -10,6 +10,7 @@ pub mod utils;
 
 use clap::{Subcommand, ValueEnum};
 use lastfm_edit::LastFmEditClientImpl;
+use std::path::PathBuf;
 
 #[derive(ValueEnum, Clone)]
 pub enum SearchType {
@@ -213,8 +214,8 @@ pub enum Commands {
     /// Delete scrobbles in a range
     ///
     /// This command allows you to delete scrobbles from your library. You can specify
-    /// timestamp ranges, delete recent scrobbles from specific pages, or use offsets
-    /// from the most recent scrobble.
+    /// timestamp ranges, delete recent scrobbles from specific pages, use offsets
+    /// from the most recent scrobble, or execute a previously written manifest.
     ///
     /// Usage examples:
     /// # Show recent scrobbles that would be deleted (dry run)
@@ -225,18 +226,36 @@ pub enum Commands {
     ///
     /// # Delete scrobbles by offset from most recent (0-indexed)
     /// lastfm-edit delete --recent-offset 0-4 --apply
+    ///
+    /// # Write a deletion manifest for later execution
+    /// lastfm-edit delete --recent-offset 0-4 --write-manifest delete.json
+    ///
+    /// # Execute a deletion manifest
+    /// lastfm-edit delete --manifest delete.json --apply --delete-delay-ms 60000
     Delete {
         /// Delete scrobbles from recent pages (format: start-end, 0-indexed)
-        #[arg(long, conflicts_with_all = ["timestamp_range", "recent_offset"])]
+        #[arg(long, conflicts_with_all = ["timestamp_range", "recent_offset", "manifest"])]
         recent_pages: Option<String>,
 
         /// Delete scrobbles from timestamp range (format: start_ts-end_ts)
-        #[arg(long, conflicts_with_all = ["recent_pages", "recent_offset"])]
+        #[arg(long, conflicts_with_all = ["recent_pages", "recent_offset", "manifest"])]
         timestamp_range: Option<String>,
 
         /// Delete scrobbles by offset from most recent (format: start-end, 0-indexed)
-        #[arg(long, conflicts_with_all = ["recent_pages", "timestamp_range"])]
+        #[arg(long, conflicts_with_all = ["recent_pages", "timestamp_range", "manifest"])]
         recent_offset: Option<String>,
+
+        /// Delete scrobbles from a previously written deletion manifest
+        #[arg(long, conflicts_with_all = ["recent_pages", "timestamp_range", "recent_offset", "write_manifest"])]
+        manifest: Option<PathBuf>,
+
+        /// Write matched scrobbles to a deletion manifest instead of deleting them
+        #[arg(long, conflicts_with = "manifest")]
+        write_manifest: Option<PathBuf>,
+
+        /// Milliseconds to wait between actual delete requests
+        #[arg(long, default_value = "1000")]
+        delete_delay_ms: u64,
 
         /// Actually perform the deletions (default is dry-run mode)
         #[arg(long)]
@@ -366,6 +385,9 @@ pub async fn execute_command(
             recent_pages,
             timestamp_range,
             recent_offset,
+            manifest,
+            write_manifest,
+            delete_delay_ms,
             apply,
             dry_run,
         } => {
@@ -373,14 +395,38 @@ pub async fn execute_command(
             let is_dry_run = dry_run || !apply;
 
             if let Some(pages_range) = recent_pages {
-                delete::handle_delete_recent_pages(client, &pages_range, is_dry_run).await
+                delete::handle_delete_recent_pages(
+                    client,
+                    &pages_range,
+                    is_dry_run,
+                    write_manifest.as_deref(),
+                    delete_delay_ms,
+                )
+                .await
             } else if let Some(ts_range) = timestamp_range {
-                delete::handle_delete_timestamp_range(client, &ts_range, is_dry_run).await
+                delete::handle_delete_timestamp_range(
+                    client,
+                    &ts_range,
+                    is_dry_run,
+                    write_manifest.as_deref(),
+                    delete_delay_ms,
+                )
+                .await
             } else if let Some(offset_range) = recent_offset {
-                delete::handle_delete_recent_offset(client, &offset_range, is_dry_run).await
+                delete::handle_delete_recent_offset(
+                    client,
+                    &offset_range,
+                    is_dry_run,
+                    write_manifest.as_deref(),
+                    delete_delay_ms,
+                )
+                .await
+            } else if let Some(manifest_path) = manifest {
+                delete::handle_delete_manifest(client, &manifest_path, is_dry_run, delete_delay_ms)
+                    .await
             } else {
                 Err(
-                    "Must specify one of: --recent-pages, --timestamp-range, or --recent-offset"
+                    "Must specify one of: --recent-pages, --timestamp-range, --recent-offset, or --manifest"
                         .into(),
                 )
             }

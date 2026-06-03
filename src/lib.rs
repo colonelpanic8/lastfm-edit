@@ -3,6 +3,7 @@
 pub mod api;
 pub mod cancel;
 pub mod client;
+pub mod delete_manifest;
 pub mod discovery;
 pub mod edit_analysis;
 pub mod headers;
