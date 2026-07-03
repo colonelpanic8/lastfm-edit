@@ -17,7 +17,30 @@ use crate::types::LastFmError;
 
 #[async_trait(?Send)]
 pub trait LastFmApiClient: Clone {
-    async fn api_get_recent_tracks_page(&self, page: u32) -> Result<TrackPage>;
+    /// Fetch a single page of the user's recent tracks via the JSON API.
+    ///
+    /// Equivalent to [`api_get_recent_tracks_page_in_range`](Self::api_get_recent_tracks_page_in_range)
+    /// with no time window.
+    async fn api_get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
+        self.api_get_recent_tracks_page_in_range(page, None, None)
+            .await
+    }
+
+    /// Fetch a single page of the user's recent tracks restricted to a unix-timestamp window.
+    ///
+    /// `from` and `to` are passed through to the `user.getRecentTracks` API endpoint's
+    /// optional `from`/`to` query parameters. Observed live (see the
+    /// `api_recent_tracks_in_range` VCR test): `from` is **inclusive** and `to` is
+    /// **exclusive** — a native half-open `[from, to)` window, despite the API docs'
+    /// "strictly after"/"strictly before" wording. Callers that must be robust to a
+    /// server-side behavior change can widen `from` by one second and dedupe by
+    /// timestamp.
+    async fn api_get_recent_tracks_page_in_range(
+        &self,
+        page: u32,
+        from: Option<u64>,
+        to: Option<u64>,
+    ) -> Result<TrackPage>;
 }
 
 #[derive(Clone)]
@@ -77,46 +100,109 @@ impl LastFmApiClientImpl {
             starting_page,
         ))
     }
+
+    /// Iterate over recent tracks restricted to a unix-timestamp window.
+    ///
+    /// `from` and `to` are forwarded to the `user.getRecentTracks` endpoint's optional
+    /// query parameters. Observed live (see the `api_recent_tracks_in_range` VCR test):
+    /// `from` is **inclusive** and `to` is **exclusive** — a native half-open
+    /// `[from, to)` window.
+    pub fn recent_tracks_in_range(
+        &self,
+        from: Option<u64>,
+        to: Option<u64>,
+    ) -> Box<dyn AsyncPaginatedIterator<Track>> {
+        Box::new(ApiRecentTracksIterator::with_range(self.clone(), from, to))
+    }
+}
+
+/// Build the `user.getRecentTracks` request URL, appending `from`/`to` only when present.
+pub(crate) fn build_recent_tracks_url(
+    username: &str,
+    api_key: &str,
+    page: u32,
+    from: Option<u64>,
+    to: Option<u64>,
+) -> String {
+    let mut url = format!(
+        "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&format=json&page={}&limit=200",
+        urlencoding::encode(username),
+        urlencoding::encode(api_key),
+        page
+    );
+
+    if let Some(from) = from {
+        url.push_str(&format!("&from={from}"));
+    }
+    if let Some(to) = to {
+        url.push_str(&format!("&to={to}"));
+    }
+
+    url
+}
+
+/// Shared implementation of a single `user.getRecentTracks` page fetch.
+///
+/// Builds the request URL (including the optional `from`/`to` unix-timestamp window),
+/// broadcasts `RequestStarted`/`RequestCompleted` events, and parses the JSON response.
+/// Used by both [`LastFmApiClientImpl`] and `LastFmEditClientImpl` so the request logic
+/// exists in exactly one place.
+pub(crate) async fn fetch_recent_tracks_page(
+    client: &Arc<dyn HttpClient + Send + Sync>,
+    broadcaster: &SharedEventBroadcaster,
+    username: &str,
+    api_key: &str,
+    page: u32,
+    from: Option<u64>,
+    to: Option<u64>,
+) -> Result<TrackPage> {
+    let url = build_recent_tracks_url(username, api_key, page, from, to);
+
+    let request_info = RequestInfo::from_url_and_method(&url, "GET");
+    let request_start = std::time::Instant::now();
+
+    broadcaster.broadcast_event(ClientEvent::RequestStarted {
+        request: request_info.clone(),
+    });
+
+    let request = Request::new(Method::Get, url.parse::<Url>().unwrap());
+    let mut response = client
+        .send(request)
+        .await
+        .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+    broadcaster.broadcast_event(ClientEvent::RequestCompleted {
+        request: request_info,
+        status_code: response.status().into(),
+        duration_ms: request_start.elapsed().as_millis() as u64,
+    });
+
+    let body = response
+        .body_string()
+        .await
+        .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+    parse_api_recent_tracks_response(&body)
 }
 
 #[async_trait(?Send)]
 impl LastFmApiClient for LastFmApiClientImpl {
-    async fn api_get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
-        let url = format!(
-            "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&format=json&page={}&limit=200",
-            urlencoding::encode(&self.username),
-            urlencoding::encode(&self.api_key),
-            page
-        );
-
-        let request_info = RequestInfo::from_url_and_method(&url, "GET");
-        let request_start = std::time::Instant::now();
-
-        self.broadcaster
-            .broadcast_event(ClientEvent::RequestStarted {
-                request: request_info.clone(),
-            });
-
-        let request = Request::new(Method::Get, url.parse::<Url>().unwrap());
-        let mut response = self
-            .client
-            .send(request)
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        self.broadcaster
-            .broadcast_event(ClientEvent::RequestCompleted {
-                request: request_info,
-                status_code: response.status().into(),
-                duration_ms: request_start.elapsed().as_millis() as u64,
-            });
-
-        let body = response
-            .body_string()
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        parse_api_recent_tracks_response(&body)
+    async fn api_get_recent_tracks_page_in_range(
+        &self,
+        page: u32,
+        from: Option<u64>,
+        to: Option<u64>,
+    ) -> Result<TrackPage> {
+        fetch_recent_tracks_page(
+            &self.client,
+            &self.broadcaster,
+            &self.username,
+            &self.api_key,
+            page,
+            from,
+            to,
+        )
+        .await
     }
 }
 
@@ -349,5 +435,51 @@ mod tests {
         let page = parse_api_recent_tracks_response(json).unwrap();
         assert!(!page.has_next_page);
         assert_eq!(page.page_number, 3);
+    }
+
+    #[test]
+    fn test_build_recent_tracks_url_without_range() {
+        let url = build_recent_tracks_url("someuser", "apikey123", 2, None, None);
+        assert_eq!(
+            url,
+            "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=someuser&api_key=apikey123&format=json&page=2&limit=200"
+        );
+        assert!(!url.contains("&from="));
+        assert!(!url.contains("&to="));
+    }
+
+    #[test]
+    fn test_build_recent_tracks_url_with_from_and_to() {
+        let url = build_recent_tracks_url(
+            "someuser",
+            "apikey123",
+            1,
+            Some(1700000000),
+            Some(1700086400),
+        );
+        assert_eq!(
+            url,
+            "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=someuser&api_key=apikey123&format=json&page=1&limit=200&from=1700000000&to=1700086400"
+        );
+    }
+
+    #[test]
+    fn test_build_recent_tracks_url_with_only_from() {
+        let url = build_recent_tracks_url("someuser", "apikey123", 1, Some(1700000000), None);
+        assert!(url.ends_with("&limit=200&from=1700000000"));
+        assert!(!url.contains("&to="));
+    }
+
+    #[test]
+    fn test_build_recent_tracks_url_with_only_to() {
+        let url = build_recent_tracks_url("someuser", "apikey123", 1, None, Some(1700086400));
+        assert!(url.ends_with("&limit=200&to=1700086400"));
+        assert!(!url.contains("&from="));
+    }
+
+    #[test]
+    fn test_build_recent_tracks_url_encodes_username() {
+        let url = build_recent_tracks_url("some user&x", "key", 1, None, None);
+        assert!(url.contains("user=some%20user%26x"));
     }
 }

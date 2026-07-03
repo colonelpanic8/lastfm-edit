@@ -479,6 +479,8 @@ pub struct ApiRecentTracksIterator<C: LastFmApiClient> {
     buffer: Vec<Track>,
     stop_at_timestamp: Option<u64>,
     total_pages: Option<u32>,
+    from: Option<u64>,
+    to: Option<u64>,
 }
 
 #[async_trait(?Send)]
@@ -491,7 +493,7 @@ impl<C: LastFmApiClient> AsyncPaginatedIterator<Track> for ApiRecentTracksIterat
 
             let page = self
                 .client
-                .api_get_recent_tracks_page(self.current_page)
+                .api_get_recent_tracks_page_in_range(self.current_page, self.from, self.to)
                 .await?;
 
             if page.tracks.is_empty() {
@@ -548,7 +550,25 @@ impl<C: LastFmApiClient> ApiRecentTracksIterator<C> {
             buffer: Vec::new(),
             stop_at_timestamp: None,
             total_pages: None,
+            from: None,
+            to: None,
         }
+    }
+
+    /// Create an iterator restricted to a unix-timestamp window.
+    ///
+    /// `from` and `to` are forwarded to the `user.getRecentTracks` endpoint's optional
+    /// query parameters on every page fetch. Per the last.fm API documentation, `from`
+    /// selects tracks strictly after the given timestamp and `to` selects tracks
+    /// strictly before it — but the exact edge inclusivity has not yet been confirmed
+    /// against the live service (to be verified via VCR recording). A caller wanting a
+    /// half-open `[from, to)` window should conservatively pass
+    /// `from = window.start - 1`, or dedupe results by timestamp.
+    pub fn with_range(client: C, from: Option<u64>, to: Option<u64>) -> Self {
+        let mut iterator = Self::new(client);
+        iterator.from = from;
+        iterator.to = to;
+        iterator
     }
 
     pub fn with_stop_timestamp(mut self, timestamp: u64) -> Self {

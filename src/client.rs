@@ -1934,46 +1934,28 @@ impl LastFmEditClient for LastFmEditClientImpl {
 
 #[async_trait(?Send)]
 impl crate::api::LastFmApiClient for LastFmEditClientImpl {
-    async fn api_get_recent_tracks_page(&self, page: u32) -> Result<TrackPage> {
+    async fn api_get_recent_tracks_page_in_range(
+        &self,
+        page: u32,
+        from: Option<u64>,
+        to: Option<u64>,
+    ) -> Result<TrackPage> {
         let api_key = self
             .api_key
             .as_ref()
             .ok_or_else(|| LastFmError::Auth("No API key configured".to_string()))?;
 
         let username = self.username();
-        let url = format!(
-            "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&format=json&page={}&limit=200",
-            urlencoding::encode(&username),
-            urlencoding::encode(api_key),
-            page
-        );
-
-        let request_info = RequestInfo::from_url_and_method(&url, "GET");
-        let request_start = std::time::Instant::now();
-
-        self.broadcast_event(ClientEvent::RequestStarted {
-            request: request_info.clone(),
-        });
-
-        let request = Request::new(Method::Get, url.parse::<Url>().unwrap());
-        let mut response = self
-            .client
-            .send(request)
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        self.broadcast_event(ClientEvent::RequestCompleted {
-            request: request_info,
-            status_code: response.status().into(),
-            duration_ms: request_start.elapsed().as_millis() as u64,
-        });
-
-        let body = response
-            .body_string()
-            .await
-            .map_err(|e| LastFmError::Http(e.to_string()))?;
-
-        crate::api::parse_api_recent_tracks_response(&body)
+        crate::api::fetch_recent_tracks_page(
+            &self.client,
+            &self.broadcaster,
+            &username,
+            api_key,
+            page,
+            from,
+            to,
+        )
+        .await
     }
 }
 
