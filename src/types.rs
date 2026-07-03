@@ -1097,6 +1097,33 @@ impl OperationalDelayConfig {
     }
 }
 
+/// How the client should react when a rate limit is detected.
+///
+/// This controls what happens *after* detection; detection itself (status codes,
+/// response-body patterns) is configured via [`RateLimitConfig`] and always broadcasts
+/// [`ClientEvent::RateLimited`] and updates the shared [`RateLimitState`] regardless of
+/// the behavior selected here.
+///
+/// # Queue-building usage
+///
+/// [`RateLimitBehavior::ReturnError`] is intended for callers that maintain their own work
+/// queue: instead of the client sleeping internally, operations fail fast with
+/// [`LastFmError::RateLimit`](crate::LastFmError::RateLimit). The caller can then watch
+/// [`SharedEventBroadcaster::watch_rate_limit_state`] (or the client's
+/// `watch_rate_limit_state()`) for the "paused until T" estimate and schedule retries itself.
+/// See `LastFmEditClientImpl::non_blocking()` for a convenient way to derive such a client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RateLimitBehavior {
+    /// Default behavior: internally sleep and retry (subject to [`RetryConfig`]) when a rate
+    /// limit is detected. Callers block until the operation succeeds or retries are exhausted.
+    #[default]
+    BlockAndRetry,
+    /// Never sleep or retry internally on rate limits. Operations return
+    /// [`LastFmError::RateLimit`](crate::LastFmError::RateLimit) immediately so the caller can
+    /// queue the work and schedule its own retry (e.g. by watching [`RateLimitState`]).
+    ReturnError,
+}
+
 /// Unified configuration for retry behavior and rate limiting
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ClientConfig {
@@ -1108,6 +1135,8 @@ pub struct ClientConfig {
     pub operational_delays: OperationalDelayConfig,
     /// Last.fm API key for read-only API access (optional)
     pub api_key: Option<String>,
+    /// How to react when a rate limit is detected (block-and-retry vs. return an error)
+    pub rate_limit_behavior: RateLimitBehavior,
 }
 
 impl ClientConfig {
@@ -1208,6 +1237,16 @@ impl ClientConfig {
     /// Set the Last.fm API key for read-only API access
     pub fn with_api_key(mut self, api_key: String) -> Self {
         self.api_key = Some(api_key);
+        self
+    }
+
+    /// Set how the client reacts to detected rate limits.
+    ///
+    /// With [`RateLimitBehavior::ReturnError`] the client never sleeps or retries internally
+    /// on rate limits; operations surface [`LastFmError::RateLimit`](crate::LastFmError::RateLimit)
+    /// so the caller can schedule retries itself (see [`RateLimitBehavior`] docs).
+    pub fn with_rate_limit_behavior(mut self, behavior: RateLimitBehavior) -> Self {
+        self.rate_limit_behavior = behavior;
         self
     }
 }

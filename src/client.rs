@@ -6,8 +6,8 @@ use crate::r#trait::{LastFmBaseClient, LastFmEditClient};
 use crate::retry;
 use crate::types::{
     AlbumPage, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver, DelayReason,
-    EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, RateLimitConfig,
-    RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
+    EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, RateLimitBehavior,
+    RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
     SingleEditResponse, Track, TrackPage,
 };
 use crate::Result;
@@ -230,6 +230,32 @@ impl LastFmEditClientImpl {
         Self::from_session_with_broadcaster(client, session, self.broadcaster.clone())
     }
 
+    /// Get a non-blocking clone of this client that returns errors instead of sleeping when
+    /// rate limited.
+    ///
+    /// The returned client shares this client's HTTP client, session, event broadcaster, and
+    /// cancellation state (all `Arc`/channel-shared on plain `clone()`); only its
+    /// [`ClientConfig::rate_limit_behavior`] differs, set to [`RateLimitBehavior::ReturnError`].
+    /// Any events it emits (including `RateLimited`) are visible to subscribers of the
+    /// original client, and both clients report the same [`rate_limit_state`](Self::rate_limit_state).
+    ///
+    /// # Intended usage: caller-managed queues
+    ///
+    /// Instead of the client parking internally with backoff sleeps, operations on the
+    /// non-blocking clone fail fast with [`LastFmError::RateLimit`]. A caller building its own
+    /// work queue can:
+    ///
+    /// 1. Attempt an operation; on `Err(LastFmError::RateLimit { .. })`, requeue it.
+    /// 2. Watch [`watch_rate_limit_state`](Self::watch_rate_limit_state) for the
+    ///    [`RateLimitState::RateLimited`](crate::RateLimitState) "paused until T" estimate.
+    /// 3. Schedule its own retry once the state returns to
+    ///    [`RateLimitState::Ready`](crate::RateLimitState) (or `until_estimate` passes).
+    pub fn non_blocking(&self) -> Self {
+        let mut clone = self.clone();
+        clone.config.rate_limit_behavior = RateLimitBehavior::ReturnError;
+        clone
+    }
+
     pub fn username(&self) -> String {
         self.session.lock().unwrap().username.clone()
     }
@@ -276,6 +302,15 @@ impl LastFmEditClientImpl {
         track_name: &str,
         timestamp: u64,
     ) -> Result<bool> {
+        // Non-blocking mode: single attempt, no internal sleeping/retrying. Rate limits are
+        // PROPAGATED as `Err(LastFmError::RateLimit { .. })` (instead of being folded into
+        // `Ok(false)` by the retry path) so queue-building callers can reschedule the delete.
+        if self.config.rate_limit_behavior == RateLimitBehavior::ReturnError {
+            return self
+                .delete_scrobble_impl(artist_name, track_name, timestamp)
+                .await;
+        }
+
         if !self.config.retry.enabled {
             return self
                 .delete_scrobble_impl(artist_name, track_name, timestamp)
@@ -629,6 +664,28 @@ impl LastFmEditClientImpl {
         exact_edit: &ExactScrobbleEdit,
         max_retries: u32,
     ) -> Result<EditResponse> {
+        // Non-blocking mode: single attempt, no internal sleeping/retrying. Rate limits are
+        // PROPAGATED as `Err(LastFmError::RateLimit { .. })` so queue-building callers can
+        // reschedule the edit themselves; other errors keep the usual "folded into a failed
+        // EditResponse" behavior.
+        if self.config.rate_limit_behavior == RateLimitBehavior::ReturnError {
+            return match self.edit_scrobble_impl(exact_edit).await {
+                Ok(success) => Ok(EditResponse::single(
+                    success,
+                    None,
+                    None,
+                    exact_edit.clone(),
+                )),
+                Err(rate_limit @ LastFmError::RateLimit { .. }) => Err(rate_limit),
+                Err(error) => Ok(EditResponse::single(
+                    false,
+                    Some(error.to_string()),
+                    None,
+                    exact_edit.clone(),
+                )),
+            };
+        }
+
         // Skip retry if disabled in config or max_retries is 0
         if !self.config.retry.enabled || max_retries == 0 {
             return match self.edit_scrobble_impl(exact_edit).await {
@@ -1229,6 +1286,12 @@ impl LastFmEditClientImpl {
     }
 
     pub async fn get(&self, url: &str) -> Result<Response> {
+        // In non-blocking mode we never sleep/retry internally on rate limits, regardless of
+        // the retry configuration. Detection still broadcasts RateLimited events and updates
+        // the shared rate-limit state inside `get_without_retry`.
+        if self.config.rate_limit_behavior == RateLimitBehavior::ReturnError {
+            return self.get_without_retry(url).await;
+        }
         if self.config.retry.enabled {
             self.get_with_retry(url).await
         } else {
