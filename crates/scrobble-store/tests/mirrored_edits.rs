@@ -128,12 +128,16 @@ async fn apply_edit_enriches_applies_and_mirrors() {
 
     let outcome = editor.apply_edit(edit).await.unwrap();
     let new_id = ScrobbleId::new(UTS, "Cam'ron", "Oh Boy (Clean)");
-    assert_eq!(
-        outcome,
+    match &outcome {
         EditOutcome::Applied {
-            result_ids: vec![new_id.clone()]
+            result_ids,
+            edit_id,
+        } => {
+            assert_eq!(result_ids, &vec![new_id.clone()]);
+            assert!(!edit_id.is_empty());
         }
-    );
+        other => panic!("expected Applied, got {other:?}"),
+    }
 
     // Local mirror: new identity live and Verified, old identity tombstoned.
     let new_record = store.get_scrobble(&new_id).await.unwrap().unwrap();
@@ -298,7 +302,9 @@ async fn apply_delete_tombstones_locally() {
 
     let editor = MirroredEditor::new(store.clone(), client);
     let outcome = editor.apply_delete(&seeded_record().id).await.unwrap();
-    assert_eq!(outcome, EditOutcome::Applied { result_ids: vec![] });
+    assert!(
+        matches!(outcome, EditOutcome::Applied { ref result_ids, .. } if result_ids.is_empty())
+    );
     assert!(
         store
             .get_scrobble(&seeded_record().id)

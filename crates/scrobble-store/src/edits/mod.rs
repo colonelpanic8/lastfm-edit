@@ -34,9 +34,16 @@ use std::sync::Arc;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EditOutcome {
     /// Applied upstream and mirrored locally; these are the ids now live in the store.
-    Applied { result_ids: Vec<ScrobbleId> },
+    /// `edit_id` identifies the entry in the durable edit log for cross-referencing.
+    Applied {
+        result_ids: Vec<ScrobbleId>,
+        edit_id: String,
+    },
     /// Resume found the operation already reflected upstream; only the mirror was updated.
-    AlreadyApplied { result_ids: Vec<ScrobbleId> },
+    AlreadyApplied {
+        result_ids: Vec<ScrobbleId>,
+        edit_id: String,
+    },
     /// The attempt failed (recorded in the log; retriable via `resume_pending`).
     Failed { error: String },
 }
@@ -211,7 +218,10 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
                     self.events.emit(SyncEvent::EditApplied {
                         edit_id: entry.edit_id.clone(),
                     });
-                    EditOutcome::AlreadyApplied { result_ids }
+                    EditOutcome::AlreadyApplied {
+                        result_ids,
+                        edit_id: entry.edit_id.clone(),
+                    }
                 }
                 None => self.attempt(entry.clone(), op).await?,
             };
@@ -299,7 +309,10 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
                 self.events.emit(SyncEvent::EditApplied {
                     edit_id: entry.edit_id.clone(),
                 });
-                Ok(EditOutcome::Applied { result_ids })
+                Ok(EditOutcome::Applied {
+                    result_ids,
+                    edit_id: entry.edit_id.clone(),
+                })
             }
             Ok((false, message)) => {
                 let error = message.unwrap_or_else(|| "edit rejected by last.fm".to_string());
