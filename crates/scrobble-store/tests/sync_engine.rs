@@ -7,7 +7,6 @@ use scrobble_store::source::{ScrobbleSource, SourcePage};
 use scrobble_store::{
     MemoryStorage, RecordSource, Result, Storage, SyncEngine, SyncEvent, SyncOptions,
 };
-use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use tokio::sync::watch;
 

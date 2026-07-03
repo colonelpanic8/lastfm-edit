@@ -10,7 +10,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum EditOp {
-    Edit(ExactScrobbleEdit),
+    // Boxed: ExactScrobbleEdit is large (10 owned fields) and would otherwise bloat every
+    // EditEventKind/EditOp value. Serde treats Box<T> transparently, so the on-disk format
+    // is unchanged.
+    Edit(Box<ExactScrobbleEdit>),
     Delete {
         artist: String,
         track: String,

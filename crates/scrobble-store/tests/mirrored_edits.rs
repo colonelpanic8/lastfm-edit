@@ -244,7 +244,7 @@ async fn crash_after_upstream_success_converges_without_resubmitting() {
             edit_id: "e-crash-test".to_string(),
             at: 100,
             kind: scrobble_store::EditEventKind::Queued {
-                op: scrobble_store::EditOp::Edit(edit.clone()),
+                op: scrobble_store::EditOp::Edit(Box::new(edit.clone())),
                 target_ids: vec![seeded_record().id],
             },
         }])

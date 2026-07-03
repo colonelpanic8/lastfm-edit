@@ -166,7 +166,7 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
             )));
         }
 
-        let op = EditOp::Edit(edit.clone());
+        let op = EditOp::Edit(Box::new(edit.clone()));
         let entry = self.queue(op.clone(), vec![target_id.clone()]).await?;
         self.attempt(entry, op).await
     }
