@@ -12,6 +12,7 @@
 pub mod default_rules;
 pub mod error;
 pub mod events;
+pub mod executor;
 pub mod feed;
 pub mod filters;
 pub mod ops;
@@ -25,6 +26,7 @@ pub mod subject;
 
 pub use error::{Result, ScrubberError};
 pub use events::{ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver};
+pub use executor::{Executor, ExecutorOptions};
 pub use feed::{FeedBatch, ScrubFeed};
 pub use filters::{ReleaseFilterConfig, ReleaseFilterType};
 pub use planner::{Planner, RULES_PROVIDER};
