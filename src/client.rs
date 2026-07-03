@@ -432,6 +432,20 @@ impl LastFmEditClientImpl {
         self.broadcaster.latest_event()
     }
 
+    /// Get the current rate-limit state snapshot.
+    ///
+    /// Shared across all clones of this client (they share the same broadcaster), so a
+    /// monitoring task can hold a clone and observe rate limiting caused by any of them.
+    pub fn rate_limit_state(&self) -> crate::types::RateLimitState {
+        self.broadcaster.rate_limit_state()
+    }
+
+    /// Get a watch receiver tracking the rate-limit state. Await `.changed()` to react to
+    /// pause/resume transitions without polling.
+    pub fn watch_rate_limit_state(&self) -> crate::types::RateLimitStateWatcher {
+        self.broadcaster.watch_rate_limit_state()
+    }
+
     fn broadcast_event(&self, event: ClientEvent) {
         self.broadcaster.broadcast_event(event);
     }
@@ -1201,6 +1215,17 @@ impl LastFmEditClientImpl {
 
         if response.status().is_success() && self.is_rate_limit_response(&body) {
             log::debug!("Response body contains rate limit patterns");
+            // Broadcast here so pattern-detected rate limits are observable even when the
+            // retry loop (which also broadcasts) is not driving this call.
+            self.broadcast_event(ClientEvent::RateLimited {
+                delay_seconds: 60,
+                request: Some(RequestInfo::from_url_and_method(url, "GET")),
+                rate_limit_type: RateLimitType::ResponsePattern,
+                rate_limit_timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            });
             return Err(LastFmError::RateLimit { retry_after: 60 });
         }
 
@@ -1742,6 +1767,14 @@ impl LastFmBaseClient for LastFmEditClientImpl {
 
     fn latest_event(&self) -> Option<ClientEvent> {
         self.latest_event()
+    }
+
+    fn rate_limit_state(&self) -> crate::types::RateLimitState {
+        self.rate_limit_state()
+    }
+
+    fn watch_rate_limit_state(&self) -> crate::types::RateLimitStateWatcher {
+        self.watch_rate_limit_state()
     }
 
     async fn validate_session(&self) -> bool {

@@ -129,3 +129,130 @@ fn test_client_creation_patterns() {
     let _sub2 = client2.subscribe();
     let _sub3 = client3.subscribe();
 }
+
+mod rate_limit_state {
+    use lastfm_edit::{
+        ClientEvent, RateLimitState, RateLimitType, RequestInfo, SharedEventBroadcaster,
+    };
+
+    fn rate_limited_event(timestamp: u64, delay_seconds: u64) -> ClientEvent {
+        ClientEvent::RateLimited {
+            delay_seconds,
+            request: None,
+            rate_limit_type: RateLimitType::ResponsePattern,
+            rate_limit_timestamp: timestamp,
+        }
+    }
+
+    fn completed_event(status_code: u16) -> ClientEvent {
+        ClientEvent::RequestCompleted {
+            request: RequestInfo::from_url_and_method("https://www.last.fm/", "GET"),
+            status_code,
+            duration_ms: 1,
+        }
+    }
+
+    #[test]
+    fn starts_ready() {
+        let broadcaster = SharedEventBroadcaster::new();
+        assert_eq!(broadcaster.rate_limit_state(), RateLimitState::Ready);
+        assert!(!broadcaster.rate_limit_state().is_rate_limited_at(0));
+    }
+
+    #[test]
+    fn rate_limited_event_sets_state() {
+        let broadcaster = SharedEventBroadcaster::new();
+        broadcaster.broadcast_event(rate_limited_event(1_000, 60));
+
+        let state = broadcaster.rate_limit_state();
+        assert_eq!(
+            state,
+            RateLimitState::RateLimited {
+                since: 1_000,
+                until_estimate: 1_060,
+                kind: RateLimitType::ResponsePattern,
+            }
+        );
+        assert!(state.is_rate_limited_at(1_030));
+        assert!(!state.is_rate_limited_at(1_060));
+        assert_eq!(
+            state.remaining_at(1_030),
+            Some(std::time::Duration::from_secs(30))
+        );
+        assert_eq!(state.remaining_at(1_061), None);
+    }
+
+    #[test]
+    fn consecutive_detections_preserve_since_and_extend_until() {
+        let broadcaster = SharedEventBroadcaster::new();
+        broadcaster.broadcast_event(rate_limited_event(1_000, 60));
+        broadcaster.broadcast_event(rate_limited_event(1_060, 120));
+
+        assert_eq!(
+            broadcaster.rate_limit_state(),
+            RateLimitState::RateLimited {
+                since: 1_000,
+                until_estimate: 1_180,
+                kind: RateLimitType::ResponsePattern,
+            }
+        );
+    }
+
+    #[test]
+    fn rate_limit_ended_resets_to_ready() {
+        let broadcaster = SharedEventBroadcaster::new();
+        broadcaster.broadcast_event(rate_limited_event(1_000, 60));
+        broadcaster.broadcast_event(ClientEvent::RateLimitEnded {
+            request: RequestInfo::from_url_and_method("https://www.last.fm/", "GET"),
+            rate_limit_type: RateLimitType::ResponsePattern,
+            total_rate_limit_duration_seconds: 60,
+        });
+        assert_eq!(broadcaster.rate_limit_state(), RateLimitState::Ready);
+    }
+
+    #[test]
+    fn successful_request_self_heals_to_ready() {
+        let broadcaster = SharedEventBroadcaster::new();
+        broadcaster.broadcast_event(rate_limited_event(1_000, 60));
+        broadcaster.broadcast_event(completed_event(200));
+        assert_eq!(broadcaster.rate_limit_state(), RateLimitState::Ready);
+    }
+
+    #[test]
+    fn failed_request_does_not_reset_state() {
+        let broadcaster = SharedEventBroadcaster::new();
+        broadcaster.broadcast_event(rate_limited_event(1_000, 60));
+        broadcaster.broadcast_event(completed_event(429));
+        assert!(matches!(
+            broadcaster.rate_limit_state(),
+            RateLimitState::RateLimited { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn watch_channel_observes_transitions() {
+        let broadcaster = SharedEventBroadcaster::new();
+        let mut watcher = broadcaster.watch_rate_limit_state();
+        assert_eq!(*watcher.borrow(), RateLimitState::Ready);
+
+        broadcaster.broadcast_event(rate_limited_event(1_000, 60));
+        watcher.changed().await.expect("sender alive");
+        assert!(matches!(
+            *watcher.borrow_and_update(),
+            RateLimitState::RateLimited { .. }
+        ));
+
+        broadcaster.broadcast_event(completed_event(200));
+        watcher.changed().await.expect("sender alive");
+        assert_eq!(*watcher.borrow_and_update(), RateLimitState::Ready);
+    }
+
+    #[test]
+    fn ready_transitions_do_not_spuriously_notify() {
+        let broadcaster = SharedEventBroadcaster::new();
+        let watcher = broadcaster.watch_rate_limit_state();
+        // Successful request while already Ready must not mark the watcher changed.
+        broadcaster.broadcast_event(completed_event(200));
+        assert!(!watcher.has_changed().expect("sender alive"));
+    }
+}

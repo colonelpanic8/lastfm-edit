@@ -50,6 +50,16 @@ impl LastFmApiClientImpl {
         self.broadcaster.latest_event()
     }
 
+    /// Get the current rate-limit state snapshot.
+    pub fn rate_limit_state(&self) -> crate::types::RateLimitState {
+        self.broadcaster.rate_limit_state()
+    }
+
+    /// Get a watch receiver tracking rate-limit state transitions.
+    pub fn watch_rate_limit_state(&self) -> crate::types::RateLimitStateWatcher {
+        self.broadcaster.watch_rate_limit_state()
+    }
+
     pub fn username(&self) -> &str {
         &self.username
     }

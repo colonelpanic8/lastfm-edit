@@ -1,7 +1,7 @@
 use crate::iterator::AsyncPaginatedIterator;
 use crate::types::{
     Album, Artist, ArtistPage, ClientEvent, ClientEventReceiver, EditResponse, ExactScrobbleEdit,
-    LastFmEditSession, ScrobbleEdit, Track,
+    LastFmEditSession, RateLimitState, RateLimitStateWatcher, ScrobbleEdit, Track,
 };
 use crate::Result;
 use async_trait::async_trait;
@@ -176,6 +176,28 @@ pub trait LastFmBaseClient {
     /// }
     /// ```
     fn latest_event(&self) -> Option<ClientEvent>;
+
+    /// Get the current rate-limit state snapshot.
+    ///
+    /// Returns [`RateLimitState::RateLimited`] (with an estimated resume time) while the client
+    /// is parked due to detected rate limiting, and [`RateLimitState::Ready`] otherwise.
+    /// The default implementation always reports `Ready`; clients backed by a
+    /// [`SharedEventBroadcaster`](crate::types::SharedEventBroadcaster) override it.
+    fn rate_limit_state(&self) -> RateLimitState {
+        RateLimitState::Ready
+    }
+
+    /// Get a watch receiver tracking rate-limit state transitions.
+    ///
+    /// Await `.changed()` on the receiver to react to pause/resume without polling. The default
+    /// implementation returns a watcher that always reads `Ready` and never changes.
+    fn watch_rate_limit_state(&self) -> RateLimitStateWatcher {
+        static NEVER_LIMITED: std::sync::OnceLock<tokio::sync::watch::Sender<RateLimitState>> =
+            std::sync::OnceLock::new();
+        NEVER_LIMITED
+            .get_or_init(|| tokio::sync::watch::channel(RateLimitState::Ready).0)
+            .subscribe()
+    }
 
     /// Validate if the current session is still working.
     ///

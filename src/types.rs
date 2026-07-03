@@ -1466,11 +1466,62 @@ pub type ClientEventReceiver = broadcast::Receiver<ClientEvent>;
 /// Type alias for the watch receiver
 pub type ClientEventWatcher = watch::Receiver<Option<ClientEvent>>;
 
+/// Current rate-limit state of a client.
+///
+/// Unlike [`ClientEvent`] subscriptions (which report transitions), this is a snapshot that can
+/// be queried synchronously via [`SharedEventBroadcaster::rate_limit_state`] or awaited via the
+/// watch channel from [`SharedEventBroadcaster::watch_rate_limit_state`]. It is derived
+/// automatically from the events flowing through the broadcaster, so every detection and retry
+/// path keeps it up to date.
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum RateLimitState {
+    /// No rate limiting currently in effect.
+    #[default]
+    Ready,
+    /// The client is rate limited and expected to be parked until `until_estimate`.
+    RateLimited {
+        /// When the current rate-limit episode began (seconds since Unix epoch).
+        since: u64,
+        /// Best-estimate time at which operation will resume (seconds since Unix epoch).
+        /// Updated as retries re-detect the limit and extend the backoff.
+        until_estimate: u64,
+        /// How the rate limit was detected.
+        kind: RateLimitType,
+    },
+}
+
+impl RateLimitState {
+    /// Whether the state indicates active rate limiting at `now_unix` (seconds since epoch).
+    ///
+    /// Returns `false` once `now_unix` has passed `until_estimate`, even if no event has
+    /// transitioned the state back to [`RateLimitState::Ready`] yet.
+    pub fn is_rate_limited_at(&self, now_unix: u64) -> bool {
+        match self {
+            RateLimitState::Ready => false,
+            RateLimitState::RateLimited { until_estimate, .. } => now_unix < *until_estimate,
+        }
+    }
+
+    /// Time remaining until the estimated resume point, if currently rate limited.
+    pub fn remaining_at(&self, now_unix: u64) -> Option<std::time::Duration> {
+        match self {
+            RateLimitState::RateLimited { until_estimate, .. } if now_unix < *until_estimate => {
+                Some(std::time::Duration::from_secs(until_estimate - now_unix))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Type alias for the rate-limit state watch receiver
+pub type RateLimitStateWatcher = watch::Receiver<RateLimitState>;
+
 /// Shared event broadcasting state that persists across client clones
 #[derive(Clone)]
 pub struct SharedEventBroadcaster {
     event_tx: broadcast::Sender<ClientEvent>,
     last_event_tx: watch::Sender<Option<ClientEvent>>,
+    rate_limit_tx: watch::Sender<RateLimitState>,
 }
 
 impl SharedEventBroadcaster {
@@ -1478,17 +1529,60 @@ impl SharedEventBroadcaster {
     pub fn new() -> Self {
         let (event_tx, _) = broadcast::channel(100);
         let (last_event_tx, _) = watch::channel(None);
+        let (rate_limit_tx, _) = watch::channel(RateLimitState::Ready);
 
         Self {
             event_tx,
             last_event_tx,
+            rate_limit_tx,
         }
     }
 
     /// Broadcast an event to all subscribers
     pub fn broadcast_event(&self, event: ClientEvent) {
+        self.update_rate_limit_state(&event);
         let _ = self.event_tx.send(event.clone());
         let _ = self.last_event_tx.send(Some(event));
+    }
+
+    /// Derive rate-limit state transitions from the event stream.
+    fn update_rate_limit_state(&self, event: &ClientEvent) {
+        let new_state = match event {
+            ClientEvent::RateLimited {
+                delay_seconds,
+                rate_limit_type,
+                rate_limit_timestamp,
+                ..
+            } => {
+                // Preserve `since` across consecutive detections within one episode.
+                let since = match &*self.rate_limit_tx.borrow() {
+                    RateLimitState::RateLimited { since, .. } => *since,
+                    RateLimitState::Ready => *rate_limit_timestamp,
+                };
+                RateLimitState::RateLimited {
+                    since,
+                    until_estimate: rate_limit_timestamp + delay_seconds,
+                    kind: rate_limit_type.clone(),
+                }
+            }
+            ClientEvent::RateLimitEnded { .. } => RateLimitState::Ready,
+            // A successful response means we are no longer parked. This also self-heals paths
+            // that never emit RateLimitEnded (e.g. retries exhausted, non-retrying callers).
+            ClientEvent::RequestCompleted { status_code, .. }
+                if (200..300).contains(status_code) =>
+            {
+                RateLimitState::Ready
+            }
+            _ => return,
+        };
+        self.rate_limit_tx.send_if_modified(|state| {
+            if *state != new_state {
+                *state = new_state;
+                true
+            } else {
+                false
+            }
+        });
     }
 
     /// Subscribe to events
@@ -1499,6 +1593,17 @@ impl SharedEventBroadcaster {
     /// Get the latest event
     pub fn latest_event(&self) -> Option<ClientEvent> {
         self.last_event_tx.borrow().clone()
+    }
+
+    /// Get the current rate-limit state snapshot.
+    pub fn rate_limit_state(&self) -> RateLimitState {
+        self.rate_limit_tx.borrow().clone()
+    }
+
+    /// Get a watch receiver that tracks the rate-limit state across all client clones
+    /// sharing this broadcaster. Await `.changed()` to react to pause/resume transitions.
+    pub fn watch_rate_limit_state(&self) -> RateLimitStateWatcher {
+        self.rate_limit_tx.subscribe()
     }
 }
 
