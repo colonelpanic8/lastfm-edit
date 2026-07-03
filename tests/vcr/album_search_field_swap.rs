@@ -107,8 +107,7 @@ async fn test_album_search_multiple_artists() {
         if album.name.to_lowercase().contains("abbey road") {
             assert!(
                 !album.artist.to_lowercase().contains("abbey road"),
-                "Found 'Abbey Road' in artist field instead of album name field for: {:?}",
-                album
+                "Found 'Abbey Road' in artist field instead of album name field for: {album:?}"
             );
         }
     }
