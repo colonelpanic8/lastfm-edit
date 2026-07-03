@@ -1,0 +1,9 @@
+# Copy this file to .envrc.local to override the credential setup in .envrc
+# without editing the committed file. .envrc.local is gitignored.
+#
+# Any variable you export here wins over the `pass`-based defaults in .envrc,
+# so you don't need `pass` (or Ivan's specific entry layout) to use this repo.
+
+export LASTFM_EDIT_USERNAME="your-username"
+export LASTFM_EDIT_PASSWORD="your-password"
+export LASTFM_EDIT_API_KEY="your-api-key"

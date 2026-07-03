@@ -4,3 +4,4 @@
 /artists.txt
 /python/target/
 /python/**/__pycache__/
+/.envrc.local
