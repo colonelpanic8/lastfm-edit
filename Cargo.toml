@@ -10,6 +10,25 @@ documentation = "https://docs.rs/lastfm-edit"
 readme = "README.md"
 exclude = [".claude/", ".codex/", "AGENTS.md", "Cargo.toml.orig", "coverage/"]
 
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/colonelpanic8/lastfm-edit"
+
+[workspace.dependencies]
+lastfm-edit = { path = ".", version = "6.0.3" }
+scrobble-store = { path = "crates/scrobble-store", version = "0.1.0" }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+log = "0.4"
+
 [dependencies]
 # Core dependencies
 http-client = { version = "^6.6.3", package = "http-client-2", default-features = false }
