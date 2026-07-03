@@ -38,12 +38,13 @@ pub struct Track {
     /// where album information is available in the edit forms. May be `None`
     /// for aggregate track listings or when album information is not available.
     pub album: Option<String>,
-    /// The album artist name (if available and different from track artist)
+    /// The album artist name, when the data source actually provides it.
     ///
-    /// This field is populated when tracks are retrieved from recent scrobbles
-    /// where album artist information is available. May be `None` for tracks
-    /// where the album artist is the same as the track artist, or when this
-    /// information is not available.
+    /// `None` means unknown/not provided by the source — it must never be guessed (e.g. by
+    /// copying the track artist), because the two legitimately differ for compilations and
+    /// soundtracks. Values scraped from Last.fm edit forms are authoritative; the official
+    /// recent-tracks API does not supply album artist at all, so API-sourced tracks always
+    /// carry `None`.
     pub album_artist: Option<String>,
 }
 
@@ -464,11 +465,11 @@ impl ScrobbleEdit {
             Some(original_track.to_string()),
             Some(original_album.to_string()),
             original_artist.to_string(),
-            Some(original_artist.to_string()), // album_artist defaults to artist
+            None, // unknown album artist: don't filter discovery on a guess
             Some(original_track.to_string()),
             Some(original_album.to_string()),
             original_artist.to_string(),
-            Some(original_artist.to_string()), // album_artist defaults to artist
+            None, // no new value: keep whatever the edit form already has
             Some(timestamp),
             true, // edit_all defaults to true
         )
@@ -525,11 +526,11 @@ impl ScrobbleEdit {
             Some(track_name.to_string()),
             Some(album_name.to_string()),
             artist_name.to_string(),
-            Some(artist_name.to_string()),
+            None, // unknown album artist: don't filter discovery on a guess
             Some(track_name.to_string()),
             Some(album_name.to_string()),
             artist_name.to_string(),
-            Some(artist_name.to_string()),
+            None, // no new value: keep whatever the edit form already has
             Some(timestamp),
             true,
         )
@@ -553,8 +554,8 @@ impl ScrobbleEdit {
             Some(track_name.to_string()),
             None, // Will be filled by client or kept as original
             artist_name.to_string(),
-            Some(artist_name.to_string()), // album_artist defaults to artist
-            None,                          // Client will find representative timestamp
+            None, // no new value: keep whatever the edit form already has
+            None, // Client will find representative timestamp
             true,
         )
     }

@@ -187,14 +187,16 @@ pub fn parse_api_recent_tracks_response(json: &str) -> Result<TrackPage> {
         })
         .filter_map(|t| {
             let timestamp: u64 = t.date.as_ref()?.uts.parse().ok()?;
-            let artist = t.artist.text.clone();
             Some(Track {
                 name: t.name,
-                artist: artist.clone(),
+                artist: t.artist.text,
                 playcount: 1,
                 timestamp: Some(timestamp),
                 album: Some(t.album.text),
-                album_artist: Some(artist),
+                // The recent-tracks API response carries no album-artist field; report that
+                // honestly instead of guessing. Scraped edit-form values are the authoritative
+                // way to obtain it.
+                album_artist: None,
             })
         })
         .collect();
@@ -243,6 +245,8 @@ mod tests {
         assert_eq!(page.tracks[0].name, "Test Track");
         assert_eq!(page.tracks[0].artist, "Test Artist");
         assert_eq!(page.tracks[0].album.as_deref(), Some("Test Album"));
+        // The API provides no album-artist information; it must not be fabricated.
+        assert_eq!(page.tracks[0].album_artist, None);
         assert_eq!(page.tracks[0].timestamp, Some(1700000000));
         assert_eq!(page.tracks[0].playcount, 1);
         assert_eq!(page.page_number, 1);
