@@ -5,3 +5,5 @@
 /python/target/
 /python/**/__pycache__/
 /.envrc.local
+/.codex/
+/.playwright-mcp/
