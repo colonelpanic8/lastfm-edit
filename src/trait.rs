@@ -505,6 +505,65 @@ pub trait LastFmEditClient: LastFmBaseClient {
         discovery_iterator.collect_all().await
     }
 
+    /// Get every album variation of a track from the user's library, fully populated from
+    /// the scrobble edit forms on the track's library page.
+    ///
+    /// Returns one [`ExactScrobbleEdit`] per unique `(album, album artist)` combination,
+    /// with all original fields — including the authoritative `album_artist_name_original`
+    /// scraped from the hidden form inputs — filled in. This is the primary way to backfill
+    /// album artist information, which is not available from Last.fm's public API.
+    ///
+    /// # Arguments
+    ///
+    /// * `track_name` - The track name as it appears in the library
+    /// * `artist_name` - The (track) artist name as it appears in the library
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LastFmError::Parse`](crate::LastFmError::Parse) if no scrobble edit forms
+    /// can be found for the track.
+    async fn get_scrobble_edit_variations(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+    ) -> Result<Vec<ExactScrobbleEdit>>;
+
+    /// Resolve the authoritative album artist for a scrobbled track.
+    ///
+    /// This is a convenience wrapper around
+    /// [`get_scrobble_edit_variations`](Self::get_scrobble_edit_variations) that picks a
+    /// single variation and returns its `album_artist_name_original`:
+    ///
+    /// - If `album` is `Some`, the variation whose `album_name_original` matches it
+    ///   **exactly (case-sensitively)** is used.
+    /// - If `album` is `None`, or no variation matches exactly, the **first** discovered
+    ///   variation is used as a fallback.
+    ///
+    /// Returns `Ok(None)` only when no variations are available at all (implementations
+    /// typically return an error in that case instead).
+    ///
+    /// # Arguments
+    ///
+    /// * `artist` - The (track) artist name as it appears in the library
+    /// * `track` - The track name as it appears in the library
+    /// * `album` - The album to disambiguate between variations, if known
+    async fn resolve_album_artist(
+        &self,
+        artist: &str,
+        track: &str,
+        album: Option<&str>,
+    ) -> Result<Option<String>> {
+        let variations = self.get_scrobble_edit_variations(track, artist).await?;
+        let chosen = match album {
+            Some(album_name) => variations
+                .iter()
+                .find(|variation| variation.album_name_original == album_name)
+                .or_else(|| variations.first()),
+            None => variations.first(),
+        };
+        Ok(chosen.map(|variation| variation.album_artist_name_original.clone()))
+    }
+
     /// Edit album metadata by updating scrobbles with new album name.
     async fn edit_album(
         &self,
@@ -619,6 +678,11 @@ mockall::mock! {
             track_name: &str,
             timestamp: u64,
         ) -> Result<bool>;
+        async fn get_scrobble_edit_variations(
+            &self,
+            track_name: &str,
+            artist_name: &str,
+        ) -> Result<Vec<ExactScrobbleEdit>>;
         fn discover_scrobbles(
             &self,
             edit: ScrobbleEdit,

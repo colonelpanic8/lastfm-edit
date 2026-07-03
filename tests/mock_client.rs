@@ -81,6 +81,103 @@ mod mock_tests {
         Ok(())
     }
 
+    fn variation(album: &str, album_artist: &str) -> ExactScrobbleEdit {
+        ExactScrobbleEdit::new(
+            "Track".to_string(),
+            album.to_string(),
+            "Artist".to_string(),
+            album_artist.to_string(),
+            "Track".to_string(),
+            album.to_string(),
+            "Artist".to_string(),
+            album_artist.to_string(),
+            1640995200,
+            true,
+        )
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_mock_get_scrobble_edit_variations() -> Result<()> {
+        let mut mock_client = MockLastFmEditClient::new();
+
+        let variations = vec![
+            variation("Album A", "Album Artist A"),
+            variation("Album B", "Album Artist B"),
+        ];
+        let returned = variations.clone();
+        mock_client
+            .expect_get_scrobble_edit_variations()
+            .with(eq("Track"), eq("Artist"))
+            .times(1)
+            .returning(move |_, _| Ok(returned.clone()));
+
+        let client: &dyn LastFmEditClient = &mock_client;
+        let result = client
+            .get_scrobble_edit_variations("Track", "Artist")
+            .await?;
+        assert_eq!(result, variations);
+
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_resolve_album_artist_default_impl() -> Result<()> {
+        let mut mock_client = MockLastFmEditClient::new();
+
+        let variations = vec![
+            variation("Album A", "Album Artist A"),
+            variation("Album B", "Album Artist B"),
+        ];
+        mock_client
+            .expect_get_scrobble_edit_variations()
+            .with(eq("Track"), eq("Artist"))
+            .returning(move |_, _| Ok(variations.clone()));
+
+        let client: &dyn LastFmEditClient = &mock_client;
+
+        // Exact (case-sensitive) album match picks the matching variation.
+        assert_eq!(
+            client
+                .resolve_album_artist("Artist", "Track", Some("Album B"))
+                .await?,
+            Some("Album Artist B".to_string())
+        );
+
+        // Case mismatch is not an exact match: falls back to the first variation.
+        assert_eq!(
+            client
+                .resolve_album_artist("Artist", "Track", Some("album b"))
+                .await?,
+            Some("Album Artist A".to_string())
+        );
+
+        // No album provided: falls back to the first variation.
+        assert_eq!(
+            client.resolve_album_artist("Artist", "Track", None).await?,
+            Some("Album Artist A".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_resolve_album_artist_no_variations() -> Result<()> {
+        let mut mock_client = MockLastFmEditClient::new();
+        mock_client
+            .expect_get_scrobble_edit_variations()
+            .returning(|_, _| Ok(vec![]));
+
+        let client: &dyn LastFmEditClient = &mock_client;
+        assert_eq!(
+            client
+                .resolve_album_artist("Artist", "Track", Some("Album"))
+                .await?,
+            None
+        );
+
+        Ok(())
+    }
+
     #[test_log::test(tokio::test)]
     async fn test_mock_get_recent_scrobbles() -> Result<()> {
         let mut mock_client = MockLastFmEditClient::new();

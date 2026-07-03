@@ -826,7 +826,25 @@ impl LastFmEditClientImpl {
         Ok(form_html)
     }
 
+    /// Deprecated alias for [`get_scrobble_edit_variations`](Self::get_scrobble_edit_variations).
+    #[deprecated(note = "use get_scrobble_edit_variations")]
     pub async fn load_edit_form_values_internal(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+    ) -> Result<Vec<ExactScrobbleEdit>> {
+        self.get_scrobble_edit_variations(track_name, artist_name)
+            .await
+    }
+
+    /// Discover every album variation of a track in the user's library, fully populated from
+    /// the scrobble edit forms on the track's library page.
+    ///
+    /// This scrapes `/user/{user}/library/music/{artist}/_/{track}` (following pagination up to
+    /// a few pages) and returns one [`ExactScrobbleEdit`] per unique
+    /// `(album, album artist)` combination, with all original fields — including the
+    /// authoritative `album_artist_name_original` — taken from the hidden form inputs.
+    pub async fn get_scrobble_edit_variations(
         &self,
         track_name: &str,
         artist_name: &str,
@@ -1105,8 +1123,18 @@ impl LastFmEditClientImpl {
         }
 
         let form_album = extract_form_value("album_name").unwrap_or_default();
-        let form_album_artist =
-            extract_form_value("album_artist_name").unwrap_or_else(|| form_artist.clone());
+        // Last.fm's edit forms normally include an `album_artist_name` input whose value is
+        // authoritative (it can legitimately differ from the track artist for compilations
+        // and soundtracks). When the input is missing entirely (observed for some scrobbles
+        // without album metadata), we fall back to the track artist as the best available
+        // guess so the edit form can still be submitted with a complete field set.
+        let form_album_artist = extract_form_value("album_artist_name").unwrap_or_else(|| {
+            log::debug!(
+                "No album_artist_name input in edit form for '{form_track}' by '{form_artist}'; \
+                 falling back to track artist as album artist"
+            );
+            form_artist.clone()
+        });
 
         let album_key = (form_album.clone(), form_album_artist.clone());
         if !unique_albums.insert(album_key) {
@@ -1825,6 +1853,15 @@ impl LastFmEditClient for LastFmEditClientImpl {
         timestamp: u64,
     ) -> Result<bool> {
         self.delete_scrobble(artist_name, track_name, timestamp)
+            .await
+    }
+
+    async fn get_scrobble_edit_variations(
+        &self,
+        track_name: &str,
+        artist_name: &str,
+    ) -> Result<Vec<ExactScrobbleEdit>> {
+        self.get_scrobble_edit_variations(track_name, artist_name)
             .await
     }
 

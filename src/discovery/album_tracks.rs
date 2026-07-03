@@ -66,7 +66,7 @@ impl AsyncDiscoveryIterator<ExactScrobbleEdit> for AlbumTracksDiscovery {
             // Get scrobble data for this track
             match self
                 .client
-                .load_edit_form_values_internal(&track.name, lookup_artist)
+                .get_scrobble_edit_variations(&track.name, lookup_artist)
                 .await
             {
                 Ok(track_scrobbles) => {

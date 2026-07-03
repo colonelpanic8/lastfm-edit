@@ -54,7 +54,7 @@ impl AsyncDiscoveryIterator<ExactScrobbleEdit> for ExactMatchDiscovery {
 
             match self
                 .client
-                .load_edit_form_values_internal(&self.track_name, &self.edit.artist_name_original)
+                .get_scrobble_edit_variations(&self.track_name, &self.edit.artist_name_original)
                 .await
             {
                 Ok(all_variations) => {
