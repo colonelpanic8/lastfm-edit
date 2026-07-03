@@ -1,4 +1,5 @@
 mod album_search;
+mod album_search_field_swap;
 mod album_tracks;
 mod api_recent_tracks;
 mod artist_albums;
