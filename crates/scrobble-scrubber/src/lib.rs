@@ -15,6 +15,9 @@ pub mod events;
 pub mod feed;
 pub mod filters;
 pub mod ops;
+pub mod planner;
+pub mod policy;
+pub mod provider;
 pub mod queue;
 pub mod rewrite;
 pub mod state;
@@ -24,6 +27,12 @@ pub use error::{Result, ScrubberError};
 pub use events::{ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver};
 pub use feed::{FeedBatch, ScrubFeed};
 pub use filters::{ReleaseFilterConfig, ReleaseFilterType};
+pub use planner::{Planner, RULES_PROVIDER};
+pub use policy::{EditDecision, Policy};
+pub use provider::{
+    ActionProviderError, BoxedProvider, OrScrubActionProvider, RewriteRulesScrubActionProvider,
+    ScrubActionProvider, ScrubActionSuggestion, SuggestionWithContext,
+};
 pub use ops::{approve_intent, approve_pending_rule, reject_intent, reject_pending_rule};
 pub use queue::{
     EditIntent, InstanceStatus, IntentState, PendingRule, PendingRuleState, QueueEvent,
