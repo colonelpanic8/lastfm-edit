@@ -15,6 +15,10 @@ pub mod events;
 pub mod executor;
 pub mod feed;
 pub mod filters;
+#[cfg(feature = "musicbrainz")]
+pub mod musicbrainz;
+#[cfg(feature = "openai")]
+pub mod openai;
 pub mod ops;
 pub mod planner;
 pub mod policy;
@@ -29,13 +33,19 @@ pub use events::{ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus, Scrubb
 pub use executor::{Executor, ExecutorOptions};
 pub use feed::{FeedBatch, ScrubFeed};
 pub use filters::{ReleaseFilterConfig, ReleaseFilterType};
+#[cfg(feature = "musicbrainz")]
+pub use musicbrainz::{
+    CompilationToCanonicalProvider, MusicBrainzClient, MusicBrainzScrubActionProvider,
+};
+#[cfg(feature = "openai")]
+pub use openai::{OpenAIProviderConfig, OpenAIScrubActionProvider, DEFAULT_SYSTEM_PROMPT};
+pub use ops::{approve_intent, approve_pending_rule, reject_intent, reject_pending_rule};
 pub use planner::{Planner, RULES_PROVIDER};
 pub use policy::{EditDecision, Policy};
 pub use provider::{
     ActionProviderError, BoxedProvider, OrScrubActionProvider, RewriteRulesScrubActionProvider,
     ScrubActionProvider, ScrubActionSuggestion, SuggestionWithContext,
 };
-pub use ops::{approve_intent, approve_pending_rule, reject_intent, reject_pending_rule};
 pub use queue::{
     EditIntent, InstanceStatus, IntentState, PendingRule, PendingRuleState, QueueEvent,
     QueueEventKind, RuleEvent, RuleEventKind,

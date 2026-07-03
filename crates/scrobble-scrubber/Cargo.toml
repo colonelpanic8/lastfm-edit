@@ -20,6 +20,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 sha2 = "0.10"
 tokio = { version = "1.0", default-features = false, features = ["sync", "time", "macros"] }
 
+# Provider dependencies (feature-gated)
+musicbrainz_rs = { version = "0.12", optional = true }
+openai-api-rs = { version = "6.0.7", optional = true }
+
 # CLI-only dependencies
 clap = { version = "4.4", features = ["derive", "env"], optional = true }
 toml = { version = "0.8", optional = true }
@@ -36,6 +40,8 @@ lastfm-edit = { workspace = true, features = ["mock"] }
 [features]
 default = ["cli"]
 cli = ["dep:clap", "dep:toml", "dep:dirs", "dep:env_logger", "dep:http-client", "tokio/rt"]
+musicbrainz = ["dep:musicbrainz_rs"]
+openai = ["dep:openai-api-rs"]
 
 [[bin]]
 name = "scrobble-scrubber"
