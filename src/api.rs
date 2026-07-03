@@ -127,9 +127,36 @@ pub struct ApiRecentTracksResponse {
 
 #[derive(Deserialize)]
 pub struct ApiRecentTracks {
+    /// The API serializes a single-track page as a bare object rather than a one-element
+    /// array, and omits the field entirely for empty pages — accept all three shapes.
+    #[serde(default, deserialize_with = "deserialize_one_or_many")]
     pub track: Vec<ApiTrack>,
     #[serde(rename = "@attr")]
     pub attr: ApiPaginationAttr,
+}
+
+fn deserialize_one_or_many<'de, D>(deserializer: D) -> std::result::Result<Vec<ApiTrack>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        Many(Vec<ApiTrack>),
+        One(Box<ApiTrack>),
+    }
+    Ok(match Option::<OneOrMany>::deserialize(deserializer)? {
+        None => Vec::new(),
+        Some(OneOrMany::Many(tracks)) => tracks,
+        Some(OneOrMany::One(track)) => vec![*track],
+    })
+}
+
+/// Error body shape returned by the API (e.g. `{"error":6,"message":"User not found"}`).
+#[derive(Deserialize)]
+struct ApiErrorResponse {
+    error: i64,
+    message: String,
 }
 
 #[derive(Deserialize)]
@@ -166,8 +193,17 @@ pub struct ApiPaginationAttr {
 }
 
 pub fn parse_api_recent_tracks_response(json: &str) -> Result<TrackPage> {
-    let response: ApiRecentTracksResponse =
-        serde_json::from_str(json).map_err(|e| crate::types::LastFmError::Parse(e.to_string()))?;
+    let response: ApiRecentTracksResponse = serde_json::from_str(json).map_err(|e| {
+        // Prefer surfacing the API's own error message when the body is an error payload.
+        if let Ok(api_error) = serde_json::from_str::<ApiErrorResponse>(json) {
+            crate::types::LastFmError::Http(format!(
+                "last.fm API error {}: {}",
+                api_error.error, api_error.message
+            ))
+        } else {
+            crate::types::LastFmError::Parse(e.to_string())
+        }
+    })?;
 
     let current_page: u32 = response.recenttracks.attr.page.parse().unwrap_or(1);
     let total_pages: u32 = response.recenttracks.attr.total_pages.parse().unwrap_or(1);
@@ -252,6 +288,43 @@ mod tests {
         assert_eq!(page.page_number, 1);
         assert!(page.has_next_page);
         assert_eq!(page.total_pages, Some(5));
+    }
+
+    #[test]
+    fn test_parse_single_track_as_object() {
+        // The API returns a bare object (not a one-element array) for single-track pages.
+        let json = r##"{
+            "recenttracks": {
+                "track": {
+                    "name": "Solo",
+                    "artist": {"#text": "Artist"},
+                    "album": {"#text": "Album"},
+                    "date": {"uts": "1700000000"}
+                },
+                "@attr": {"page": "1", "totalPages": "1"}
+            }
+        }"##;
+        let page = parse_api_recent_tracks_response(json).unwrap();
+        assert_eq!(page.tracks.len(), 1);
+        assert_eq!(page.tracks[0].name, "Solo");
+    }
+
+    #[test]
+    fn test_parse_empty_page_without_track_field() {
+        let json = r##"{
+            "recenttracks": {
+                "@attr": {"page": "1", "totalPages": "0"}
+            }
+        }"##;
+        let page = parse_api_recent_tracks_response(json).unwrap();
+        assert!(page.tracks.is_empty());
+    }
+
+    #[test]
+    fn test_api_error_body_is_surfaced() {
+        let json = r##"{"error":6,"message":"User not found"}"##;
+        let err = parse_api_recent_tracks_response(json).unwrap_err();
+        assert!(err.to_string().contains("User not found"), "{err}");
     }
 
     #[test]
