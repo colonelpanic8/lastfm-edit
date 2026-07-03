@@ -1,6 +1,6 @@
 [package]
 name = "lastfm-edit"
-version = "6.0.3"
+version = "7.0.0"
 edition = "2021"
 description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
 license = "MIT"
@@ -19,7 +19,7 @@ license = "MIT"
 repository = "https://github.com/colonelpanic8/lastfm-edit"
 
 [workspace.dependencies]
-lastfm-edit = { path = ".", version = "6.0.3" }
+lastfm-edit = { path = ".", version = "7.0.0" }
 scrobble-store = { path = "crates/scrobble-store", version = "0.1.0" }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
