@@ -153,6 +153,34 @@ async fn actor_processes_consider_and_execute_commands() {
 }
 
 #[tokio::test]
+async fn cancel_execution_flips_the_executors_flag_without_the_command_channel() {
+    let store = Arc::new(MemoryStorage::new());
+    let state = Arc::new(MemoryScrubberState::new());
+    let planner = planner(store.clone(), state.clone());
+    let bus = planner.event_bus();
+    let executor = Executor::from_parts(
+        store.clone() as Arc<dyn Storage>,
+        state.clone() as Arc<dyn ScrubberState>,
+        MirroredEditor::new(
+            store.clone() as Arc<dyn Storage>,
+            MockLastFmEditClient::new(),
+        ),
+        MockLastFmEditClient::new(),
+    )
+    .with_event_bus(bus);
+    let flag = executor.cancel_handle();
+
+    let (handle, _actor) =
+        ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
+
+    // Out-of-band: no command is sent (the actor isn't even running), yet the
+    // executor's cancel flag flips so an in-flight pass would stop.
+    assert!(!flag.load(std::sync::atomic::Ordering::Relaxed));
+    handle.cancel_execution();
+    assert!(flag.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+#[tokio::test]
 async fn actor_survives_command_errors() {
     let local = tokio::task::LocalSet::new();
     local

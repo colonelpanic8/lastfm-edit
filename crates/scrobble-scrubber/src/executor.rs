@@ -8,7 +8,10 @@
 //!
 //! Rate limits are never "failures": a propagated `RateLimit` error pauses the executor
 //! (emitting [`ScrubberEvent::ExecutorPaused`]) and retries the same instance once the
-//! client is no longer parked. An inter-edit delay paces even successful traffic.
+//! client is no longer parked. Under *sustained* rate limiting a pass doesn't wait
+//! forever, though: after [`ExecutorOptions::max_rate_limit_pauses_per_pass`] pauses the
+//! pass defers — it stops early, leaving intents `InProgress` for a later pass. An
+//! inter-edit delay paces even successful traffic.
 
 use crate::error::{Result, ScrubberError};
 use crate::events::{ExecReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver};
@@ -29,6 +32,10 @@ pub struct ExecutorOptions {
     pub max_edits: Option<u32>,
     /// Give up on an intent once every remaining instance has failed this many times.
     pub max_attempts_per_instance: u32,
+    /// How many rate-limit pauses a single pass will sit through before deferring —
+    /// stopping early with everything unfinished left `InProgress` for a later pass.
+    /// Rate limits still never consume per-instance attempts.
+    pub max_rate_limit_pauses_per_pass: u32,
 }
 
 impl Default for ExecutorOptions {
@@ -37,6 +44,7 @@ impl Default for ExecutorOptions {
             inter_edit_delay: std::time::Duration::from_secs(2),
             max_edits: None,
             max_attempts_per_instance: 3,
+            max_rate_limit_pauses_per_pass: 3,
         }
     }
 }
@@ -97,7 +105,8 @@ impl<C: LastFmEditClient> Executor<C> {
         self.events.clone()
     }
 
-    /// A handle that cancels in-flight and future executor calls when flipped.
+    /// A handle that cancels the in-flight pass when flipped. The flag is reset at the
+    /// start of every pass, so cancelling one pass never poisons the next.
     pub fn cancel_handle(&self) -> Arc<AtomicBool> {
         self.cancelled.clone()
     }
@@ -145,18 +154,40 @@ impl<C: LastFmEditClient> Executor<C> {
     }
 
     async fn run_once_inner(&self, max_edits: Option<u32>) -> Result<ExecReport> {
+        // A fresh pass starts un-cancelled; the flag only interrupts the pass it was
+        // flipped during.
+        self.cancelled.store(false, Ordering::Relaxed);
         let mut report = ExecReport::default();
         let mut attempts_used: u32 = 0;
+        let mut rate_limit_pauses: u32 = 0;
 
         let queue = self.state.load_queue().await?;
         for intent in queue.into_iter().filter(|i| i.state.is_executable()) {
-            self.check_cancelled()?;
+            if self.cancelled.load(Ordering::Relaxed) {
+                break;
+            }
             if budget_exhausted(max_edits, attempts_used) {
                 break;
             }
             report.intents_processed += 1;
-            self.execute_intent(intent, max_edits, &mut report, &mut attempts_used)
-                .await?;
+            match self
+                .execute_intent(
+                    intent,
+                    max_edits,
+                    &mut report,
+                    &mut attempts_used,
+                    &mut rate_limit_pauses,
+                )
+                .await
+            {
+                Ok(PassControl::Continue) => {}
+                // Sustained rate limiting: stop the pass; unfinished intents stay
+                // InProgress and a later pass resumes them.
+                Ok(PassControl::Defer) => break,
+                // Cancellation ends the pass cleanly for the same reason.
+                Err(ScrubberError::Cancelled) => break,
+                Err(err) => return Err(err),
+            }
         }
         Ok(report)
     }
@@ -180,7 +211,8 @@ impl<C: LastFmEditClient> Executor<C> {
         max_edits: Option<u32>,
         report: &mut ExecReport,
         attempts_used: &mut u32,
-    ) -> Result<()> {
+        rate_limit_pauses: &mut u32,
+    ) -> Result<PassControl> {
         // Re-expand against the live store — NOT the planning-time snapshot.
         let live = self.live_instances(&intent).await?;
         if live.is_empty() {
@@ -190,7 +222,7 @@ impl<C: LastFmEditClient> Executor<C> {
                 state: IntentState::Applied,
             });
             report.intents_completed += 1;
-            return Ok(());
+            return Ok(PassControl::Continue);
         }
         self.append(
             intent.id,
@@ -215,7 +247,7 @@ impl<C: LastFmEditClient> Executor<C> {
         for instance in &live {
             self.check_cancelled()?;
             if budget_exhausted(max_edits, *attempts_used) {
-                return Ok(()); // stays InProgress for a later run
+                return Ok(PassControl::Continue); // stays InProgress for a later run
             }
             match progress.get(instance) {
                 Some(InstanceStatus::Applied { .. }) => continue,
@@ -228,7 +260,10 @@ impl<C: LastFmEditClient> Executor<C> {
             }
 
             *attempts_used += 1;
-            match self.apply_instance(&intent, instance).await? {
+            match self
+                .apply_instance(&intent, instance, rate_limit_pauses)
+                .await?
+            {
                 InstanceOutcome::Applied { edit_id } => {
                     progress.insert(
                         instance.clone(),
@@ -285,6 +320,12 @@ impl<C: LastFmEditClient> Executor<C> {
                         error,
                     });
                 }
+                InstanceOutcome::Deferred => {
+                    // Rate-limited past the pass's pause budget: not attempted, no
+                    // failure recorded — the intent stays InProgress and the whole
+                    // pass stops here.
+                    return Ok(PassControl::Defer);
+                }
                 InstanceOutcome::AbandonIntent { reason } => {
                     self.append(
                         intent.id,
@@ -298,7 +339,7 @@ impl<C: LastFmEditClient> Executor<C> {
                         state: IntentState::Abandoned { reason },
                     });
                     report.intents_abandoned += 1;
-                    return Ok(());
+                    return Ok(PassControl::Continue);
                 }
             }
 
@@ -317,7 +358,7 @@ impl<C: LastFmEditClient> Executor<C> {
                 state: IntentState::Applied,
             });
             report.intents_completed += 1;
-            return Ok(());
+            return Ok(PassControl::Continue);
         }
 
         // Abandon when everything left has exhausted its attempts.
@@ -351,23 +392,31 @@ impl<C: LastFmEditClient> Executor<C> {
             report.intents_abandoned += 1;
         }
         // Otherwise: stays InProgress (budget/cancel/pending retries) for a later pass.
-        Ok(())
+        Ok(PassControl::Continue)
     }
 
     /// One instance: clearance → prepare (enrichment scrape) → overlay → apply.
-    /// Rate limits pause-and-retry indefinitely; they never consume an attempt.
+    /// Rate limits pause-and-retry — never consuming an attempt — until the pass's
+    /// pause budget runs out, at which point the instance is [`InstanceOutcome::Deferred`].
     async fn apply_instance(
         &self,
         intent: &EditIntent,
         instance: &ScrobbleId,
+        rate_limit_pauses: &mut u32,
     ) -> Result<InstanceOutcome> {
         loop {
             self.check_cancelled()?;
-            self.await_rate_limit_clearance().await?;
+            if let Clearance::Deferred = self.await_rate_limit_clearance(rate_limit_pauses).await? {
+                return Ok(InstanceOutcome::Deferred);
+            }
 
             let prepared = match self.editor.prepare_edit(instance).await {
                 Ok(prepared) => prepared,
                 Err(StoreError::LastFm(lastfm_edit::LastFmError::RateLimit { retry_after })) => {
+                    if !self.budget_rate_limit_pause(rate_limit_pauses) {
+                        self.emit_deferred(Some(Self::now() + retry_after));
+                        return Ok(InstanceOutcome::Deferred);
+                    }
                     self.pause_for_rate_limit(retry_after).await?;
                     continue;
                 }
@@ -390,6 +439,10 @@ impl<C: LastFmEditClient> Executor<C> {
                     return Ok(InstanceOutcome::Failed { error });
                 }
                 Err(StoreError::LastFm(lastfm_edit::LastFmError::RateLimit { retry_after })) => {
+                    if !self.budget_rate_limit_pause(rate_limit_pauses) {
+                        self.emit_deferred(Some(Self::now() + retry_after));
+                        return Ok(InstanceOutcome::Deferred);
+                    }
                     self.pause_for_rate_limit(retry_after).await?;
                     continue;
                 }
@@ -410,6 +463,21 @@ impl<C: LastFmEditClient> Executor<C> {
         }
     }
 
+    /// Count one rate-limit pause against the pass's budget. `false` means the budget is
+    /// spent: defer the pass instead of waiting again.
+    fn budget_rate_limit_pause(&self, rate_limit_pauses: &mut u32) -> bool {
+        *rate_limit_pauses += 1;
+        *rate_limit_pauses <= self.options.max_rate_limit_pauses_per_pass
+    }
+
+    /// The pass is deferring on a rate limit it won't wait out; surface the pause (the
+    /// closing `ExecCompleted` marks the pass over).
+    fn emit_deferred(&self, until_estimate: Option<u64>) {
+        self.events.emit(ScrubberEvent::ExecutorPaused {
+            reason: scrobble_store::PauseReason::RateLimited { until_estimate },
+        });
+    }
+
     async fn pause_for_rate_limit(&self, retry_after: u64) -> Result<()> {
         let until = Self::now() + retry_after;
         self.events.emit(ScrubberEvent::ExecutorPaused {
@@ -423,8 +491,9 @@ impl<C: LastFmEditClient> Executor<C> {
     }
 
     /// Wait until the client's rate-limit state clears (same watch-loop pattern as the
-    /// store's sync engine).
-    async fn await_rate_limit_clearance(&self) -> Result<()> {
+    /// store's sync engine). Every still-rate-limited wait counts against the pass's
+    /// pause budget; once spent this stops waiting and reports [`Clearance::Deferred`].
+    async fn await_rate_limit_clearance(&self, rate_limit_pauses: &mut u32) -> Result<Clearance> {
         let mut watcher = self.client.watch_rate_limit_state();
         let mut paused = false;
         loop {
@@ -434,9 +503,13 @@ impl<C: LastFmEditClient> Executor<C> {
                 if paused {
                     self.events.emit(ScrubberEvent::ExecutorResumed);
                 }
-                return Ok(());
+                return Ok(Clearance::Cleared);
             }
             if let RateLimitState::RateLimited { until_estimate, .. } = &state {
+                if !self.budget_rate_limit_pause(rate_limit_pauses) {
+                    self.emit_deferred(Some(*until_estimate));
+                    return Ok(Clearance::Deferred);
+                }
                 if !paused {
                     paused = true;
                     self.events.emit(ScrubberEvent::ExecutorPaused {
@@ -499,6 +572,22 @@ enum InstanceOutcome {
     AbandonIntent {
         reason: String,
     },
+    /// Rate-limited past the pass's pause budget; not attempted — try a later pass.
+    Deferred,
+}
+
+/// Whether a pass may keep draining intents.
+enum PassControl {
+    Continue,
+    /// Sustained rate limiting: stop the pass, leaving unfinished intents InProgress.
+    Defer,
+}
+
+/// Result of waiting on the client's rate-limit watch state.
+enum Clearance {
+    Cleared,
+    /// Still rate-limited with the pass's pause budget spent.
+    Deferred,
 }
 
 /// Overlay the proposal's *changed* fields onto a freshly-prepared exact edit.

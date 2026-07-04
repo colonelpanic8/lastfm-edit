@@ -109,6 +109,7 @@ pub fn Dashboard() -> Element {
     let handle_exec = handle.clone();
     let backend_sync = core.backend.clone();
     let backend_continuous = core.backend.clone();
+    let backend_stop = core.backend.clone();
     let sync_available = core.sync_available;
 
     let ui_read = ui.read();
@@ -263,6 +264,15 @@ pub fn Dashboard() -> Element {
                                 .try_send(ScrubberCommand::ExecuteOnce { max_edits });
                         },
                         "{exec_label}"
+                    }
+                    button {
+                        class: "btn danger",
+                        disabled: ui_read.exec == ExecStatus::Idle,
+                        title: "interrupt the in-flight execute pass; unfinished intents stay in progress",
+                        onclick: move |_| {
+                            let _ = backend_stop.try_send(crate::core::BackendCommand::StopExecution);
+                        },
+                        "Stop execution"
                     }
                     input {
                         r#type: "number",

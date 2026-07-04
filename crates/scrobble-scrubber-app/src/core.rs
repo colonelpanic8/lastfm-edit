@@ -47,6 +47,9 @@ pub enum BackendCommand {
     SyncNow,
     /// Turn the sync → plan → execute loop on/off.
     SetContinuous { enabled: bool, interval_secs: u64 },
+    /// Interrupt an in-flight execute pass (out-of-band — the actor's command channel
+    /// is serial, so a `ScrubberCommand` would sit behind the runaway pass).
+    StopExecution,
 }
 
 /// Everything the UI needs to talk to the backend. All Send; lives in dioxus context.
@@ -94,6 +97,7 @@ struct StoreSection {
 struct ExecutorSection {
     inter_edit_delay_secs: u64,
     max_attempts_per_instance: u32,
+    max_rate_limit_pauses_per_pass: u32,
 }
 
 impl Default for ExecutorSection {
@@ -101,6 +105,7 @@ impl Default for ExecutorSection {
         Self {
             inter_edit_delay_secs: 2,
             max_attempts_per_instance: 3,
+            max_rate_limit_pauses_per_pass: 3,
         }
     }
 }
@@ -216,6 +221,15 @@ async fn backend_main(
                 tracing::info!(enabled, interval_secs = secs, "continuous mode");
                 continuous.set(enabled);
                 interval_secs.set(secs.max(10));
+                if !enabled {
+                    // Toggling off must also interrupt an in-flight execute, not just
+                    // future iterations.
+                    handle.cancel_execution();
+                }
+            }
+            BackendCommand::StopExecution => {
+                tracing::info!("stop execution requested");
+                handle.cancel_execution();
             }
         }
     }
@@ -230,12 +244,19 @@ async fn continuous_loop(
     handle: ScrubberHandle,
 ) {
     let mut next_run = 0u64;
+    let mut was_enabled = false;
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         if !enabled.get() {
+            if was_enabled {
+                // Disabled mid-cycle: interrupt any execute still in flight too.
+                handle.cancel_execution();
+                was_enabled = false;
+            }
             next_run = 0; // run immediately on re-enable
             continue;
         }
+        was_enabled = true;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -332,6 +353,7 @@ async fn build(command_tx: mpsc::Sender<BackendCommand>) -> Result<BackendParts,
         inter_edit_delay: std::time::Duration::from_secs(config.executor.inter_edit_delay_secs),
         max_edits: None,
         max_attempts_per_instance: config.executor.max_attempts_per_instance,
+        max_rate_limit_pauses_per_pass: config.executor.max_rate_limit_pauses_per_pass,
     })
     .with_event_bus(bus);
 

@@ -18,6 +18,7 @@ use crate::planner::Planner;
 use crate::state::ScrubberState;
 use lastfm_edit::LastFmEditClient;
 use scrobble_store::{ScrobbleRecord, Storage, SyncEvent, SyncEventReceiver};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -50,6 +51,7 @@ pub enum ScrubberCommand {
 pub struct ScrubberHandle {
     commands: mpsc::Sender<ScrubberCommand>,
     events: ScrubberEventBus,
+    cancel: Arc<AtomicBool>,
 }
 
 impl ScrubberHandle {
@@ -74,6 +76,14 @@ impl ScrubberHandle {
 
     pub fn event_bus(&self) -> ScrubberEventBus {
         self.events.clone()
+    }
+
+    /// Interrupt an in-flight `ExecuteOnce` pass. Out-of-band on purpose: the actor
+    /// processes commands serially, so a command couldn't reach a runaway pass. The
+    /// cancelled pass returns cleanly (intents left `InProgress`), and the executor
+    /// resets the flag at the start of every pass, so later executes run normally.
+    pub fn cancel_execution(&self) {
+        self.cancel.store(true, Ordering::Relaxed);
     }
 }
 
@@ -101,6 +111,7 @@ impl<C: LastFmEditClient> ScrubberActor<C> {
             ScrubberHandle {
                 commands: tx,
                 events: events.clone(),
+                cancel: executor.cancel_handle(),
             },
             Self {
                 planner,

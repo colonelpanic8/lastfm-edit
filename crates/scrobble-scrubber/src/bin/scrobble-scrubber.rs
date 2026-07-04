@@ -213,6 +213,7 @@ struct StoreSection {
 struct ExecutorSection {
     inter_edit_delay_secs: u64,
     max_attempts_per_instance: u32,
+    max_rate_limit_pauses_per_pass: u32,
 }
 
 impl Default for ExecutorSection {
@@ -220,6 +221,7 @@ impl Default for ExecutorSection {
         Self {
             inter_edit_delay_secs: 2,
             max_attempts_per_instance: 3,
+            max_rate_limit_pauses_per_pass: 3,
         }
     }
 }
@@ -419,19 +421,30 @@ async fn execute(ctx: &Context, max_edits: Option<u32>, follow: bool) -> Result<
         inter_edit_delay: std::time::Duration::from_secs(ctx.config.executor.inter_edit_delay_secs),
         max_edits,
         max_attempts_per_instance: ctx.config.executor.max_attempts_per_instance,
+        max_rate_limit_pauses_per_pass: ctx.config.executor.max_rate_limit_pauses_per_pass,
     })
     .with_event_bus(bus.clone());
 
-    let cancel = executor.cancel_handle();
-    tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
-        eprintln!("\ncancelling after the current operation…");
-    });
+    // Cancelled passes return cleanly (the executor resets the flag per pass), so a
+    // separate stop flag ends the follow loop.
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let stop = stop.clone();
+        let cancel = executor.cancel_handle();
+        tokio::spawn(async move {
+            let _ = tokio::signal::ctrl_c().await;
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            eprintln!("\ncancelling after the current operation…");
+        });
+    }
 
     let printer = tokio::task::spawn_local(render_events(bus.subscribe()));
     let mut totals = (0u64, 0u64);
     loop {
+        if stop.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        }
         let report = executor.run_once().await?;
         totals.0 += report.instances_applied;
         totals.1 += report.instances_failed;
@@ -478,6 +491,7 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         inter_edit_delay: std::time::Duration::from_secs(ctx.config.executor.inter_edit_delay_secs),
         max_edits: None,
         max_attempts_per_instance: ctx.config.executor.max_attempts_per_instance,
+        max_rate_limit_pauses_per_pass: ctx.config.executor.max_rate_limit_pauses_per_pass,
     })
     .with_event_bus(bus.clone());
     let exec_cancel = executor.cancel_handle();
