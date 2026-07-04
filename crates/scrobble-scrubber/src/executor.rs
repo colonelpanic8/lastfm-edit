@@ -1,6 +1,7 @@
 //! The executor: the single paced lane through which ALL last.fm write traffic flows.
 //!
-//! Drains `Ready`/`InProgress` intents from the durable queue, oldest first. Per intent it
+//! Drains executable intents from the durable queue, resuming `InProgress` (partially-done)
+//! intents before starting freshly-`Ready` ones; oldest first within each group. Per intent it
 //! re-expands the subject against the *live* store (so instances discovered after planning
 //! are included), then per instance: waits for rate-limit clearance, enriches + applies via
 //! the store's crash-safe [`MirroredEditor`], and records per-instance progress back into
@@ -162,7 +163,17 @@ impl<C: LastFmEditClient> Executor<C> {
         let mut rate_limit_pauses: u32 = 0;
 
         let queue = self.state.load_queue().await?;
-        for intent in queue.into_iter().filter(|i| i.state.is_executable()) {
+        // Resume half-done (InProgress) intents before starting freshly-Ready ones,
+        // so a pass finishes what it started; oldest-first is preserved within each group.
+        let mut executable: Vec<_> = queue
+            .into_iter()
+            .filter(|i| i.state.is_executable())
+            .collect();
+        executable.sort_by_key(|i| match i.state {
+            IntentState::InProgress => 0u8,
+            _ => 1,
+        });
+        for intent in executable {
             if self.cancelled.load(Ordering::Relaxed) {
                 break;
             }

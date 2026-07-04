@@ -434,6 +434,154 @@ async fn exhausted_failures_abandon_the_intent() {
     ));
 }
 
+// A second, distinct subject so the two intents in the ordering test don't collide.
+const ARTIST_B: &str = "David Bowie";
+const DIRTY_B: &str = "Heroes - 2017 Remaster";
+const CLEAN_B: &str = "Heroes";
+const ALBUM_B: &str = "\"Heroes\"";
+const AA_B: &str = "David Bowie";
+
+fn record_for(artist: &str, track: &str, album: &str, aa: &str, uts: u64) -> ScrobbleRecord {
+    ScrobbleRecord {
+        id: ScrobbleId::new(uts, artist, track),
+        uts,
+        artist: artist.to_string(),
+        track: track.to_string(),
+        album: Some(album.to_string()),
+        album_artist: Provenanced::Verified(aa.to_string()),
+        source: RecordSource::Scrape,
+        fetched_at: 1,
+        deleted: false,
+        v: 1,
+    }
+}
+
+fn subject_for(artist: &str, track: &str, album: &str, aa: &str) -> Subject {
+    Subject {
+        artist: artist.into(),
+        track: track.into(),
+        album: Some(album.into()),
+        album_artist: Some(aa.into()),
+    }
+}
+
+fn proposal_for(artist: &str, dirty: &str, clean: &str, album: &str, aa: &str) -> ScrobbleEdit {
+    ScrobbleEdit {
+        track_name_original: Some(dirty.into()),
+        album_name_original: Some(album.into()),
+        artist_name_original: artist.into(),
+        album_artist_name_original: Some(aa.into()),
+        track_name: Some(clean.into()),
+        album_name: Some(album.into()),
+        artist_name: artist.into(),
+        album_artist_name: Some(aa.into()),
+        timestamp: None,
+        edit_all: true,
+    }
+}
+
+/// Queue an intent for `subject` at logical time `at`. If `expand` is set, append an
+/// `Expanded` event (with the given store instances) so the intent folds to `InProgress`;
+/// otherwise it folds to `Ready`.
+async fn queue_intent_for(
+    state: &dyn ScrubberState,
+    at: u64,
+    subject: Subject,
+    proposed: ScrobbleEdit,
+    expand: Option<Vec<ScrobbleId>>,
+) -> Uuid {
+    let id = Uuid::new_v4();
+    state
+        .append_queue_events(&[QueueEvent {
+            id,
+            at,
+            kind: QueueEventKind::Created {
+                subject,
+                proposed: Box::new(proposed),
+                provider: "rewrite_rules".into(),
+                requires_approval: false,
+            },
+        }])
+        .await
+        .unwrap();
+    if let Some(instance_ids) = expand {
+        state
+            .append_queue_events(&[QueueEvent {
+                id,
+                at: at + 1,
+                kind: QueueEventKind::Expanded { instance_ids },
+            }])
+            .await
+            .unwrap();
+    }
+    id
+}
+
+#[tokio::test]
+async fn resumes_in_progress_before_ready() {
+    use std::sync::Mutex;
+
+    let store = Arc::new(MemoryStorage::new());
+    // Intent R's subject (the original Queen fixtures) and intent P's distinct subject.
+    let rec_r = record(100);
+    let rec_p = record_for(ARTIST_B, DIRTY_B, ALBUM_B, AA_B, 200);
+    store
+        .append_scrobbles(&[rec_r.clone(), rec_p.clone()])
+        .await
+        .unwrap();
+
+    let state = Arc::new(MemoryScrubberState::new());
+    // R created FIRST, left Ready (no Expanded event).
+    let r = queue_intent_for(state.as_ref(), 1, subject(), proposal(), None).await;
+    // P created SECOND (later) with an Expanded event → folds to InProgress.
+    let p = queue_intent_for(
+        state.as_ref(),
+        10,
+        subject_for(ARTIST_B, DIRTY_B, ALBUM_B, AA_B),
+        proposal_for(ARTIST_B, DIRTY_B, CLEAN_B, ALBUM_B, AA_B),
+        Some(vec![rec_p.id.clone()]),
+    )
+    .await;
+
+    // Sanity: the folded states are what the ordering test hinges on.
+    {
+        let queue = state.load_queue().await.unwrap();
+        assert_eq!(
+            queue.iter().find(|i| i.id == r).unwrap().state,
+            IntentState::Ready
+        );
+        assert_eq!(
+            queue.iter().find(|i| i.id == p).unwrap().state,
+            IntentState::InProgress
+        );
+    }
+
+    // The mock records the artist of each edit in call order.
+    let order = Arc::new(Mutex::new(Vec::<String>::new()));
+    let recorder = order.clone();
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_edit_scrobble_single()
+        .times(2)
+        .returning(move |edit, _| {
+            recorder.lock().unwrap().push(edit.artist_name.clone());
+            Ok(success(edit))
+        });
+
+    let exec = executor(store.clone(), state.clone(), client, zero_delay());
+    let report = exec.run_once().await.unwrap();
+    assert_eq!(report.instances_applied, 2);
+
+    // Priority override of creation order: the later-created InProgress intent P is
+    // edited BEFORE the earlier-created Ready intent R.
+    let seen = order.lock().unwrap().clone();
+    assert_eq!(
+        seen,
+        vec![ARTIST_B.to_string(), ARTIST.to_string()],
+        "InProgress intent P must be resumed before Ready intent R"
+    );
+}
+
 #[tokio::test]
 async fn vanished_subject_completes_without_touching_lastfm() {
     let store = Arc::new(MemoryStorage::new());
