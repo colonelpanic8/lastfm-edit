@@ -125,8 +125,14 @@ impl<C: LastFmEditClient> Executor<C> {
     /// Drain currently-executable intents once. Returns what happened; leaves anything
     /// unfinished (budget, failures) in the queue for a later pass.
     pub async fn run_once(&self) -> Result<ExecReport> {
+        self.run_once_with_budget(self.options.max_edits).await
+    }
+
+    /// Like [`Executor::run_once`], with a per-call attempt budget overriding the
+    /// configured one (used by command-driven hosts).
+    pub async fn run_once_with_budget(&self, max_edits: Option<u32>) -> Result<ExecReport> {
         self.events.emit(ScrubberEvent::ExecStarted);
-        let result = self.run_once_inner().await;
+        let result = self.run_once_inner(max_edits).await;
         match &result {
             Ok(report) => self.events.emit(ScrubberEvent::ExecCompleted {
                 report: report.clone(),
@@ -138,27 +144,21 @@ impl<C: LastFmEditClient> Executor<C> {
         result
     }
 
-    async fn run_once_inner(&self) -> Result<ExecReport> {
+    async fn run_once_inner(&self, max_edits: Option<u32>) -> Result<ExecReport> {
         let mut report = ExecReport::default();
         let mut attempts_used: u32 = 0;
 
         let queue = self.state.load_queue().await?;
         for intent in queue.into_iter().filter(|i| i.state.is_executable()) {
             self.check_cancelled()?;
-            if self.budget_exhausted(attempts_used) {
+            if budget_exhausted(max_edits, attempts_used) {
                 break;
             }
             report.intents_processed += 1;
-            self.execute_intent(intent, &mut report, &mut attempts_used)
+            self.execute_intent(intent, max_edits, &mut report, &mut attempts_used)
                 .await?;
         }
         Ok(report)
-    }
-
-    fn budget_exhausted(&self, attempts_used: u32) -> bool {
-        self.options
-            .max_edits
-            .is_some_and(|cap| attempts_used >= cap)
     }
 
     /// Live instances of an intent's subject, oldest first.
@@ -177,6 +177,7 @@ impl<C: LastFmEditClient> Executor<C> {
     async fn execute_intent(
         &self,
         intent: EditIntent,
+        max_edits: Option<u32>,
         report: &mut ExecReport,
         attempts_used: &mut u32,
     ) -> Result<()> {
@@ -213,7 +214,7 @@ impl<C: LastFmEditClient> Executor<C> {
 
         for instance in &live {
             self.check_cancelled()?;
-            if self.budget_exhausted(*attempts_used) {
+            if budget_exhausted(max_edits, *attempts_used) {
                 return Ok(()); // stays InProgress for a later run
             }
             match progress.get(instance) {
@@ -479,6 +480,10 @@ impl<C: LastFmEditClient> Executor<C> {
             }])
             .await
     }
+}
+
+fn budget_exhausted(max_edits: Option<u32>, attempts_used: u32) -> bool {
+    max_edits.is_some_and(|cap| attempts_used >= cap)
 }
 
 enum InstanceOutcome {

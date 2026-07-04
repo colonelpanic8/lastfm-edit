@@ -23,13 +23,23 @@ use crate::provider::{BoxedProvider, ScrubActionSuggestion};
 use crate::queue::{QueueEvent, QueueEventKind};
 use crate::state::{rules_hash, ProviderCoverage, ScrubberState};
 use crate::subject::{group_by_subject, Subject};
-use scrobble_store::{CoverageMap, ScrobbleId, Segment, Storage};
+use scrobble_store::{CoverageMap, ScrobbleId, ScrobbleRecord, Segment, Storage};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
 
 /// The provider name whose coverage is keyed to the active rule set.
 pub const RULES_PROVIDER: &str = "rewrite_rules";
+
+/// Everything a planning pass consults besides the records themselves.
+struct PlanContext {
+    coverages: HashMap<String, ProviderCoverage>,
+    open_intents: Vec<crate::queue::EditIntent>,
+    pending_rules: Vec<crate::queue::PendingRule>,
+    dismissed: HashSet<Subject>,
+    /// Subjects that must not receive new intents (open intents + queued this pass).
+    occupied: HashSet<Subject>,
+}
 
 pub struct Planner {
     store: Arc<dyn Storage>,
@@ -107,7 +117,65 @@ impl Planner {
         result
     }
 
+    /// Plan over an arbitrary batch of records pushed from anywhere (a sync-event bridge,
+    /// a UI selection, another process) — the actor-style entry point. Runs the same
+    /// dedupe → analyze → policy → enqueue pipeline as feed-driven planning, but makes no
+    /// planning-coverage claims: a pushed batch says nothing about a *time range* being
+    /// fully analyzed, so coverage-driven passes may later re-visit the same subjects
+    /// (the dismissed/open-intent filters absorb the overlap).
+    pub async fn plan_records(&self, records: &[ScrobbleRecord]) -> Result<PlanReport> {
+        let result = self.plan_records_inner(records).await;
+        match &result {
+            Ok(report) => self.events.emit(ScrubberEvent::PlanCompleted {
+                report: report.clone(),
+            }),
+            Err(err) => self.events.emit(ScrubberEvent::Error {
+                error: err.to_string(),
+            }),
+        }
+        result
+    }
+
+    async fn plan_records_inner(&self, records: &[ScrobbleRecord]) -> Result<PlanReport> {
+        let mut context = self.load_context().await?;
+        let batch = FeedBatch {
+            records: records.to_vec(),
+            coverage_claim: None,
+        };
+        let mut report = PlanReport::default();
+        self.plan_batch(&batch, &mut context, &mut report).await?;
+        Ok(report)
+    }
+
     async fn plan_inner(&self, feed: &ScrubFeed) -> Result<PlanReport> {
+        let mut context = self.load_context().await?;
+
+        // Resolve the feed. For Incremental: work = union over providers of their gaps,
+        // restricted to synced coverage (and the optional window).
+        let incremental_work = match feed {
+            ScrubFeed::Incremental { window } => Some(
+                self.incremental_work(&context.coverages, window.clone())
+                    .await?,
+            ),
+            _ => None,
+        };
+        let batches = feed
+            .batches(
+                self.store.as_ref(),
+                incremental_work.as_ref(),
+                self.batch_hint,
+            )
+            .await?;
+
+        let mut report = PlanReport::default();
+        for batch in batches {
+            self.plan_batch(&batch, &mut context, &mut report).await?;
+        }
+        Ok(report)
+    }
+
+    /// Everything a planning pass consults besides the records themselves.
+    async fn load_context(&self) -> Result<PlanContext> {
         if self.providers.is_empty() {
             return Err(ScrubberError::Provider {
                 provider: "planner".into(),
@@ -134,13 +202,12 @@ impl Planner {
             coverages.insert(name, coverage);
         }
 
-        // Context for providers and dedup.
         let queue = self.state.load_queue().await?;
         let open_intents: Vec<_> = queue
             .into_iter()
             .filter(|intent| intent.state.is_open())
             .collect();
-        let mut occupied_subjects: HashSet<Subject> = open_intents
+        let occupied: HashSet<Subject> = open_intents
             .iter()
             .map(|intent| intent.subject.clone())
             .collect();
@@ -153,36 +220,13 @@ impl Planner {
             .filter(|rule| rule.state == crate::queue::PendingRuleState::Open)
             .collect();
 
-        // Resolve the feed. For Incremental: work = union over providers of their gaps,
-        // restricted to synced coverage (and the optional window).
-        let incremental_work = match feed {
-            ScrubFeed::Incremental { window } => {
-                Some(self.incremental_work(&coverages, window.clone()).await?)
-            }
-            _ => None,
-        };
-        let batches = feed
-            .batches(
-                self.store.as_ref(),
-                incremental_work.as_ref(),
-                self.batch_hint,
-            )
-            .await?;
-
-        let mut report = PlanReport::default();
-        for batch in batches {
-            self.plan_batch(
-                &batch,
-                &mut coverages,
-                &open_intents,
-                &pending_rules,
-                &dismissed,
-                &mut occupied_subjects,
-                &mut report,
-            )
-            .await?;
-        }
-        Ok(report)
+        Ok(PlanContext {
+            coverages,
+            open_intents,
+            pending_rules,
+            dismissed,
+            occupied,
+        })
     }
 
     /// Work remaining for an incremental pass: within synced time (∩ window), any range
@@ -212,17 +256,19 @@ impl Planner {
         Ok(CoverageMap::from_segments(work_segments))
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn plan_batch(
         &self,
         batch: &FeedBatch,
-        coverages: &mut HashMap<String, ProviderCoverage>,
-        open_intents: &[crate::queue::EditIntent],
-        pending_rules: &[crate::queue::PendingRule],
-        dismissed: &HashSet<Subject>,
-        occupied_subjects: &mut HashSet<Subject>,
+        context: &mut PlanContext,
         report: &mut PlanReport,
     ) -> Result<()> {
+        let PlanContext {
+            coverages,
+            open_intents,
+            pending_rules,
+            dismissed,
+            occupied: occupied_subjects,
+        } = context;
         // Dedup to subjects, keeping instance stats for representative tracks.
         let groups = group_by_subject(&batch.records);
         let mut subjects: Vec<(Subject, Vec<ScrobbleId>)> = Vec::new();

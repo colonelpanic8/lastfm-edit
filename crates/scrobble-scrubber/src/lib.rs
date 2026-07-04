@@ -15,6 +15,7 @@ pub mod events;
 pub mod executor;
 pub mod feed;
 pub mod filters;
+pub mod handle;
 #[cfg(feature = "musicbrainz")]
 pub mod musicbrainz;
 #[cfg(feature = "openai")]
@@ -33,6 +34,7 @@ pub use events::{ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus, Scrubb
 pub use executor::{Executor, ExecutorOptions};
 pub use feed::{FeedBatch, ScrubFeed};
 pub use filters::{ReleaseFilterConfig, ReleaseFilterType};
+pub use handle::{bridge_sync_events, ScrubberActor, ScrubberCommand, ScrubberHandle};
 #[cfg(feature = "musicbrainz")]
 pub use musicbrainz::{
     CompilationToCanonicalProvider, MusicBrainzClient, MusicBrainzScrubActionProvider,
