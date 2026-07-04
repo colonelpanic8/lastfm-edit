@@ -1,0 +1,6 @@
+[application]
+name = "ScrobbleScrubber"
+
+[bundle]
+identifier = "org.colonelpanic.scrobble-scrubber"
+publisher = "Ivan Malison"

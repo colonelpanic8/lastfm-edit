@@ -47,6 +47,17 @@
               # For TUI development
               libiconv
             ]
+            ++ lib.optionals stdenv.isLinux [
+              # Dioxus desktop (webview) dependencies + dev tooling
+              gtk3
+              webkitgtk_4_1
+              glib
+              glib-networking
+              libsoup_3
+              libappindicator-gtk3
+              xdotool
+              dioxus-cli
+            ]
             ++ lib.optionals stdenv.isDarwin [
               # macOS specific dependencies
               darwin.apple_sdk.frameworks.Security
@@ -57,13 +68,15 @@
           # Environment variables
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
+          shellHook = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+            export LD_LIBRARY_PATH="${pkgs.libappindicator-gtk3}/lib:${pkgs.gtk3}/lib:$LD_LIBRARY_PATH"
+            export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
+          '';
+
           # For OpenSSL on some systems
           OPENSSL_DIR = "${pkgs.openssl.dev}";
           OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
           OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
-
-          shellHook = ''
-          '';
         };
 
         packages.lastfm-edit = pkgs.rustPlatform.buildRustPackage {

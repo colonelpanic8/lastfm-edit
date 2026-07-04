@@ -21,6 +21,7 @@ repository = "https://github.com/colonelpanic8/lastfm-edit"
 [workspace.dependencies]
 lastfm-edit = { path = ".", version = "7.0.0" }
 scrobble-store = { path = "crates/scrobble-store", version = "0.1.0" }
+scrobble-scrubber = { path = "crates/scrobble-scrubber", version = "0.1.0", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -113,3 +114,15 @@ path = "examples/custom_session_manager.rs"
 [[example]]
 name = "artist_tracks_direct"
 path = "examples/artist_tracks_direct.rs"
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

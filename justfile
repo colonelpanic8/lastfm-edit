@@ -212,3 +212,11 @@ publish bump_type="patch":
 
 ipython:
     python/start_ipython.sh
+
+# Dioxus desktop app (hot-reload via dx). Run from the crate dir: dx 0.7.5 does not
+# expand the `crates/*` workspace glob, so `--package` from the root can't find it.
+app:
+    cd crates/scrobble-scrubber-app && dx serve --platform desktop
+
+app-run:
+    cargo run -p scrobble-scrubber-app
