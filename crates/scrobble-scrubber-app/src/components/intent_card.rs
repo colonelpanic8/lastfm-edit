@@ -1,9 +1,10 @@
 //! One edit intent, rendered as a reviewable card with diff, progress, and actions.
 
+use crate::core::BackendCommand;
 use crate::model::{edit_diff, fmt_ts};
 use crate::CoreSignal;
 use dioxus::prelude::*;
-use scrobble_scrubber::{EditIntent, InstanceStatus, IntentState, ScrubberCommand};
+use scrobble_scrubber::{EditIntent, InstanceStatus, IntentState};
 
 #[component]
 pub fn IntentCard(intent: EditIntent) -> Element {
@@ -11,10 +12,12 @@ pub fn IntentCard(intent: EditIntent) -> Element {
     let Some(Ok(core)) = core.read().clone() else {
         return rsx! {};
     };
-    let handle = core.handle.clone();
-    let handle_reject = handle.clone();
-    let handle_dismiss = handle.clone();
-    let handle_reinstate = handle.clone();
+    // Queue mutations go through the backend channel (not the actor's serial command
+    // channel) so they stay responsive while an execute pass is running.
+    let backend = core.backend.clone();
+    let backend_reject = backend.clone();
+    let backend_dismiss = backend.clone();
+    let backend_reinstate = backend.clone();
     let id = intent.id;
 
     let diffs = edit_diff(&intent.subject, &intent.proposed);
@@ -90,15 +93,15 @@ pub fn IntentCard(intent: EditIntent) -> Element {
                         button {
                             class: "btn primary",
                             onclick: move |_| {
-                                let _ = handle.try_send(ScrubberCommand::Approve(id));
+                                let _ = backend.try_send(BackendCommand::Approve(id));
                             },
                             "Approve"
                         }
                         button {
                             class: "btn",
                             onclick: move |_| {
-                                let _ = handle_reject
-                                    .try_send(ScrubberCommand::Reject {
+                                let _ = backend_reject
+                                    .try_send(BackendCommand::Reject {
                                         id,
                                         dismiss: false,
                                     });
@@ -108,8 +111,8 @@ pub fn IntentCard(intent: EditIntent) -> Element {
                         button {
                             class: "btn danger",
                             onclick: move |_| {
-                                let _ = handle_dismiss
-                                    .try_send(ScrubberCommand::Reject {
+                                let _ = backend_dismiss
+                                    .try_send(BackendCommand::Reject {
                                         id,
                                         dismiss: true,
                                     });
@@ -123,8 +126,8 @@ pub fn IntentCard(intent: EditIntent) -> Element {
                         button {
                             class: "btn danger",
                             onclick: move |_| {
-                                let _ = handle_reject
-                                    .try_send(ScrubberCommand::Reject {
+                                let _ = backend_reject
+                                    .try_send(BackendCommand::Reject {
                                         id,
                                         dismiss: false,
                                     });
@@ -138,7 +141,7 @@ pub fn IntentCard(intent: EditIntent) -> Element {
                         button {
                             class: "btn",
                             onclick: move |_| {
-                                let _ = handle_reinstate.try_send(ScrubberCommand::Reinstate(id));
+                                let _ = backend_reinstate.try_send(BackendCommand::Reinstate(id));
                             },
                             "Reinstate"
                         }

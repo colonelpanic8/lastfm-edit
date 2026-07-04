@@ -1,9 +1,10 @@
 //! Queue review: filterable list of edit intents with approve/reject actions.
 
 use crate::components::IntentCard;
+use crate::core::BackendCommand;
 use crate::{CoreSignal, UiSignal};
 use dioxus::prelude::*;
-use scrobble_scrubber::{EditIntent, IntentState, ScrubberCommand, ScrubberState};
+use scrobble_scrubber::{EditIntent, IntentState, ScrubberState};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Filter {
@@ -110,8 +111,8 @@ pub fn Queue() -> Element {
                                     .filter(|i| i.state == IntentState::AwaitingApproval)
                                 {
                                     let _ = core
-                                        .handle
-                                        .try_send(ScrubberCommand::Approve(intent.id));
+                                        .backend
+                                        .try_send(BackendCommand::Approve(intent.id));
                                 }
                             }
                         },

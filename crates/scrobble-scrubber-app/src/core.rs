@@ -6,8 +6,9 @@
 
 use lastfm_edit::LastFmEditClientImpl;
 use scrobble_scrubber::{
-    Executor, ExecutorOptions, FsScrubberState, Planner, RewriteRulesScrubActionProvider,
-    ScrubFeed, ScrubberActor, ScrubberCommand, ScrubberEventBus, ScrubberHandle, ScrubberState,
+    approve_intent, reinstate_intent, reject_intent, Executor, ExecutorOptions, FsScrubberState,
+    Planner, RewriteRulesScrubActionProvider, ScrubFeed, ScrubberActor, ScrubberCommand,
+    ScrubberEvent, ScrubberEventBus, ScrubberHandle, ScrubberState,
 };
 use scrobble_store::{ApiSource, FsStorage, Storage, SyncEngine, SyncEventReceiver};
 use serde::Deserialize;
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
+use uuid::Uuid;
 
 /// Why the app can't start; rendered as a full-page notice.
 #[derive(Clone, Debug)]
@@ -50,6 +52,13 @@ pub enum BackendCommand {
     /// Interrupt an in-flight execute pass (out-of-band — the actor's command channel
     /// is serial, so a `ScrubberCommand` would sit behind the runaway pass).
     StopExecution,
+    /// Release an awaiting-approval intent. Runs directly against the durable queue
+    /// (not the actor's serial channel), so it stays responsive during an execute pass.
+    Approve(Uuid),
+    /// Decline an open intent, optionally dismissing its subject. Same out-of-band path.
+    Reject { id: Uuid, dismiss: bool },
+    /// Un-reject a rejected intent. Same out-of-band path.
+    Reinstate(Uuid),
 }
 
 /// Everything the UI needs to talk to the backend. All Send; lives in dioxus context.
@@ -180,6 +189,7 @@ async fn backend_main(
 
     let handle = core.handle.clone();
     let store = core.store.clone();
+    let state = core.state.clone();
     if ready.send(Ok(core)).is_err() {
         return; // UI gone before boot finished
     }
@@ -230,6 +240,47 @@ async fn backend_main(
             BackendCommand::StopExecution => {
                 tracing::info!("stop execution requested");
                 handle.cancel_execution();
+            }
+            // Queue mutations run as their own tasks against the shared state, off the
+            // actor's serial command channel, so they resolve during an execute pass's
+            // await points instead of queueing behind it. Appends are atomic and the fold
+            // is order-tolerant, so this is safe alongside the executor's own appends.
+            BackendCommand::Approve(id) => {
+                let state = state.clone();
+                let handle = handle.clone();
+                tokio::task::spawn_local(async move {
+                    match approve_intent(state.as_ref(), id).await {
+                        Ok(()) => handle
+                            .event_bus()
+                            .emit(ScrubberEvent::IntentApproved { id }),
+                        Err(error) => tracing::warn!(%error, %id, "approve failed"),
+                    }
+                });
+            }
+            BackendCommand::Reject { id, dismiss } => {
+                let state = state.clone();
+                let handle = handle.clone();
+                tokio::task::spawn_local(async move {
+                    match reject_intent(state.as_ref(), id, dismiss).await {
+                        Ok(()) => handle.event_bus().emit(ScrubberEvent::IntentRejected {
+                            id,
+                            dismissed: dismiss,
+                        }),
+                        Err(error) => tracing::warn!(%error, %id, "reject failed"),
+                    }
+                });
+            }
+            BackendCommand::Reinstate(id) => {
+                let state = state.clone();
+                let handle = handle.clone();
+                tokio::task::spawn_local(async move {
+                    match reinstate_intent(state.as_ref(), id).await {
+                        Ok(()) => handle
+                            .event_bus()
+                            .emit(ScrubberEvent::IntentReinstated { id }),
+                        Err(error) => tracing::warn!(%error, %id, "reinstate failed"),
+                    }
+                });
             }
         }
     }
