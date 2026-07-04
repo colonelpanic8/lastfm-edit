@@ -5,8 +5,9 @@ use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use clap::{Parser, Subcommand};
 use scrobble_scrubber::{
     approve_intent, approve_pending_rule, load_comprehensive_default_rules, reject_intent,
-    reject_pending_rule, Executor, ExecutorOptions, FsScrubberState, IntentState, Planner, Policy,
-    RewriteRulesScrubActionProvider, ScrubFeed, ScrubberEvent, ScrubberEventBus, ScrubberState,
+    reject_pending_rule, ExecEnded, Executor, ExecutorOptions, FsScrubberState, IntentState,
+    Planner, Policy, RewriteRulesScrubActionProvider, ScrubFeed, ScrubberEvent, ScrubberEventBus,
+    ScrubberState,
 };
 use scrobble_store::{ApiSource, FsStorage, ScrobbleId, Storage, SyncEngine};
 use serde::Deserialize;
@@ -448,6 +449,8 @@ async fn execute(ctx: &Context, max_edits: Option<u32>, follow: bool) -> Result<
         let report = executor.run_once().await?;
         totals.0 += report.instances_applied;
         totals.1 += report.instances_failed;
+        // could use report.ended here (e.g. sleep longer after a Deferred pass) — for
+        // now the idle heuristic stays purely count-based.
         if !follow || report.intents_processed == 0 {
             if follow {
                 tokio::time::sleep(std::time::Duration::from_secs(15)).await;
@@ -804,6 +807,18 @@ async fn render_events(mut rx: scrobble_scrubber::ScrubberEventReceiver) {
                     ScrubberEvent::ExecutorResumed => {
                         paused_until = None;
                         status_line("resumed");
+                    }
+                    ScrubberEvent::ExecCompleted { report } => {
+                        let ended = match report.ended {
+                            ExecEnded::Completed => "completed",
+                            ExecEnded::Deferred => "deferred (rate limited)",
+                            ExecEnded::Cancelled => "cancelled",
+                            ExecEnded::BudgetExhausted => "budget exhausted",
+                        };
+                        eprintln!(
+                            "\rpass ended: {ended} ({} applied, {} failed)",
+                            report.instances_applied, report.instances_failed
+                        );
                     }
                     ScrubberEvent::CycleStarted { n } => status_line(&format!("cycle {n}: syncing…")),
                     ScrubberEvent::Sleeping { seconds } => status_line(&format!("idle, next cycle in {seconds}s")),

@@ -23,6 +23,7 @@ pub mod openai;
 pub mod ops;
 pub mod planner;
 pub mod policy;
+pub mod projection;
 pub mod provider;
 pub mod queue;
 pub mod rewrite;
@@ -30,7 +31,9 @@ pub mod state;
 pub mod subject;
 
 pub use error::{Result, ScrubberError};
-pub use events::{ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver};
+pub use events::{
+    ExecEnded, ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver,
+};
 pub use executor::{Executor, ExecutorOptions};
 pub use feed::{FeedBatch, ScrubFeed};
 pub use filters::{ReleaseFilterConfig, ReleaseFilterType};
@@ -46,6 +49,10 @@ pub use ops::{
 };
 pub use planner::{Planner, RULES_PROVIDER};
 pub use policy::{EditDecision, Policy};
+pub use projection::{
+    execution_order, review_status, work_queue_view, work_status, ReviewStatus, WorkItem,
+    WorkQueueView, WorkStatus,
+};
 pub use provider::{
     ActionProviderError, BoxedProvider, OrScrubActionProvider, RewriteRulesScrubActionProvider,
     ScrubActionProvider, ScrubActionSuggestion, SuggestionWithContext,

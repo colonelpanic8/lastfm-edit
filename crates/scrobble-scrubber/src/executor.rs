@@ -15,7 +15,9 @@
 //! inter-edit delay paces even successful traffic.
 
 use crate::error::{Result, ScrubberError};
-use crate::events::{ExecReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver};
+use crate::events::{
+    ExecEnded, ExecReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver,
+};
 use crate::queue::{EditIntent, InstanceStatus, IntentState, QueueEvent, QueueEventKind};
 use crate::state::ScrubberState;
 use lastfm_edit::{ExactScrobbleEdit, LastFmEditClient, RateLimitState};
@@ -164,20 +166,16 @@ impl<C: LastFmEditClient> Executor<C> {
 
         let queue = self.state.load_queue().await?;
         // Resume half-done (InProgress) intents before starting freshly-Ready ones,
-        // so a pass finishes what it started; oldest-first is preserved within each group.
-        let mut executable: Vec<_> = queue
-            .into_iter()
-            .filter(|i| i.state.is_executable())
-            .collect();
-        executable.sort_by_key(|i| match i.state {
-            IntentState::InProgress => 0u8,
-            _ => 1,
-        });
-        for intent in executable {
+        // so a pass finishes what it started; oldest-first is preserved within each
+        // group. Shared with UIs via `projection::execution_order` so what they render
+        // as "next" is exactly what runs next.
+        for intent in crate::projection::execution_order(queue) {
             if self.cancelled.load(Ordering::Relaxed) {
+                report.ended = ExecEnded::Cancelled;
                 break;
             }
             if budget_exhausted(max_edits, attempts_used) {
+                report.ended = ExecEnded::BudgetExhausted;
                 break;
             }
             report.intents_processed += 1;
@@ -194,12 +192,24 @@ impl<C: LastFmEditClient> Executor<C> {
                 Ok(PassControl::Continue) => {}
                 // Sustained rate limiting: stop the pass; unfinished intents stay
                 // InProgress and a later pass resumes them.
-                Ok(PassControl::Defer) => break,
+                Ok(PassControl::Defer) => {
+                    report.ended = ExecEnded::Deferred;
+                    break;
+                }
+                // The budget ran out mid-intent; no more work can happen this pass.
+                Ok(PassControl::BudgetExhausted) => {
+                    report.ended = ExecEnded::BudgetExhausted;
+                    break;
+                }
                 // Cancellation ends the pass cleanly for the same reason.
-                Err(ScrubberError::Cancelled) => break,
+                Err(ScrubberError::Cancelled) => {
+                    report.ended = ExecEnded::Cancelled;
+                    break;
+                }
                 Err(err) => return Err(err),
             }
         }
+        // Falling out of the loop without a break leaves the default: Completed.
         Ok(report)
     }
 
@@ -258,7 +268,9 @@ impl<C: LastFmEditClient> Executor<C> {
         for instance in &live {
             self.check_cancelled()?;
             if budget_exhausted(max_edits, *attempts_used) {
-                return Ok(PassControl::Continue); // stays InProgress for a later run
+                // Stays InProgress for a later run; the pass itself is over (nothing
+                // after this intent could be attempted either).
+                return Ok(PassControl::BudgetExhausted);
             }
             match progress.get(instance) {
                 Some(InstanceStatus::Applied { .. }) => continue,
@@ -592,6 +604,9 @@ enum PassControl {
     Continue,
     /// Sustained rate limiting: stop the pass, leaving unfinished intents InProgress.
     Defer,
+    /// The edit budget ran out mid-intent: stop the pass (distinct from `Defer` so the
+    /// report can say why).
+    BudgetExhausted,
 }
 
 /// Result of waiting on the client's rate-limit watch state.

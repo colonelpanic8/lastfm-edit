@@ -25,6 +25,20 @@ pub struct PlanReport {
     pub reported_only: u64,
 }
 
+/// Why an execution pass returned.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecEnded {
+    /// The pass drained every executable intent it set out to.
+    #[default]
+    Completed,
+    /// Sustained rate limiting: the pass stopped early, leaving work `InProgress`.
+    Deferred,
+    /// The cancel handle was flipped mid-pass.
+    Cancelled,
+    /// The per-pass edit budget ran out with work remaining.
+    BudgetExhausted,
+}
+
 /// Summary of one execution pass.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecReport {
@@ -33,6 +47,9 @@ pub struct ExecReport {
     pub intents_abandoned: u64,
     pub instances_applied: u64,
     pub instances_failed: u64,
+    /// Bus-only type, so this is additive: old payloads deserialize as `Completed`.
+    #[serde(default)]
+    pub ended: ExecEnded,
 }
 
 /// Events broadcast by the scrubber's components.
@@ -166,5 +183,25 @@ impl ScrubberEventBus {
 impl Default for ScrubberEventBus {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exec_report_without_ended_deserializes_as_completed() {
+        // A payload from before `ended` existed must fold to the default.
+        let json = r#"{
+            "intents_processed": 2,
+            "intents_completed": 1,
+            "intents_abandoned": 0,
+            "instances_applied": 3,
+            "instances_failed": 1
+        }"#;
+        let report: ExecReport = serde_json::from_str(json).unwrap();
+        assert_eq!(report.ended, ExecEnded::Completed);
+        assert_eq!(report.intents_processed, 2);
     }
 }

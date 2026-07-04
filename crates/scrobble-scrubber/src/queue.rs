@@ -136,6 +136,15 @@ impl EditIntent {
             .filter(|s| matches!(s, InstanceStatus::Failed { .. }))
             .count()
     }
+
+    /// Known-`Pending` instances. Zero until the executor expands the intent, so this
+    /// undercounts a `Ready` intent's real workload (see [`crate::projection`]).
+    pub fn pending_count(&self) -> usize {
+        self.instances
+            .values()
+            .filter(|s| matches!(s, InstanceStatus::Pending))
+            .count()
+    }
 }
 
 /// Fold an ordered event stream into intents, in first-created order.

@@ -8,8 +8,8 @@ use lastfm_edit::{
 };
 use scrobble_scrubber::queue::{QueueEvent, QueueEventKind};
 use scrobble_scrubber::{
-    Executor, ExecutorOptions, IntentState, MemoryScrubberState, ScrubberEvent, ScrubberState,
-    Subject,
+    ExecEnded, Executor, ExecutorOptions, IntentState, MemoryScrubberState, ScrubberEvent,
+    ScrubberState, Subject,
 };
 use scrobble_store::{
     MemoryStorage, MirroredEditor, Provenanced, RecordSource, ScrobbleId, ScrobbleRecord, Storage,
@@ -146,6 +146,7 @@ async fn applies_all_instances_mirrors_locally_and_completes() {
     assert_eq!(report.intents_completed, 1);
     assert_eq!(report.instances_applied, 3);
     assert_eq!(report.instances_failed, 0);
+    assert_eq!(report.ended, ExecEnded::Completed);
 
     // Queue folded to Applied with three per-instance records.
     let queue = state.load_queue().await.unwrap();
@@ -224,6 +225,7 @@ async fn budget_stops_mid_intent_and_a_fresh_run_resumes_without_duplicates() {
     let report = exec.run_once().await.unwrap();
     assert_eq!(report.instances_applied, 1);
     assert_eq!(report.intents_completed, 0);
+    assert_eq!(report.ended, ExecEnded::BudgetExhausted);
     assert_eq!(
         state.load_queue().await.unwrap()[0].state,
         IntentState::InProgress
@@ -239,6 +241,7 @@ async fn budget_stops_mid_intent_and_a_fresh_run_resumes_without_duplicates() {
     let report = exec.run_once().await.unwrap();
     assert_eq!(report.instances_applied, 1);
     assert_eq!(report.intents_completed, 1);
+    assert_eq!(report.ended, ExecEnded::Completed);
     assert_eq!(
         state.load_queue().await.unwrap()[0].state,
         IntentState::Applied
@@ -325,6 +328,7 @@ async fn sustained_rate_limiting_defers_the_pass_leaving_intents_in_progress() {
     assert_eq!(report.instances_applied, 0);
     assert_eq!(report.instances_failed, 0, "rate limits are not failures");
     assert_eq!(report.intents_abandoned, 0);
+    assert_eq!(report.ended, ExecEnded::Deferred);
 
     // The deferred intent stays InProgress with no attempts consumed; the intent
     // behind it was never reached and is still Ready.
@@ -389,6 +393,7 @@ async fn cancellation_stops_the_pass_cleanly_and_the_next_pass_resumes() {
 
     assert_eq!(report.instances_applied, 1);
     assert_eq!(report.instances_failed, 0);
+    assert_eq!(report.ended, ExecEnded::Cancelled);
     assert_eq!(
         state.load_queue().await.unwrap()[0].state,
         IntentState::InProgress
@@ -398,6 +403,7 @@ async fn cancellation_stops_the_pass_cleanly_and_the_next_pass_resumes() {
     let report = exec.run_once().await.unwrap();
     assert_eq!(report.instances_applied, 1);
     assert_eq!(report.intents_completed, 1);
+    assert_eq!(report.ended, ExecEnded::Completed);
     let intent = &state.load_queue().await.unwrap()[0];
     assert_eq!(intent.state, IntentState::Applied);
     assert_eq!(intent.done_count(), 2);
