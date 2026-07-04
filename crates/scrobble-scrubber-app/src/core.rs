@@ -288,6 +288,10 @@ async fn backend_main(
 
 /// While enabled: sync (when available) → plan incremental → execute, then wait the
 /// interval. 1s ticks so toggling off takes effect quickly.
+///
+/// Emits `CycleStarted`/`CycleCompleted`/`Sleeping` so continuous mode is visible in
+/// the UI. Caveat: "completed" here means the cycle's work was *enqueued* — the actor
+/// serializes the actual plan/execute; the pass events show real progress.
 async fn continuous_loop(
     enabled: Rc<Cell<bool>>,
     interval_secs: Rc<Cell<u64>>,
@@ -296,6 +300,7 @@ async fn continuous_loop(
 ) {
     let mut next_run = 0u64;
     let mut was_enabled = false;
+    let mut cycle = 0u64;
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         if !enabled.get() {
@@ -316,7 +321,10 @@ async fn continuous_loop(
             continue;
         }
         next_run = now + interval_secs.get();
-        tracing::debug!("continuous: starting cycle");
+        tracing::debug!(cycle, "continuous: starting cycle");
+        handle
+            .event_bus()
+            .emit(ScrubberEvent::CycleStarted { n: cycle });
 
         if let Some(engine) = &sync {
             if let Err(error) = engine.extend_to_present().await {
@@ -340,6 +348,13 @@ async fn continuous_loop(
         {
             break;
         }
+        handle
+            .event_bus()
+            .emit(ScrubberEvent::CycleCompleted { n: cycle });
+        handle.event_bus().emit(ScrubberEvent::Sleeping {
+            seconds: interval_secs.get(),
+        });
+        cycle += 1;
     }
 }
 

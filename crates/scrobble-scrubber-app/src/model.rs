@@ -2,9 +2,10 @@
 
 use chrono::{DateTime, Local};
 use lastfm_edit::ScrobbleEdit;
-use scrobble_scrubber::{ExecReport, PlanReport, ScrubberEvent, Subject};
+use scrobble_scrubber::{ExecEnded, ExecReport, PlanReport, ScrubberEvent, Subject};
 use scrobble_store::{PauseReason, SyncEvent};
 use std::collections::VecDeque;
+use uuid::Uuid;
 
 pub const LOG_CAP: usize = 500;
 
@@ -15,14 +16,58 @@ pub struct LogEntry {
     pub summary: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub enum ExecStatus {
+/// The intent an execute pass is currently working through.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CurrentIntent {
+    pub id: Uuid,
+    /// Subject rendered via `Display` ("Artist — Track [Album]").
+    pub subject: String,
+    pub instances: usize,
+}
+
+/// Live counters for the in-flight execute pass.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PassProgress {
+    pub applied: u64,
+    pub failed: u64,
+    pub intents_done: u64,
+    pub current: Option<CurrentIntent>,
+}
+
+/// Executor state machine. Progress survives pause/resume within a pass, so a
+/// rate-limit pause doesn't erase what the pass already did.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum PassState {
     #[default]
     Idle,
-    Running,
+    Running(PassProgress),
     Paused {
+        progress: PassProgress,
         until: Option<u64>,
     },
+}
+
+impl PassState {
+    /// The live progress, whether running or paused.
+    fn progress_mut(&mut self) -> Option<&mut PassProgress> {
+        match self {
+            PassState::Idle => None,
+            PassState::Running(progress) | PassState::Paused { progress, .. } => Some(progress),
+        }
+    }
+}
+
+/// Where the continuous sync → plan → execute loop is within a cycle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CyclePhase {
+    Running,
+    Sleeping { seconds: u64 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CycleInfo {
+    pub n: u64,
+    pub phase: CyclePhase,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -47,10 +92,16 @@ pub enum SyncStatus {
 }
 
 /// The reducible UI state: everything the event stream drives, as plain data.
+///
+/// The broadcast bus is lossy under lag (cap 4096), so the pass counters here can
+/// drift from reality; `ExecCompleted`'s authoritative report and the queue reload
+/// self-heal at pass end.
 #[derive(Clone, Debug, Default)]
 pub struct UiState {
     pub log: VecDeque<LogEntry>,
-    pub exec: ExecStatus,
+    pub pass: PassState,
+    /// Present while continuous mode has emitted cycle events.
+    pub continuous: Option<CycleInfo>,
     pub plan: PlanStatus,
     pub last_plan: Option<PlanReport>,
     pub last_exec: Option<ExecReport>,
@@ -80,18 +131,49 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
         ScrubberEvent::IntentQueued { .. }
         | ScrubberEvent::IntentApproved { .. }
         | ScrubberEvent::IntentRejected { .. }
-        | ScrubberEvent::IntentReinstated { .. }
-        | ScrubberEvent::IntentCompleted { .. }
-        | ScrubberEvent::IntentExpanded { .. }
-        | ScrubberEvent::EditApplied { .. }
-        | ScrubberEvent::EditFailed { .. } => {
+        | ScrubberEvent::IntentReinstated { .. } => {
             state.queue_epoch += 1;
         }
         ScrubberEvent::ExecStarted => {
-            state.exec = ExecStatus::Running;
+            state.pass = PassState::Running(PassProgress::default());
+        }
+        ScrubberEvent::IntentExpanded {
+            id,
+            subject,
+            instances,
+        } => {
+            if let Some(progress) = state.pass.progress_mut() {
+                progress.current = Some(CurrentIntent {
+                    id: *id,
+                    subject: subject.to_string(),
+                    instances: *instances,
+                });
+            }
+            state.queue_epoch += 1;
+        }
+        ScrubberEvent::EditApplied { .. } => {
+            if let Some(progress) = state.pass.progress_mut() {
+                progress.applied += 1;
+            }
+            state.queue_epoch += 1;
+        }
+        ScrubberEvent::EditFailed { .. } => {
+            if let Some(progress) = state.pass.progress_mut() {
+                progress.failed += 1;
+            }
+            state.queue_epoch += 1;
+        }
+        ScrubberEvent::IntentCompleted { .. } => {
+            if let Some(progress) = state.pass.progress_mut() {
+                progress.intents_done += 1;
+                // The executor is serial, so the completed intent is always the current
+                // one; clear unconditionally rather than matching ids.
+                progress.current = None;
+            }
+            state.queue_epoch += 1;
         }
         ScrubberEvent::ExecCompleted { report } => {
-            state.exec = ExecStatus::Idle;
+            state.pass = PassState::Idle;
             state.last_exec = Some(report.clone());
             state.queue_epoch += 1;
         }
@@ -100,10 +182,37 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
                 PauseReason::RateLimited { until_estimate } => *until_estimate,
                 PauseReason::Backoff { .. } => None,
             };
-            state.exec = ExecStatus::Paused { until };
+            // Carry the pass's progress into Paused instead of dropping it.
+            let progress = match std::mem::take(&mut state.pass) {
+                PassState::Running(progress) | PassState::Paused { progress, .. } => progress,
+                PassState::Idle => PassProgress::default(),
+            };
+            state.pass = PassState::Paused { progress, until };
         }
         ScrubberEvent::ExecutorResumed => {
-            state.exec = ExecStatus::Running;
+            let progress = match std::mem::take(&mut state.pass) {
+                PassState::Running(progress) | PassState::Paused { progress, .. } => progress,
+                PassState::Idle => PassProgress::default(),
+            };
+            state.pass = PassState::Running(progress);
+        }
+        ScrubberEvent::CycleStarted { n } => {
+            state.continuous = Some(CycleInfo {
+                n: *n,
+                phase: CyclePhase::Running,
+            });
+        }
+        ScrubberEvent::CycleCompleted { n } => {
+            // Phase stays Running: the Sleeping event follows immediately.
+            state.continuous = Some(CycleInfo {
+                n: *n,
+                phase: CyclePhase::Running,
+            });
+        }
+        ScrubberEvent::Sleeping { seconds } => {
+            if let Some(info) = &mut state.continuous {
+                info.phase = CyclePhase::Sleeping { seconds: *seconds };
+            }
         }
         ScrubberEvent::Error { error } => {
             state.error = Some(error.clone());
@@ -203,8 +312,10 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
         ScrubberEvent::ExecCompleted { report } => (
             "✔",
             format!(
-                "execute complete: {} applied, {} failed",
-                report.instances_applied, report.instances_failed
+                "pass ended: {} — {} applied, {} failed",
+                ended_label(&report.ended),
+                report.instances_applied,
+                report.instances_failed
             ),
         ),
         ScrubberEvent::CycleStarted { n } => ("↻", format!("cycle {n}")),
@@ -224,6 +335,16 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
             _ => return None,
         },
     })
+}
+
+/// Human label for why an execute pass returned.
+pub fn ended_label(ended: &ExecEnded) -> &'static str {
+    match ended {
+        ExecEnded::Completed => "completed",
+        ExecEnded::Deferred => "deferred (rate limited)",
+        ExecEnded::Cancelled => "cancelled",
+        ExecEnded::BudgetExhausted => "budget exhausted",
+    }
 }
 
 /// A changed field in a proposed edit.
@@ -350,11 +471,93 @@ mod tests {
         assert_eq!(fields, vec!["track", "artist", "album"]);
     }
 
+    fn instance() -> scrobble_store::ScrobbleId {
+        scrobble_store::ScrobbleId::new(1000, "Queen", "You And I - Remastered 2011")
+    }
+
+    fn applied(intent: uuid::Uuid) -> ScrubberEvent {
+        ScrubberEvent::EditApplied {
+            intent,
+            subject: subject(),
+            instance: instance(),
+            edit_id: "e1".into(),
+        }
+    }
+
+    fn progress(state: &UiState) -> &PassProgress {
+        match &state.pass {
+            PassState::Running(progress) | PassState::Paused { progress, .. } => progress,
+            PassState::Idle => panic!("expected an in-flight pass, got Idle"),
+        }
+    }
+
     #[test]
-    fn reduce_tracks_exec_lifecycle_and_rate_limits() {
+    fn reduce_tracks_full_pass_lifecycle() {
         let mut state = UiState::default();
+        let id = uuid::Uuid::new_v4();
+
         reduce(&mut state, &ScrubberEvent::ExecStarted);
-        assert_eq!(state.exec, ExecStatus::Running);
+        assert_eq!(state.pass, PassState::Running(PassProgress::default()));
+
+        reduce(
+            &mut state,
+            &ScrubberEvent::IntentExpanded {
+                id,
+                subject: subject(),
+                instances: 2,
+            },
+        );
+        let current = progress(&state).current.clone().expect("current intent");
+        assert_eq!(current.id, id);
+        assert_eq!(current.instances, 2);
+        assert_eq!(current.subject, subject().to_string());
+
+        reduce(&mut state, &applied(id));
+        reduce(&mut state, &applied(id));
+        assert_eq!(progress(&state).applied, 2);
+        assert_eq!(progress(&state).failed, 0);
+        assert_eq!(progress(&state).intents_done, 0);
+
+        reduce(
+            &mut state,
+            &ScrubberEvent::IntentCompleted {
+                id,
+                state: scrobble_scrubber::IntentState::Applied,
+            },
+        );
+        assert_eq!(progress(&state).intents_done, 1);
+        assert_eq!(progress(&state).current, None);
+
+        let report = ExecReport {
+            instances_applied: 2,
+            ended: ExecEnded::Completed,
+            ..ExecReport::default()
+        };
+        reduce(
+            &mut state,
+            &ScrubberEvent::ExecCompleted {
+                report: report.clone(),
+            },
+        );
+        assert_eq!(state.pass, PassState::Idle);
+        assert_eq!(state.last_exec, Some(report));
+    }
+
+    #[test]
+    fn reduce_pause_preserves_progress_and_resume_restores_it() {
+        let mut state = UiState::default();
+        let id = uuid::Uuid::new_v4();
+        reduce(&mut state, &ScrubberEvent::ExecStarted);
+        reduce(&mut state, &applied(id));
+        reduce(
+            &mut state,
+            &ScrubberEvent::EditFailed {
+                intent: id,
+                subject: subject(),
+                instance: instance(),
+                error: "boom".into(),
+            },
+        );
 
         reduce(
             &mut state,
@@ -364,10 +567,71 @@ mod tests {
                 },
             },
         );
-        assert_eq!(state.exec, ExecStatus::Paused { until: Some(1000) });
+        match &state.pass {
+            PassState::Paused { progress, until } => {
+                assert_eq!(*until, Some(1000));
+                assert_eq!(progress.applied, 1);
+                assert_eq!(progress.failed, 1);
+            }
+            other => panic!("expected Paused, got {other:?}"),
+        }
+
+        // Counters keep advancing while paused (in-flight edits can still land).
+        reduce(&mut state, &applied(id));
+        assert_eq!(progress(&state).applied, 2);
 
         reduce(&mut state, &ScrubberEvent::ExecutorResumed);
-        assert_eq!(state.exec, ExecStatus::Running);
+        match &state.pass {
+            PassState::Running(p) => {
+                assert_eq!(p.applied, 2);
+                assert_eq!(p.failed, 1);
+            }
+            other => panic!("expected Running, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reduce_tracks_continuous_cycles() {
+        let mut state = UiState::default();
+        assert_eq!(state.continuous, None);
+
+        reduce(&mut state, &ScrubberEvent::CycleStarted { n: 3 });
+        assert_eq!(
+            state.continuous,
+            Some(CycleInfo {
+                n: 3,
+                phase: CyclePhase::Running,
+            })
+        );
+
+        reduce(&mut state, &ScrubberEvent::CycleCompleted { n: 3 });
+        reduce(&mut state, &ScrubberEvent::Sleeping { seconds: 300 });
+        assert_eq!(
+            state.continuous,
+            Some(CycleInfo {
+                n: 3,
+                phase: CyclePhase::Sleeping { seconds: 300 },
+            })
+        );
+    }
+
+    #[test]
+    fn exec_completed_exposes_ended_reason() {
+        let mut state = UiState::default();
+        reduce(&mut state, &ScrubberEvent::ExecStarted);
+        reduce(
+            &mut state,
+            &ScrubberEvent::ExecCompleted {
+                report: ExecReport {
+                    ended: ExecEnded::Deferred,
+                    ..ExecReport::default()
+                },
+            },
+        );
+        assert_eq!(
+            state.last_exec.as_ref().map(|r| r.ended.clone()),
+            Some(ExecEnded::Deferred)
+        );
     }
 
     #[test]

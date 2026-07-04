@@ -1,7 +1,7 @@
 //! Dashboard: status, stats, controls, activity log.
 
 use crate::components::ActivityLog;
-use crate::model::{fmt_ts, ExecStatus, PlanStatus, SyncStatus};
+use crate::model::{fmt_ts, CycleInfo, CyclePhase, PassState, PlanStatus, SyncStatus};
 use crate::{CoreSignal, UiSignal};
 use dioxus::prelude::*;
 use scrobble_scrubber::{IntentState, ScrubFeed, ScrubberCommand, ScrubberState};
@@ -117,22 +117,33 @@ pub fn Dashboard() -> Element {
         PlanStatus::Idle => "Plan incremental".to_string(),
         PlanStatus::Planning { subjects } => format!("Planning… ({subjects})"),
     };
-    let exec_label = match &ui_read.exec {
-        ExecStatus::Idle => "Execute".to_string(),
-        ExecStatus::Running => "Executing…".to_string(),
-        ExecStatus::Paused { .. } => "Paused (rate limit)".to_string(),
+    let exec_label = match &ui_read.pass {
+        PassState::Idle => "Execute".to_string(),
+        PassState::Running(_) => "Executing…".to_string(),
+        PassState::Paused { .. } => "Paused (rate limit)".to_string(),
     };
-    let (exec_pill_class, exec_pill) = match &ui_read.exec {
-        ExecStatus::Idle => ("", "executor idle".to_string()),
-        ExecStatus::Running => ("accent", "executor running".to_string()),
-        ExecStatus::Paused { until } => (
+    let (exec_pill_class, exec_pill) = match &ui_read.pass {
+        PassState::Idle => ("", "executor idle".to_string()),
+        PassState::Running(progress) => (
+            "accent",
+            format!(
+                "executing — {} applied{}",
+                progress.applied,
+                if progress.failed > 0 {
+                    format!(", {} failed", progress.failed)
+                } else {
+                    String::new()
+                }
+            ),
+        ),
+        PassState::Paused { progress, until } => (
             "danger",
             match until {
                 Some(until) => {
                     let left = (*until as i64 - now()).max(0);
-                    format!("rate limited — {left}s left")
+                    format!("rate limited — {left}s left ({} applied)", progress.applied)
                 }
-                None => "rate limited".to_string(),
+                None => format!("rate limited ({} applied)", progress.applied),
             },
         ),
     };
@@ -199,7 +210,7 @@ pub fn Dashboard() -> Element {
                     "No active rules — run `scrobble-scrubber rules enable-defaults` and restart."
                 }
             }
-            if let ExecStatus::Paused { until } = &ui_read.exec {
+            if let PassState::Paused { until, .. } = &ui_read.pass {
                 {
                     let detail = match until {
                         Some(until) => {
@@ -257,7 +268,7 @@ pub fn Dashboard() -> Element {
                     }
                     button {
                         class: "btn",
-                        disabled: ui_read.exec != ExecStatus::Idle,
+                        disabled: ui_read.pass != PassState::Idle,
                         onclick: move |_| {
                             let max_edits = budget_input.peek().trim().parse::<u32>().ok();
                             let _ = handle_exec
@@ -267,7 +278,7 @@ pub fn Dashboard() -> Element {
                     }
                     button {
                         class: "btn danger",
-                        disabled: ui_read.exec == ExecStatus::Idle,
+                        disabled: ui_read.pass == PassState::Idle,
                         title: "interrupt the in-flight execute pass; unfinished intents stay in progress",
                         onclick: move |_| {
                             let _ = backend_stop.try_send(crate::core::BackendCommand::StopExecution);
@@ -309,7 +320,20 @@ pub fn Dashboard() -> Element {
                         oninput: move |event| interval_input.set(event.value()),
                     }
                     if continuous() {
-                        span { class: "pill accent", "continuous — sync → plan → execute" }
+                        {
+                            let label = match &ui_read.continuous {
+                                Some(CycleInfo { n, phase: CyclePhase::Running }) => {
+                                    format!("continuous — cycle {n} running")
+                                }
+                                Some(CycleInfo { n, phase: CyclePhase::Sleeping { seconds } }) => {
+                                    format!("continuous — cycle {n} enqueued, idle {seconds}s")
+                                }
+                                None => "continuous — sync → plan → execute".to_string(),
+                            };
+                            rsx! {
+                                span { class: "pill accent", "{label}" }
+                            }
+                        }
                     }
                 }
             }
