@@ -385,6 +385,35 @@ input[type="text"] {
   margin-top: 8px;
 }
 
+/* ---- four-view additions (nav badge, pass panel, headline) ------------------ */
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-badge {
+  margin-left: auto;
+  background: var(--accent-strong);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  line-height: 1.5;
+}
+
+.pass-panel {
+  border-color: var(--accent);
+}
+
+.headline-count {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
 /* ---- scrollbars ------------------------------------------------------------ */
 
 ::-webkit-scrollbar {

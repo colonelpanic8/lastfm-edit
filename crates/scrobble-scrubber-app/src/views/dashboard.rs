@@ -4,7 +4,9 @@ use crate::components::ActivityLog;
 use crate::model::{fmt_ts, CycleInfo, CyclePhase, PassState, PlanStatus, SyncStatus};
 use crate::{CoreSignal, UiSignal};
 use dioxus::prelude::*;
-use scrobble_scrubber::{IntentState, ScrubFeed, ScrubberCommand, ScrubberState};
+use scrobble_scrubber::{
+    review_status, work_status, ReviewStatus, ScrubFeed, ScrubberCommand, ScrubberState, WorkStatus,
+};
 use scrobble_store::Storage;
 
 /// Store-derived numbers the stat cards show; reloaded when the queue epoch bumps or a
@@ -20,10 +22,10 @@ struct Stats {
     rule_total: u64,
     /// The rule set changed since rule coverage was computed; the planner will rescan.
     rule_coverage_stale: bool,
-    awaiting: usize,
-    ready: usize,
-    in_progress: usize,
-    applied: usize,
+    needs_review: usize,
+    queued: usize,
+    partial: usize,
+    done: usize,
 }
 
 #[component]
@@ -85,11 +87,18 @@ pub fn Dashboard() -> Element {
         };
         if let Ok(queue) = core.state.load_queue().await {
             for intent in &queue {
-                match intent.state {
-                    IntentState::AwaitingApproval => stats.awaiting += 1,
-                    IntentState::Ready => stats.ready += 1,
-                    IntentState::InProgress => stats.in_progress += 1,
-                    IntentState::Applied => stats.applied += 1,
+                let review = review_status(intent);
+                if review == ReviewStatus::NeedsReview {
+                    stats.needs_review += 1;
+                }
+                match work_status(intent) {
+                    // "queued" means accepted and waiting; unreviewed intents are
+                    // counted on the review axis instead.
+                    Some(WorkStatus::Queued) if review == ReviewStatus::Accepted => {
+                        stats.queued += 1;
+                    }
+                    Some(WorkStatus::Partial { .. }) => stats.partial += 1,
+                    Some(WorkStatus::Done) => stats.done += 1,
                     _ => {}
                 }
             }
@@ -100,27 +109,19 @@ pub fn Dashboard() -> Element {
     // Continuous-mode controls (mirrored to the backend loop on toggle).
     let mut continuous = use_signal(|| false);
     let mut interval_input = use_signal(|| "300".to_string());
-    let mut budget_input = use_signal(String::new);
 
     let Some(Ok(core)) = core.read().clone() else {
         return rsx! {};
     };
     let handle = core.handle.clone();
-    let handle_exec = handle.clone();
     let backend_sync = core.backend.clone();
     let backend_continuous = core.backend.clone();
-    let backend_stop = core.backend.clone();
     let sync_available = core.sync_available;
 
     let ui_read = ui.read();
     let plan_label = match &ui_read.plan {
         PlanStatus::Idle => "Plan incremental".to_string(),
         PlanStatus::Planning { subjects } => format!("Planning… ({subjects})"),
-    };
-    let exec_label = match &ui_read.pass {
-        PassState::Idle => "Execute".to_string(),
-        PassState::Running(_) => "Executing…".to_string(),
-        PassState::Paused { .. } => "Paused (rate limit)".to_string(),
     };
     let (exec_pill_class, exec_pill) = match &ui_read.pass {
         PassState::Idle => ("", "executor idle".to_string()),
@@ -189,8 +190,8 @@ pub fn Dashboard() -> Element {
         span_text(stats_now.rule_span, stats_now.rule_total)
     };
     let queue_summary = format!(
-        "{} awaiting · {} ready · {} in progress · {} applied",
-        stats_now.awaiting, stats_now.ready, stats_now.in_progress, stats_now.applied
+        "{} need review · {} queued · {} in flight · {} done",
+        stats_now.needs_review, stats_now.queued, stats_now.partial, stats_now.done
     );
 
     rsx! {
@@ -265,32 +266,6 @@ pub fn Dashboard() -> Element {
                             }));
                         },
                         "{plan_label}"
-                    }
-                    button {
-                        class: "btn",
-                        disabled: ui_read.pass != PassState::Idle,
-                        onclick: move |_| {
-                            let max_edits = budget_input.peek().trim().parse::<u32>().ok();
-                            let _ = handle_exec
-                                .try_send(ScrubberCommand::ExecuteOnce { max_edits });
-                        },
-                        "{exec_label}"
-                    }
-                    button {
-                        class: "btn danger",
-                        disabled: ui_read.pass == PassState::Idle,
-                        title: "interrupt the in-flight execute pass; unfinished intents stay in progress",
-                        onclick: move |_| {
-                            let _ = backend_stop.try_send(crate::core::BackendCommand::StopExecution);
-                        },
-                        "Stop execution"
-                    }
-                    input {
-                        r#type: "number",
-                        placeholder: "budget",
-                        title: "max edits per execute (empty = unlimited)",
-                        value: "{budget_input}",
-                        oninput: move |event| budget_input.set(event.value()),
                     }
                 }
                 div { class: "row", style: "margin-top: 10px;",
