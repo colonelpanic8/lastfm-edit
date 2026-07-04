@@ -33,6 +33,8 @@ pub enum ScrubberCommand {
     Approve(Uuid),
     /// Decline an open intent, optionally dismissing its subject for good.
     Reject { id: Uuid, dismiss: bool },
+    /// Un-reject a rejected intent, restoring it to its open state.
+    Reinstate(Uuid),
     /// Drain ready intents through last.fm, optionally with an attempt budget.
     ExecuteOnce { max_edits: Option<u32> },
     /// Approve a provider-proposed rewrite rule (merges into the active set).
@@ -142,9 +144,18 @@ impl<C: LastFmEditClient> ScrubberActor<C> {
             }
             ScrubberCommand::Approve(id) => {
                 crate::ops::approve_intent(self.state.as_ref(), id).await?;
+                self.events.emit(ScrubberEvent::IntentApproved { id });
             }
             ScrubberCommand::Reject { id, dismiss } => {
                 crate::ops::reject_intent(self.state.as_ref(), id, dismiss).await?;
+                self.events.emit(ScrubberEvent::IntentRejected {
+                    id,
+                    dismissed: dismiss,
+                });
+            }
+            ScrubberCommand::Reinstate(id) => {
+                crate::ops::reinstate_intent(self.state.as_ref(), id).await?;
+                self.events.emit(ScrubberEvent::IntentReinstated { id });
             }
             ScrubberCommand::ExecuteOnce { max_edits } => {
                 self.executor.run_once_with_budget(max_edits).await?;

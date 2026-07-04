@@ -278,3 +278,173 @@ async fn sync_bridge_turns_discoveries_into_intents_and_forwards_events() {
         })
         .await;
 }
+
+#[tokio::test]
+async fn approve_and_reject_commands_emit_events() {
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let store = Arc::new(MemoryStorage::new());
+            let state = Arc::new(MemoryScrubberState::new());
+            store
+                .append_scrobbles(&[record(100, "You And I - Remastered 2011")])
+                .await
+                .unwrap();
+
+            // Queue an awaiting-approval intent by planning with forced confirmation.
+            let planner =
+                planner(store.clone(), state.clone()).with_policy(scrobble_scrubber::Policy {
+                    require_confirmation_all: true,
+                    ..Default::default()
+                });
+            let bus = planner.event_bus();
+            let executor = Executor::from_parts(
+                store.clone() as Arc<dyn Storage>,
+                state.clone() as Arc<dyn ScrubberState>,
+                MirroredEditor::new(
+                    store.clone() as Arc<dyn Storage>,
+                    MockLastFmEditClient::new(),
+                ),
+                MockLastFmEditClient::new(),
+            )
+            .with_event_bus(bus);
+
+            let (handle, actor) =
+                ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
+            let mut events = handle.subscribe();
+            let actor_task = tokio::task::spawn_local(actor.run());
+
+            handle
+                .send(ScrubberCommand::PlanFeed(
+                    scrobble_scrubber::ScrubFeed::StoreRange { range: None },
+                ))
+                .await
+                .unwrap();
+            handle.send(ScrubberCommand::Stop).await.unwrap();
+            actor_task.await.unwrap();
+
+            let id = state.load_queue().await.unwrap()[0].id;
+            assert_eq!(
+                state.load_queue().await.unwrap()[0].state,
+                IntentState::AwaitingApproval
+            );
+
+            // Fresh actor for the approval round-trip.
+            let planner = planner_fresh(store.clone(), state.clone());
+            let bus = planner.event_bus();
+            let executor = Executor::from_parts(
+                store.clone() as Arc<dyn Storage>,
+                state.clone() as Arc<dyn ScrubberState>,
+                MirroredEditor::new(
+                    store.clone() as Arc<dyn Storage>,
+                    MockLastFmEditClient::new(),
+                ),
+                MockLastFmEditClient::new(),
+            )
+            .with_event_bus(bus);
+            let (handle, actor) =
+                ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
+            let mut events2 = handle.subscribe();
+            let actor_task = tokio::task::spawn_local(actor.run());
+            handle.send(ScrubberCommand::Approve(id)).await.unwrap();
+            handle.send(ScrubberCommand::Stop).await.unwrap();
+            actor_task.await.unwrap();
+
+            assert_eq!(
+                state.load_queue().await.unwrap()[0].state,
+                IntentState::Ready
+            );
+            let mut saw_approved = false;
+            while let Ok(event) = events2.try_recv() {
+                if matches!(event, ScrubberEvent::IntentApproved { id: got } if got == id) {
+                    saw_approved = true;
+                }
+            }
+            assert!(saw_approved, "IntentApproved emitted");
+            // Drain the first receiver so it isn't flagged unused.
+            while events.try_recv().is_ok() {}
+        })
+        .await;
+}
+
+#[tokio::test]
+async fn reinstate_command_emits_event() {
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let store = Arc::new(MemoryStorage::new());
+            let state = Arc::new(MemoryScrubberState::new());
+            store
+                .append_scrobbles(&[record(100, "You And I - Remastered 2011")])
+                .await
+                .unwrap();
+
+            // Queue an awaiting-approval intent by planning with forced confirmation.
+            let planner =
+                planner(store.clone(), state.clone()).with_policy(scrobble_scrubber::Policy {
+                    require_confirmation_all: true,
+                    ..Default::default()
+                });
+            let bus = planner.event_bus();
+            let executor = Executor::from_parts(
+                store.clone() as Arc<dyn Storage>,
+                state.clone() as Arc<dyn ScrubberState>,
+                MirroredEditor::new(
+                    store.clone() as Arc<dyn Storage>,
+                    MockLastFmEditClient::new(),
+                ),
+                MockLastFmEditClient::new(),
+            )
+            .with_event_bus(bus);
+
+            let (handle, actor) =
+                ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
+            let mut events = handle.subscribe();
+            let actor_task = tokio::task::spawn_local(actor.run());
+
+            handle
+                .send(ScrubberCommand::PlanFeed(
+                    scrobble_scrubber::ScrubFeed::StoreRange { range: None },
+                ))
+                .await
+                .unwrap();
+            let id = loop {
+                let queue = state.load_queue().await.unwrap();
+                if let Some(intent) = queue.first() {
+                    break intent.id;
+                }
+                tokio::task::yield_now().await;
+            };
+
+            // Reject with dismissal, then reinstate; the intent reopens and the
+            // subject is no longer dismissed.
+            handle
+                .send(ScrubberCommand::Reject { id, dismiss: true })
+                .await
+                .unwrap();
+            handle.send(ScrubberCommand::Reinstate(id)).await.unwrap();
+            handle.send(ScrubberCommand::Stop).await.unwrap();
+            actor_task.await.unwrap();
+
+            let queue = state.load_queue().await.unwrap();
+            assert_eq!(queue[0].state, IntentState::AwaitingApproval);
+            assert!(!state
+                .load_dismissed()
+                .await
+                .unwrap()
+                .contains(&queue[0].subject));
+
+            let mut saw_reinstated = false;
+            while let Ok(event) = events.try_recv() {
+                if matches!(event, ScrubberEvent::IntentReinstated { id: got } if got == id) {
+                    saw_reinstated = true;
+                }
+            }
+            assert!(saw_reinstated, "IntentReinstated emitted");
+        })
+        .await;
+}
+
+fn planner_fresh(store: Arc<MemoryStorage>, state: Arc<MemoryScrubberState>) -> Planner {
+    planner(store, state)
+}

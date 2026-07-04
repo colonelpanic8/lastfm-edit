@@ -41,7 +41,9 @@ pub use musicbrainz::{
 };
 #[cfg(feature = "openai")]
 pub use openai::{OpenAIProviderConfig, OpenAIScrubActionProvider, DEFAULT_SYSTEM_PROMPT};
-pub use ops::{approve_intent, approve_pending_rule, reject_intent, reject_pending_rule};
+pub use ops::{
+    approve_intent, approve_pending_rule, reinstate_intent, reject_intent, reject_pending_rule,
+};
 pub use planner::{Planner, RULES_PROVIDER};
 pub use policy::{EditDecision, Policy};
 pub use provider::{

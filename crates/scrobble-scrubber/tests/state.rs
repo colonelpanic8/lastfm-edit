@@ -4,8 +4,9 @@
 use scrobble_scrubber::queue::{QueueEvent, QueueEventKind};
 use scrobble_scrubber::rewrite::create_no_op_edit;
 use scrobble_scrubber::{
-    rules_hash, DismissedEntry, FsScrubberState, IntentState, ProviderCoverage, RewriteRule,
-    RuleEvent, RuleEventKind, ScrubberState, SdRule, Subject,
+    reinstate_intent, reject_intent, rules_hash, DismissedEntry, FsScrubberState, IntentState,
+    MemoryScrubberState, ProviderCoverage, RewriteRule, RuleEvent, RuleEventKind, ScrubberState,
+    SdRule, Subject,
 };
 use scrobble_store::{CoverageMap, Segment};
 use uuid::Uuid;
@@ -76,6 +77,7 @@ async fn full_round_trip_through_fresh_handles() {
             subject: subject(),
             at: 4,
             reason: "manual".into(),
+            active: true,
         }])
         .await
         .unwrap();
@@ -121,6 +123,42 @@ async fn full_round_trip_through_fresh_handles() {
 
     // The state dir carries the merge=union gitattributes like the store.
     assert!(dir.path().join(".gitattributes").exists());
+}
+
+#[tokio::test]
+async fn reinstate_reopens_intent_and_lifts_dismissal() {
+    let state = MemoryScrubberState::new();
+    let intent_id = Uuid::new_v4();
+    let track = subject().representative_track(1, Some(100));
+    state
+        .append_queue_events(&[QueueEvent {
+            id: intent_id,
+            at: 1,
+            kind: QueueEventKind::Created {
+                subject: subject(),
+                proposed: Box::new(create_no_op_edit(&track)),
+                provider: "rewrite_rules".into(),
+                requires_approval: true,
+            },
+        }])
+        .await
+        .unwrap();
+
+    // Rejecting with dismiss=true dismisses the subject.
+    reject_intent(&state, intent_id, true).await.unwrap();
+    assert_eq!(
+        state.load_queue().await.unwrap()[0].state,
+        IntentState::Rejected { dismissed: true }
+    );
+    assert!(state.load_dismissed().await.unwrap().contains(&subject()));
+
+    // Reinstating reopens the intent and lifts the dismissal.
+    reinstate_intent(&state, intent_id).await.unwrap();
+    assert_eq!(
+        state.load_queue().await.unwrap()[0].state,
+        IntentState::AwaitingApproval
+    );
+    assert!(!state.load_dismissed().await.unwrap().contains(&subject()));
 }
 
 #[tokio::test]

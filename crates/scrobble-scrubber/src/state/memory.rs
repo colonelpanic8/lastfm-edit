@@ -70,14 +70,9 @@ impl ScrubberState for MemoryScrubberState {
     }
 
     async fn load_dismissed(&self) -> Result<HashSet<Subject>> {
-        Ok(self
-            .inner
-            .lock()
-            .unwrap()
-            .dismissed
-            .iter()
-            .map(|entry| entry.subject.clone())
-            .collect())
+        Ok(super::fold_dismissed(
+            self.inner.lock().unwrap().dismissed.clone(),
+        ))
     }
 
     async fn append_dismissed(&self, entries: &[DismissedEntry]) -> Result<()> {

@@ -62,6 +62,19 @@ pub enum ScrubberEvent {
         provider: String,
         state: IntentState,
     },
+    /// A human released an intent for execution.
+    IntentApproved {
+        id: Uuid,
+    },
+    /// A human declined an intent.
+    IntentRejected {
+        id: Uuid,
+        dismissed: bool,
+    },
+    /// A human reinstated a previously rejected intent.
+    IntentReinstated {
+        id: Uuid,
+    },
     PendingRuleCreated {
         id: Uuid,
         provider: String,

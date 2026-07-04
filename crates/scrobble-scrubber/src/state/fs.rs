@@ -137,11 +137,9 @@ impl ScrubberState for FsScrubberState {
     }
 
     async fn load_dismissed(&self) -> Result<HashSet<Subject>> {
-        Ok(self
-            .read_jsonl::<DismissedEntry>("dismissed.jsonl")?
-            .into_iter()
-            .map(|entry| entry.subject)
-            .collect())
+        Ok(super::fold_dismissed(
+            self.read_jsonl::<DismissedEntry>("dismissed.jsonl")?,
+        ))
     }
 
     async fn append_dismissed(&self, entries: &[DismissedEntry]) -> Result<()> {

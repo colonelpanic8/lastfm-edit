@@ -64,10 +64,47 @@ pub async fn reject_intent(state: &dyn ScrubberState, id: Uuid, dismiss: bool) -
                 subject: intent.subject.clone(),
                 at: now(),
                 reason: "rejected-intent".into(),
+                active: true,
             }])
             .await?;
     }
     Ok(())
+}
+
+/// Un-reject a rejected intent, restoring it to its pre-rejection open state; if the
+/// rejection also dismissed the subject, the dismissal is lifted too.
+pub async fn reinstate_intent(state: &dyn ScrubberState, id: Uuid) -> Result<()> {
+    let queue = state.load_queue().await?;
+    let intent = queue
+        .iter()
+        .find(|intent| intent.id == id)
+        .ok_or_else(|| ScrubberError::NotFound(format!("intent {id}")))?;
+    let dismissed = match intent.state {
+        IntentState::Rejected { dismissed } => dismissed,
+        _ => {
+            return Err(ScrubberError::InvalidState(format!(
+                "intent {id} is {:?}, not Rejected",
+                intent.state
+            )));
+        }
+    };
+    if dismissed {
+        state
+            .append_dismissed(&[DismissedEntry {
+                subject: intent.subject.clone(),
+                at: now(),
+                reason: "reinstated-intent".into(),
+                active: false,
+            }])
+            .await?;
+    }
+    state
+        .append_queue_events(&[QueueEvent {
+            id,
+            at: now(),
+            kind: QueueEventKind::Reinstated,
+        }])
+        .await
 }
 
 /// Approve a proposed rule: merge it into the active rule set (which invalidates the

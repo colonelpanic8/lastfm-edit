@@ -288,6 +288,7 @@ async fn dismissed_and_occupied_subjects_are_filtered() {
             subject: dismissed_subject,
             at: 1,
             reason: "manual".into(),
+            active: true,
         }])
         .await
         .unwrap();

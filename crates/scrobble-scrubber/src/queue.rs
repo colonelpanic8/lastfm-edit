@@ -47,6 +47,9 @@ pub enum QueueEventKind {
     Approved,
     /// Human declined; optionally also dismisses the subject from future suggestions.
     Rejected { dismiss_subject: bool },
+    /// Un-reject a previously rejected intent, restoring it to its pre-rejection open
+    /// state.
+    Reinstated,
     /// Executor snapshot of the instances it will work through (may occur again on a
     /// later run if re-expansion finds new instances; ids accumulate).
     Expanded { instance_ids: Vec<ScrobbleId> },
@@ -191,6 +194,20 @@ pub fn fold_queue(events: impl IntoIterator<Item = QueueEvent>) -> Vec<EditInten
                         intent.state = IntentState::Rejected {
                             dismissed: dismiss_subject,
                         };
+                    }
+                    QueueEventKind::Reinstated => {
+                        if matches!(intent.state, IntentState::Rejected { .. }) {
+                            intent.state = if intent.requires_approval {
+                                IntentState::AwaitingApproval
+                            } else {
+                                IntentState::Ready
+                            };
+                        } else {
+                            log::warn!(
+                                "queue: Reinstated for non-rejected intent {}; ignoring",
+                                event.id
+                            );
+                        }
                     }
                     QueueEventKind::Expanded { instance_ids } => {
                         for id in instance_ids {
@@ -489,6 +506,35 @@ mod tests {
         assert_eq!(intents.len(), 1);
         assert_eq!(intents[0].state, IntentState::Rejected { dismissed: true });
         assert!(!intents[0].state.is_open());
+    }
+
+    #[test]
+    fn reinstate_restores_rejected_intent() {
+        let needs_approval = Uuid::new_v4();
+        let auto = Uuid::new_v4();
+        let intents = fold_queue(vec![
+            created(needs_approval, 1, true),
+            event(
+                needs_approval,
+                2,
+                QueueEventKind::Rejected {
+                    dismiss_subject: true,
+                },
+            ),
+            event(needs_approval, 3, QueueEventKind::Reinstated),
+            created(auto, 4, false),
+            event(
+                auto,
+                5,
+                QueueEventKind::Rejected {
+                    dismiss_subject: false,
+                },
+            ),
+            event(auto, 6, QueueEventKind::Reinstated),
+        ]);
+        assert_eq!(intents.len(), 2);
+        assert_eq!(intents[0].state, IntentState::AwaitingApproval);
+        assert_eq!(intents[1].state, IntentState::Ready);
     }
 
     #[test]

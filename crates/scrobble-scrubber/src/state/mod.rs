@@ -22,11 +22,44 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 /// A subject the user never wants suggestions for again.
+///
+/// The log is last-write-wins per subject: a later entry with `active: false`
+/// un-dismisses the subject (e.g. when a rejected intent is reinstated).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DismissedEntry {
     pub subject: Subject,
     pub at: u64,
     pub reason: String,
+    /// Whether this entry dismisses (`true`) or un-dismisses (`false`) the subject.
+    /// Defaults to `true` so pre-existing log lines stay dismissals.
+    #[serde(default = "crate::state::default_true")]
+    pub active: bool,
+}
+
+pub(crate) fn default_true() -> bool {
+    true
+}
+
+/// Fold the dismissal log last-write-wins by subject: the entry with the greatest `at`
+/// (ties broken by later position) decides, and only subjects whose winning entry is
+/// `active` are dismissed.
+pub(crate) fn fold_dismissed(
+    entries: impl IntoIterator<Item = DismissedEntry>,
+) -> HashSet<Subject> {
+    let mut latest: std::collections::HashMap<Subject, DismissedEntry> =
+        std::collections::HashMap::new();
+    for entry in entries {
+        match latest.get(&entry.subject) {
+            Some(winner) if winner.at > entry.at => {}
+            _ => {
+                latest.insert(entry.subject.clone(), entry);
+            }
+        }
+    }
+    latest
+        .into_iter()
+        .filter_map(|(subject, entry)| entry.active.then_some(subject))
+        .collect()
 }
 
 /// One provider's planning coverage: which time ranges its analysis has fully covered.
