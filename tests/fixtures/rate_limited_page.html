@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Last.fm - Rate Limited</title>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;700&display=swap" rel="stylesheet">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="robots" content="noindex">
+    <meta name="viewport" content="height=device-height,
+                      width=device-width, initial-scale=1.0,
+                      minimum-scale=1.0, maximum-scale=1.0,
+                      user-scalable=no, target-densitydpi=device-dpi">
+    <style>
+    /* Reset */
+
+    html, body, div, span, applet, object, iframe,
+    h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+    a, abbr, acronym, address, big, cite, code,
+    del, dfn, em, img, ins, kbd, q, s, samp,
+    small, strike, strong, sub, sup, tt, var,
+    b, u, i, center,
+    dl, dt, dd, ol, ul, li,
+    fieldset, form, label, legend,
+    table, caption, tbody, tfoot, thead, tr, th, td,
+    article, aside, canvas, details, embed,
+    figure, figcaption, footer, header, hgroup,
+    menu, nav, output, ruby, section, summary,
+    time, mark, audio, video {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: 100%;
+        font: inherit;
+        vertical-align: baseline;
+        box-sizing: border-box;
+    }
+    /* HTML5 display-role reset for older browsers */
+    article, aside, details, figcaption, figure,
+    footer, header, hgroup, menu, nav, section {
+        display: block;
+    }
+
+    ol, ul {
+        list-style: none;
+    }
+
+    /* Actual Styles */
+
+    body {
+        text-align: center;
+        font-family: 'Barlow','Open Sans','Lucida Grande','Helvetica Neue',Helvetica,Arial,Sans-serif;
+        color: #232323;
+        line-height: 1.5;
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: auto;
+        padding: 0 15px;
+    }
+
+    header {
+        background: black;
+        padding: 15px;
+        height: 60px;
+    }
+
+    h1 {
+        margin: 3.5rem 0 1.5rem;
+        font-size: 36px;
+        font-weight: bold;
+    }
+
+    p {
+        color: #535353;
+        font-size: 18px;
+    }
+
+    a {
+        color: #5a5a5a;
+        font-weight: bold;
+    }
+
+    #error {
+        font-weight: bold;
+        font-size: 21px;
+        color: #2d2d2d;
+        margin-top: 1.5rem;
+    }
+
+    #marvin {
+        margin: 40px 0 50px;
+    }
+
+
+    hr {
+        border-top: 1px solid #eaeaea
+    }
+
+    a:hover {
+        transition: 0.3s;
+        color: #232323;
+    }
+    .close-container {
+        margin-top: 10em;
+    }
+
+    .grid {
+        margin-top: 30px;
+        display: grid;
+        grid-auto-rows: 1fr;
+        grid-column-gap: 20px;
+        grid-row-gap: 25px;
+        grid-template-rows: auto;
+        grid-template-columns: repeat(1, 1fr);
+        margin-bottom: 150px;
+    }
+
+    .translation {
+        text-align: left;
+        color: #7e7e7e;
+    }
+
+    .translation b {
+        font-weight: bold;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      border: 0;
+    }
+
+    .row::after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+
+    @media only screen and (min-width: 768px) {
+        .grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media only screen and (min-width: 992px) {
+        .grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    @media only screen and (min-width: 1200px) {
+        .grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    /*  BREAKPOINTS: 480px - 768px - 992px - 1200px */
+
+    </style>
+  </head>
+  <body>
+    <header>
+        <img alt="last.fm logo" src="https://cdn.last.fm/images/logo.svg">
+    </header>
+    <div class="container">
+        <h1>Your request was blocked</h1>
+        <p style="margin-bottom: 20px;">To protect our website, our security firewall has flagged this request as potentially unsafe.</p>
+        <p>Please try clearing your cookies and refreshing the page.
+        <br/>If the problem persists, try again later or on a different computer network.</p>
+        <div id="error">Error 406</div>
+        <img id="marvin" src="http://cdn.last.fm/images/marvin_tea.svg" width="136px" height="210px" alt="Marvin the robot is sad because he spilt his cup of tea">
+        <hr>
+        <ul class="grid">
+            <li class="translation">
+                <b>Deutsche</b>
+                Zum Schutz unserer Website hat unsere Sicherheitsfirewall deine Anfrage als potenziell unsicher eingestuft.</br> Bitte lösche deine Cookies und lade die Seite neu. Wenn das Problem weiterhin besteht, versuche es später noch einmal oder nutze ein anderes Netzwerk.
+            </li>
+            <li class="translation">
+                <b>Español</b>
+                Para proteger nuestro sitio web, nuestro firewall de seguridad ha marcado esta solicitud como potencialmente no segura.</br>Prueba a borrar las cookies y actualizar la página. Si el problema persiste, inténtalo más adelante o en otra red informática.
+            </li>
+            <li class="translation">
+                <b>Français</b>
+                Notre pare-feu de sécurité a signalé cette requête comme potentiellement dangereuse afin de protéger notre site Web.</br>Veuillez effacer vos cookies et actualiser la page. Si le problème persiste, réessayez plus tard ou sur un autre réseau informatique.
+            </li>
+            <li class="translation">
+                <b>Italiano</b>
+                Per proteggere il nostro sito Web, il firewall di sicurezza ha contrassegnato questa richiesta come potenzialmente non sicura.</br>Prova a cancellare i cookie e ad aggiornare la pagina. Se il problema persiste, riprova più tardi o su un'altra rete di computer.
+            </li>
+            <li class="translation">
+                <b>日本語</b>
+                当社のウェブサイト保護の観点から、セキュリティファイヤーウォールがこのリクエストに潜在的な危険があると警告しています。</br>お手数ですが、Cookie を消去後にページを更新してみてください。問題が続く場合は、後ほどやり直すか、他のコンピューターネットワークでお試しください。
+            </li>
+            <li class="translation">
+                <b>Polskie</b>
+                Aby chronić naszą witrynę, nasza zapora sieciowa oznaczyła to żądanie jako potencjalnie niebezpieczne.</br>Spróbuj wyczyścić pliki ciasteczek i odświeżyć stronę. Jeśli problem będzie się powtarzał, spróbuj ponownie później lub w innej sieci komputerowej.
+            </li>
+            <li class="translation">
+                <b>Português</b>
+                Para proteger nosso site, o firewall de segurança indicou esta solicitação como sendo potencialmente perigosa. </br> Tente eliminar os cookies e atualizar a página. Se o problema continuar ocorrendo, tente novamente mais tarde ou em outra rede de computadores.
+            </li>
+            <li class="translation">
+                <b>Русский</b>
+                Наш защитный брандмауэр отметил ваш запрос как потенциально опасный.</br> Попробуйте очистить файлы cookies и обновить страницу. Если проблему не удается устранить, попробуйте позже из другой компьютерной сети.
+            </li>
+            <li class="translation">
+                <b>Svenska</b>
+                För att skydda vår webbplats har vår säkerhetsbrandvägg flaggat denna förfrågan som potentiellt osäker.</br>Försök igen genom att rensa dina cookies och uppdatera sidan. Om problemet består, försök igen senare eller på ett annat datornätverk.
+            </li>
+            <li class="translation">
+                <b>Türkçe</b>
+                Web sitemizi korumak amacıyla güvenlik duvarımız bu isteği potansiyel olarak güvenli olmayan bir istek olarak işaretlemiştir.</br>Lütfen çerezlerini silip sayfayı yenile. Sorun devam ederse, daha sonra veya farklı bir bilgisayar ağından tekrar dene.
+            </li>
+            <li class="translation">
+                <b>简体</b>
+               为保护我们的网站，我们的安全防火墙将此请求标记为潜在不安全。</br>请尝试清除 cookie，然后刷新页面。如果问题依旧，请稍后再试或使用其他计算机网络。
+            </li>
+        </ul>
+    </div>
+  </body>
+</html>

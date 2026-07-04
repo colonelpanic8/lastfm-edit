@@ -956,7 +956,7 @@ impl LastFmEditSession {
 /// Configuration for rate limit detection behavior
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RateLimitConfig {
-    /// Whether to detect rate limits by HTTP status codes (429, 403)
+    /// Whether to detect rate limits by HTTP status codes (429, 403, 503)
     pub detect_by_status: bool,
     /// Whether to detect rate limits by response body patterns
     pub detect_by_patterns: bool,
@@ -1421,6 +1421,8 @@ pub enum RateLimitType {
     Http429,
     /// HTTP 403 Forbidden (likely rate limiting)
     Http403,
+    /// HTTP 503 Service Unavailable (rate-limit interstitial)
+    Http503,
     /// Rate limit patterns detected in response body
     ResponsePattern,
 }

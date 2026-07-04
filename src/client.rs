@@ -1304,7 +1304,10 @@ impl LastFmEditClientImpl {
 
         let body = self.extract_response_body(url, &mut response).await?;
 
-        if response.status().is_success() && self.is_rate_limit_response(&body) {
+        // Check the body for rate-limit patterns regardless of HTTP status: last.fm
+        // serves its "Rate Limited" interstitial with non-success statuses (e.g. 503),
+        // and gating on is_success() would let those pages through as normal responses.
+        if self.is_rate_limit_response(&body) {
             log::debug!("Response body contains rate limit patterns");
             // Broadcast here so pattern-detected rate limits are observable even when the
             // retry loop (which also broadcasts) is not driving this call.
@@ -1471,6 +1474,24 @@ impl LastFmEditClientImpl {
                 delay_seconds: retry_after,
                 request: Some(request_info.clone()),
                 rate_limit_type: RateLimitType::Http429,
+                rate_limit_timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            });
+            return Err(LastFmError::RateLimit { retry_after });
+        }
+
+        if self.config.rate_limit.detect_by_status && response.status() == 503 {
+            let retry_after = response
+                .header("retry-after")
+                .and_then(|h| h.get(0))
+                .and_then(|v| v.as_str().parse::<u64>().ok())
+                .unwrap_or(60);
+            self.broadcast_event(ClientEvent::RateLimited {
+                delay_seconds: retry_after,
+                request: Some(request_info.clone()),
+                rate_limit_type: RateLimitType::Http503,
                 rate_limit_timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -2073,5 +2094,56 @@ impl HttpClient for ArcHttpClient {
         req: http_client::Request,
     ) -> std::result::Result<http_client::Response, http_types::Error> {
         self.0.send(req).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Captured copy of the "Last.fm - Rate Limited" interstitial that last.fm serves
+    /// (with a non-success HTTP status) when it throttles an account.
+    const RATE_LIMITED_PAGE: &str = include_str!("../tests/fixtures/rate_limited_page.html");
+
+    /// HTTP client stub for tests that never issue requests.
+    #[derive(Debug)]
+    struct NoopHttpClient;
+
+    #[async_trait::async_trait]
+    impl HttpClient for NoopHttpClient {
+        async fn send(
+            &self,
+            _req: http_client::Request,
+        ) -> std::result::Result<http_client::Response, http_types::Error> {
+            Ok(http_types::Response::new(200))
+        }
+    }
+
+    fn test_client(config: ClientConfig) -> LastFmEditClientImpl {
+        let session = LastFmEditSession::new(
+            "test_user".to_string(),
+            vec!["sessionid=.test_session_id".to_string()],
+            Some("test_csrf_token".to_string()),
+            "https://www.last.fm".to_string(),
+        );
+        LastFmEditClientImpl::from_session_with_client_config(
+            Box::new(NoopHttpClient),
+            session,
+            config,
+        )
+    }
+
+    #[test]
+    fn is_rate_limit_response_matches_captured_rate_limited_page() {
+        let client = test_client(ClientConfig::default());
+        assert!(client.is_rate_limit_response(RATE_LIMITED_PAGE));
+    }
+
+    #[test]
+    fn is_rate_limit_response_ignores_normal_page() {
+        let client = test_client(ClientConfig::default());
+        assert!(!client.is_rate_limit_response(
+            "<html><head><title>Music | Last.fm</title></head><body>ok</body></html>"
+        ));
     }
 }

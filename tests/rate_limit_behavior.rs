@@ -3,7 +3,7 @@
 
 use lastfm_edit::{
     ClientConfig, ClientEvent, ExactScrobbleEdit, LastFmEditClientImpl, LastFmEditSession,
-    LastFmError, RateLimitBehavior, RateLimitState,
+    LastFmError, RateLimitBehavior, RateLimitConfig, RateLimitState, RateLimitType,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -11,25 +11,35 @@ use std::sync::Arc;
 /// Response body matching the default "you're requesting too many pages" rate-limit pattern.
 const RATE_LIMIT_BODY: &str = "<html><body><p>you're requesting too many pages</p></body></html>";
 
+/// Captured copy of the "Last.fm - Rate Limited" interstitial, served by last.fm with a
+/// non-success (503-class) HTTP status when it throttles an account.
+const RATE_LIMITED_PAGE: &str = include_str!("fixtures/rate_limited_page.html");
+
 /// A scripted HTTP client that always returns the same canned response and counts requests.
 #[derive(Debug)]
 struct ScriptedClient {
     status: u16,
     body: String,
+    retry_after: Option<u64>,
     requests: Arc<AtomicUsize>,
 }
 
 impl ScriptedClient {
-    fn rate_limited() -> (Self, Arc<AtomicUsize>) {
+    fn with_response(status: u16, body: &str) -> (Self, Arc<AtomicUsize>) {
         let requests = Arc::new(AtomicUsize::new(0));
         (
             Self {
-                status: 200,
-                body: RATE_LIMIT_BODY.to_string(),
+                status,
+                body: body.to_string(),
+                retry_after: None,
                 requests: requests.clone(),
             },
             requests,
         )
+    }
+
+    fn rate_limited() -> (Self, Arc<AtomicUsize>) {
+        Self::with_response(200, RATE_LIMIT_BODY)
     }
 }
 
@@ -41,6 +51,9 @@ impl http_client::HttpClient for ScriptedClient {
     ) -> std::result::Result<http_client::Response, http_types::Error> {
         self.requests.fetch_add(1, Ordering::SeqCst);
         let mut response = http_types::Response::new(self.status);
+        if let Some(retry_after) = self.retry_after {
+            let _ = response.insert_header("retry-after", retry_after.to_string());
+        }
         response.set_body(self.body.clone());
         Ok(response)
     }
@@ -207,6 +220,82 @@ async fn block_and_retry_mode_folds_rate_limit_into_delete_result() {
         .await
         .expect("blocking mode should not surface rate-limit errors");
     assert!(!deleted);
+}
+
+#[test_log::test(tokio::test)]
+async fn rate_limit_page_with_non_success_status_detected_by_body_patterns() {
+    // The captured interstitial arrives with a 503-class status. With status-based
+    // detection disabled, only body-pattern detection can catch it — so this test
+    // proves detection is no longer gated on response.status().is_success().
+    let (http_client, requests) = ScriptedClient::with_response(503, RATE_LIMITED_PAGE);
+    let client = LastFmEditClientImpl::from_session_with_client_config(
+        Box::new(http_client),
+        create_test_session(),
+        ClientConfig::with_retries_disabled()
+            .with_rate_limit_config(RateLimitConfig::patterns_only()),
+    );
+
+    let mut events = client.subscribe();
+    let err = client.get_recent_tracks_page(1).await.unwrap_err();
+    assert!(matches!(err, LastFmError::RateLimit { retry_after: 60 }));
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+
+    let mut saw_pattern_rate_limit = false;
+    while let Ok(event) = events.try_recv() {
+        if let ClientEvent::RateLimited {
+            rate_limit_type: RateLimitType::ResponsePattern,
+            ..
+        } = event
+        {
+            saw_pattern_rate_limit = true;
+        }
+    }
+    assert!(saw_pattern_rate_limit);
+}
+
+#[test_log::test(tokio::test)]
+async fn http_503_status_detected_as_rate_limit() {
+    // A 503 with a body that matches no pattern is still treated as a rate limit
+    // via status-based detection.
+    let (http_client, requests) =
+        ScriptedClient::with_response(503, "<html><body>ok</body></html>");
+    let client = LastFmEditClientImpl::from_session_with_client_config(
+        Box::new(http_client),
+        create_test_session(),
+        ClientConfig::with_retries_disabled(),
+    );
+
+    let mut events = client.subscribe();
+    let err = client.get_recent_tracks_page(1).await.unwrap_err();
+    assert!(matches!(err, LastFmError::RateLimit { retry_after: 60 }));
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+
+    let mut saw_http503_rate_limit = false;
+    while let Ok(event) = events.try_recv() {
+        if let ClientEvent::RateLimited {
+            rate_limit_type: RateLimitType::Http503,
+            ..
+        } = event
+        {
+            saw_http503_rate_limit = true;
+        }
+    }
+    assert!(saw_http503_rate_limit);
+}
+
+#[test_log::test(tokio::test)]
+async fn http_503_honors_retry_after_header() {
+    let (mut http_client, _requests) =
+        ScriptedClient::with_response(503, "<html><body>ok</body></html>");
+    http_client.retry_after = Some(120);
+    let client = LastFmEditClientImpl::from_session_with_client_config(
+        Box::new(http_client),
+        create_test_session(),
+        ClientConfig::with_retries_disabled(),
+    );
+
+    let err = client.get_recent_tracks_page(1).await.unwrap_err();
+    assert!(matches!(err, LastFmError::RateLimit { retry_after: 120 }));
 }
 
 #[test_log::test(tokio::test)]
