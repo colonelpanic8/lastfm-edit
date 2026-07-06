@@ -162,7 +162,7 @@ impl<C: LastFmEditClient> Executor<C> {
         self.cancelled.store(false, Ordering::Relaxed);
         let mut report = ExecReport::default();
         let mut attempts_used: u32 = 0;
-        let mut rate_limit_pauses: u32 = 0;
+        let mut rate_limit = PassRateLimit::default();
 
         let queue = self.state.load_queue().await?;
         // Resume half-done (InProgress) intents before starting freshly-Ready ones,
@@ -185,7 +185,7 @@ impl<C: LastFmEditClient> Executor<C> {
                     max_edits,
                     &mut report,
                     &mut attempts_used,
-                    &mut rate_limit_pauses,
+                    &mut rate_limit,
                 )
                 .await
             {
@@ -232,7 +232,7 @@ impl<C: LastFmEditClient> Executor<C> {
         max_edits: Option<u32>,
         report: &mut ExecReport,
         attempts_used: &mut u32,
-        rate_limit_pauses: &mut u32,
+        rate_limit: &mut PassRateLimit,
     ) -> Result<PassControl> {
         // Re-expand against the live store — NOT the planning-time snapshot.
         let live = self.live_instances(&intent).await?;
@@ -283,11 +283,11 @@ impl<C: LastFmEditClient> Executor<C> {
             }
 
             *attempts_used += 1;
-            match self
-                .apply_instance(&intent, instance, rate_limit_pauses)
-                .await?
-            {
+            match self.apply_instance(&intent, instance, rate_limit).await? {
                 InstanceOutcome::Applied { edit_id } => {
+                    // Progress was made: reset the rate-limit backoff so the next block
+                    // starts from the base pause again.
+                    rate_limit.succeeded();
                     progress.insert(
                         instance.clone(),
                         InstanceStatus::Applied {
@@ -425,22 +425,23 @@ impl<C: LastFmEditClient> Executor<C> {
         &self,
         intent: &EditIntent,
         instance: &ScrobbleId,
-        rate_limit_pauses: &mut u32,
+        rate_limit: &mut PassRateLimit,
     ) -> Result<InstanceOutcome> {
         loop {
             self.check_cancelled()?;
-            if let Clearance::Deferred = self.await_rate_limit_clearance(rate_limit_pauses).await? {
+            if let Clearance::Deferred = self.await_rate_limit_clearance(rate_limit).await? {
                 return Ok(InstanceOutcome::Deferred);
             }
 
             let prepared = match self.editor.prepare_edit(instance).await {
                 Ok(prepared) => prepared,
                 Err(StoreError::LastFm(lastfm_edit::LastFmError::RateLimit { retry_after })) => {
-                    if !self.budget_rate_limit_pause(rate_limit_pauses) {
+                    if !rate_limit.budget_pause(self.options.max_rate_limit_pauses_per_pass) {
                         self.emit_deferred(Some(Self::now() + retry_after));
                         return Ok(InstanceOutcome::Deferred);
                     }
-                    self.pause_for_rate_limit(retry_after).await?;
+                    self.pause_for_rate_limit(rate_limit.next_pause_secs(retry_after))
+                        .await?;
                     continue;
                 }
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
@@ -462,11 +463,12 @@ impl<C: LastFmEditClient> Executor<C> {
                     return Ok(InstanceOutcome::Failed { error });
                 }
                 Err(StoreError::LastFm(lastfm_edit::LastFmError::RateLimit { retry_after })) => {
-                    if !self.budget_rate_limit_pause(rate_limit_pauses) {
+                    if !rate_limit.budget_pause(self.options.max_rate_limit_pauses_per_pass) {
                         self.emit_deferred(Some(Self::now() + retry_after));
                         return Ok(InstanceOutcome::Deferred);
                     }
-                    self.pause_for_rate_limit(retry_after).await?;
+                    self.pause_for_rate_limit(rate_limit.next_pause_secs(retry_after))
+                        .await?;
                     continue;
                 }
                 Err(StoreError::NeedsRebase(reason)) => {
@@ -486,13 +488,6 @@ impl<C: LastFmEditClient> Executor<C> {
         }
     }
 
-    /// Count one rate-limit pause against the pass's budget. `false` means the budget is
-    /// spent: defer the pass instead of waiting again.
-    fn budget_rate_limit_pause(&self, rate_limit_pauses: &mut u32) -> bool {
-        *rate_limit_pauses += 1;
-        *rate_limit_pauses <= self.options.max_rate_limit_pauses_per_pass
-    }
-
     /// The pass is deferring on a rate limit it won't wait out; surface the pause (the
     /// closing `ExecCompleted` marks the pass over).
     fn emit_deferred(&self, until_estimate: Option<u64>) {
@@ -501,22 +496,30 @@ impl<C: LastFmEditClient> Executor<C> {
         });
     }
 
-    async fn pause_for_rate_limit(&self, retry_after: u64) -> Result<()> {
-        let until = Self::now() + retry_after;
+    /// Sleep out a rate-limit pause of the given (already grown/capped) length, emitting
+    /// paused/resumed around it. `pause_secs` comes from [`PassRateLimit::next_pause_secs`].
+    async fn pause_for_rate_limit(&self, pause_secs: u64) -> Result<()> {
+        let until = Self::now() + pause_secs;
         self.events.emit(ScrubberEvent::ExecutorPaused {
             reason: scrobble_store::PauseReason::RateLimited {
                 until_estimate: Some(until),
             },
         });
-        self.sleep_or_cancelled(retry_after.min(60)).await?;
+        self.sleep_or_cancelled(pause_secs).await?;
         self.events.emit(ScrubberEvent::ExecutorResumed);
         Ok(())
     }
 
     /// Wait until the client's rate-limit state clears (same watch-loop pattern as the
-    /// store's sync engine). Every still-rate-limited wait counts against the pass's
-    /// pause budget; once spent this stops waiting and reports [`Clearance::Deferred`].
-    async fn await_rate_limit_clearance(&self, rate_limit_pauses: &mut u32) -> Result<Clearance> {
+    /// store's sync engine). A single entry into the rate-limited state costs one pause
+    /// budget unit — not one per poll tick — so polling the watch state doesn't burn the
+    /// budget on a per-30s cadence. Once the budget is spent this stops waiting and reports
+    /// [`Clearance::Deferred`]. The poll cadence follows the same exponential growth as
+    /// [`Executor::pause_for_rate_limit`] so consecutive blocks back off harder.
+    async fn await_rate_limit_clearance(
+        &self,
+        rate_limit: &mut PassRateLimit,
+    ) -> Result<Clearance> {
         let mut watcher = self.client.watch_rate_limit_state();
         let mut paused = false;
         loop {
@@ -529,11 +532,14 @@ impl<C: LastFmEditClient> Executor<C> {
                 return Ok(Clearance::Cleared);
             }
             if let RateLimitState::RateLimited { until_estimate, .. } = &state {
-                if !self.budget_rate_limit_pause(rate_limit_pauses) {
-                    self.emit_deferred(Some(*until_estimate));
-                    return Ok(Clearance::Deferred);
-                }
                 if !paused {
+                    // First observation of this block: one budget decision, one growth step.
+                    if !rate_limit.budget_pause(self.options.max_rate_limit_pauses_per_pass) {
+                        self.emit_deferred(Some(*until_estimate));
+                        return Ok(Clearance::Deferred);
+                    }
+                    // Advance the shared growth once per block (not per poll tick).
+                    rate_limit.next_pause_secs(0);
                     paused = true;
                     self.events.emit(ScrubberEvent::ExecutorPaused {
                         reason: scrobble_store::PauseReason::RateLimited {
@@ -541,9 +547,12 @@ impl<C: LastFmEditClient> Executor<C> {
                         },
                     });
                 }
+                // Poll cadence grows with the backoff (read-only) but is bounded by how long
+                // the block actually has left, so we still wake promptly once it lifts.
+                let cadence = rate_limit.pause_secs(0);
                 let wait = state
                     .remaining_at(now)
-                    .map(|d| d.as_secs().clamp(1, 30))
+                    .map(|d| d.as_secs().clamp(1, cadence))
                     .unwrap_or(1);
                 tokio::select! {
                     _ = watcher.changed() => {}
@@ -599,6 +608,53 @@ enum InstanceOutcome {
     Deferred,
 }
 
+/// Per-pass rate-limit accounting: the pause budget (how many rate-limited waits a pass
+/// will sit through before deferring) and a growth counter so consecutive blocks back off
+/// harder. A successful instance attempt resets the growth via [`PassRateLimit::succeeded`].
+#[derive(Default)]
+struct PassRateLimit {
+    /// Pause *decisions* made this pass; compared against `max_rate_limit_pauses_per_pass`.
+    pauses_used: u32,
+    /// Consecutive rate-limited pauses since the last success; drives exponential backoff.
+    consecutive: u32,
+}
+
+impl PassRateLimit {
+    /// Base pause length: never wait less than a minute on a real block.
+    const BASE_PAUSE_SECS: u64 = 60;
+    /// Cap so a single wait never parks the pass for more than ten minutes.
+    const MAX_PAUSE_SECS: u64 = 600;
+
+    /// Count one pause decision against the pass's budget. `false` means the budget is
+    /// spent: defer the pass instead of waiting again. One unit per decision, never per tick.
+    fn budget_pause(&mut self, max: u32) -> bool {
+        self.pauses_used += 1;
+        self.pauses_used <= max
+    }
+
+    /// Pause length at the current growth level *without* advancing it: `max(retry_after, 60)`
+    /// on the first block, doubling each consecutive time (120, 240, 480), capped at 600s.
+    /// Used for the poll cadence inside a single wait, where the growth counter must not move.
+    fn pause_secs(&self, retry_after: u64) -> u64 {
+        let doublings = self.consecutive.min(4);
+        let grown = Self::BASE_PAUSE_SECS.saturating_mul(1u64 << doublings);
+        retry_after.max(grown).min(Self::MAX_PAUSE_SECS)
+    }
+
+    /// The pause length for one pause decision, advancing the growth counter so the *next*
+    /// consecutive block backs off harder. Call once per pause decision.
+    fn next_pause_secs(&mut self, retry_after: u64) -> u64 {
+        let secs = self.pause_secs(retry_after);
+        self.consecutive = self.consecutive.saturating_add(1);
+        secs
+    }
+
+    /// An instance attempt landed: reset the backoff so the next block starts from the base.
+    fn succeeded(&mut self) {
+        self.consecutive = 0;
+    }
+}
+
 /// Whether a pass may keep draining intents.
 enum PassControl {
     Continue,
@@ -644,4 +700,63 @@ fn overlay_proposal(
         }
     }
     exact
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PassRateLimit;
+
+    #[test]
+    fn budget_pause_counts_decisions_against_the_cap() {
+        let mut rl = PassRateLimit::default();
+        assert!(rl.budget_pause(3));
+        assert!(rl.budget_pause(3));
+        assert!(rl.budget_pause(3));
+        // Fourth decision exceeds the budget of 3.
+        assert!(!rl.budget_pause(3));
+    }
+
+    #[test]
+    fn consecutive_pauses_grow_and_cap() {
+        let mut rl = PassRateLimit::default();
+        // First pause is at least the base minute; then doubles per consecutive pause.
+        assert_eq!(rl.next_pause_secs(0), 60);
+        assert_eq!(rl.next_pause_secs(0), 120);
+        assert_eq!(rl.next_pause_secs(0), 240);
+        assert_eq!(rl.next_pause_secs(0), 480);
+        // Capped at 600s no matter how many consecutive pauses.
+        assert_eq!(rl.next_pause_secs(0), 600);
+        assert_eq!(rl.next_pause_secs(0), 600);
+    }
+
+    #[test]
+    fn a_longer_retry_after_wins_over_the_grown_floor() {
+        let mut rl = PassRateLimit::default();
+        // retry_after above the current floor is honored, still capped at 600.
+        assert_eq!(rl.next_pause_secs(200), 200);
+        // Next consecutive floor is 120, but retry_after of 1000 clamps to the 600 cap.
+        assert_eq!(rl.next_pause_secs(1000), 600);
+    }
+
+    #[test]
+    fn pause_secs_is_non_mutating() {
+        let mut rl = PassRateLimit::default();
+        // Reading the cadence repeatedly must not advance the growth counter.
+        assert_eq!(rl.pause_secs(0), 60);
+        assert_eq!(rl.pause_secs(0), 60);
+        assert_eq!(rl.pause_secs(0), 60);
+        // Only next_pause_secs advances it.
+        assert_eq!(rl.next_pause_secs(0), 60);
+        assert_eq!(rl.pause_secs(0), 120);
+    }
+
+    #[test]
+    fn success_resets_the_backoff() {
+        let mut rl = PassRateLimit::default();
+        assert_eq!(rl.next_pause_secs(0), 60);
+        assert_eq!(rl.next_pause_secs(0), 120);
+        rl.succeeded();
+        // Growth is back to the base; the budget count is untouched.
+        assert_eq!(rl.next_pause_secs(0), 60);
+    }
 }
