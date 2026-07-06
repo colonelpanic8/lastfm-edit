@@ -448,6 +448,10 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
+        // A rate-limit interstitial (served site-wide, e.g. HTTP 406 after edit bursts) must
+        // surface as a RateLimit error, not be misread as the delete failing.
+        self.check_post_response_for_rate_limit(&delete_url, response.status(), &response_text)?;
+
         let success = response.status().is_success();
 
         if success {
@@ -866,6 +870,10 @@ impl LastFmEditClientImpl {
             .body_string()
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
+
+        // A rate-limit interstitial (served site-wide, e.g. HTTP 406 after edit bursts) must
+        // surface as a RateLimit error, not be misread by edit analysis as "rejected".
+        self.check_post_response_for_rate_limit(&edit_url, response.status(), &response_text)?;
 
         let analysis = edit_analysis::analyze_edit_response(&response_text, response.status());
 
@@ -1302,12 +1310,14 @@ impl LastFmEditClientImpl {
     async fn get_without_retry(&self, url: &str) -> Result<Response> {
         let mut response = self.get_with_redirects(url, 0).await?;
 
+        let status = response.status();
         let body = self.extract_response_body(url, &mut response).await?;
 
-        // Check the body for rate-limit patterns regardless of HTTP status: last.fm
-        // serves its "Rate Limited" interstitial with non-success statuses (e.g. 503),
-        // and gating on is_success() would let those pages through as normal responses.
-        if self.is_rate_limit_response(&body) {
+        // Only scan the body for rate-limit patterns on non-success responses. Last.fm
+        // serves its "Rate Limited" interstitial with a non-success status (e.g. 503), so
+        // scanning 2xx bodies is unnecessary and false-positives on ordinary pages whose
+        // track/album titles happen to contain phrases like "Slow Down".
+        if self.response_indicates_rate_limit(status, &body) {
             log::debug!("Response body contains rate limit patterns");
             // Broadcast here so pattern-detected rate limits are observable even when the
             // retry loop (which also broadcasts) is not driving this call.
@@ -1410,7 +1420,7 @@ impl LastFmEditClientImpl {
                 .await?;
         }
 
-        let response = self
+        let mut response = self
             .client
             .send(request)
             .await
@@ -1502,25 +1512,95 @@ impl LastFmEditClientImpl {
 
         if self.config.rate_limit.detect_by_status && response.status() == 403 {
             log::debug!("Got 403 response, checking if it's a rate limit");
-            {
-                let session = self.session.lock().unwrap();
-                if !session.cookies.is_empty() {
-                    log::debug!("403 on authenticated request - likely rate limit");
-                    self.broadcast_event(ClientEvent::RateLimited {
-                        delay_seconds: 60,
-                        request: Some(request_info.clone()),
-                        rate_limit_type: RateLimitType::Http403,
-                        rate_limit_timestamp: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs(),
-                    });
-                    return Err(LastFmError::RateLimit { retry_after: 60 });
+            // Read the body so we can confirm this is really a rate-limit interstitial
+            // rather than an ordinary 403. We only treat it as a rate limit when the body
+            // matches a known pattern; a bare 403 (e.g. genuine authorization failure) is
+            // passed through as a normal response.
+            let status = response.status();
+            let body = self.extract_response_body(url, &mut response).await?;
+            if self.is_rate_limit_response(&body) {
+                log::debug!("403 body matches rate-limit pattern - treating as rate limit");
+                self.broadcast_event(ClientEvent::RateLimited {
+                    delay_seconds: 60,
+                    request: Some(request_info.clone()),
+                    rate_limit_type: RateLimitType::Http403,
+                    rate_limit_timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                });
+                return Err(LastFmError::RateLimit { retry_after: 60 });
+            }
+
+            // Not a rate limit: rebuild the response with the already-consumed body.
+            let mut new_response = http_types::Response::new(status);
+            for (name, values) in response.iter() {
+                for value in values {
+                    let _ = new_response.insert_header(name.clone(), value.clone());
                 }
             }
+            new_response.set_body(body);
+            return Ok(new_response);
         }
 
         Ok(response)
+    }
+
+    /// Decide whether a response is a rate-limit interstitial given its status and body.
+    ///
+    /// Detection is two-tier:
+    /// - Non-success statuses: the broad pattern lists ([`RateLimitConfig::patterns`] and
+    ///   `custom_patterns`) apply, since error pages never embed user library content.
+    /// - Success (2xx) statuses: only the narrow [`RateLimitConfig::success_patterns`] list
+    ///   applies. Last.fm serves its "requesting a lot of pages" soft-throttle interstitial
+    ///   with HTTP 200, so some 2xx detection is required — but 2xx pages embed track/album
+    ///   titles (e.g. a real track named "Slow Down"), so only unambiguous interstitial
+    ///   phrases are checked.
+    fn response_indicates_rate_limit(&self, status: http_types::StatusCode, body: &str) -> bool {
+        if status.is_success() {
+            let body_lower = body.to_lowercase();
+            for pattern in &self.config.rate_limit.success_patterns {
+                if body_lower.contains(&pattern.to_lowercase()) {
+                    log::debug!(
+                        "Rate limit detected on 2xx response (success pattern: '{pattern}')"
+                    );
+                    return true;
+                }
+            }
+            false
+        } else {
+            self.is_rate_limit_response(body)
+        }
+    }
+
+    /// Guard a POST response against the rate-limit interstitial.
+    ///
+    /// Last.fm serves its "Last.fm - Rate Limited" interstitial site-wide (observed with
+    /// HTTP 406 after edit bursts), including to POST endpoints. Without this check, an
+    /// edit/delete POST that receives the interstitial would be misinterpreted as the
+    /// operation being rejected. If the response matches, broadcasts
+    /// [`ClientEvent::RateLimited`] and returns `Err(LastFmError::RateLimit)`, mirroring
+    /// the GET path in `get_without_retry`.
+    fn check_post_response_for_rate_limit(
+        &self,
+        url: &str,
+        status: http_types::StatusCode,
+        body: &str,
+    ) -> Result<()> {
+        if self.response_indicates_rate_limit(status, body) {
+            log::debug!("POST response body contains rate limit patterns (status {status})");
+            self.broadcast_event(ClientEvent::RateLimited {
+                delay_seconds: 60,
+                request: Some(RequestInfo::from_url_and_method(url, "POST")),
+                rate_limit_type: RateLimitType::ResponsePattern,
+                rate_limit_timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            });
+            return Err(LastFmError::RateLimit { retry_after: 60 });
+        }
+        Ok(())
     }
 
     fn is_rate_limit_response(&self, response_body: &str) -> bool {
@@ -2145,5 +2225,74 @@ mod tests {
         assert!(!client.is_rate_limit_response(
             "<html><head><title>Music | Last.fm</title></head><body>ok</body></html>"
         ));
+    }
+
+    #[test]
+    fn response_indicates_rate_limit_scopes_pattern_detection_to_non_success() {
+        let client = test_client(ClientConfig::default());
+
+        // 200 OK whose body contains a pattern phrase (as a track title) is NOT rate limited.
+        let ok_body = "<html><body><a class=\"track\">Slow Down</a> by Douglas</body></html>";
+        assert!(!client.response_indicates_rate_limit(http_types::StatusCode::Ok, ok_body));
+
+        // 503 serving the captured interstitial IS rate limited.
+        assert!(client.response_indicates_rate_limit(
+            http_types::StatusCode::ServiceUnavailable,
+            RATE_LIMITED_PAGE
+        ));
+
+        // 403 with a plain body is NOT rate limited.
+        assert!(!client.response_indicates_rate_limit(
+            http_types::StatusCode::Forbidden,
+            "<html><body>Forbidden</body></html>"
+        ));
+
+        // 403 whose body matches a rate-limit pattern IS rate limited.
+        assert!(client.response_indicates_rate_limit(
+            http_types::StatusCode::Forbidden,
+            "<html><body>you're requesting too many pages</body></html>"
+        ));
+    }
+
+    #[test]
+    fn response_indicates_rate_limit_detects_200_status_interstitial() {
+        let client = test_client(ClientConfig::default());
+
+        // 200 OK whose body contains a track literally named "Slow Down" is NOT rate limited:
+        // the narrow success-pattern tier must not collide with library content.
+        let track_body =
+            "<html><body><a class=\"track\">Slow Down</a> by The Beatles</body></html>";
+        assert!(!client.response_indicates_rate_limit(http_types::StatusCode::Ok, track_body));
+
+        // 200 OK serving the real soft-throttle interstitial sentence IS rate limited.
+        let interstitial_body = "<html><body><p>You're requesting a lot of pages which may \
+             slow down the site for other users</p></body></html>";
+        assert!(client.response_indicates_rate_limit(http_types::StatusCode::Ok, interstitial_body));
+    }
+
+    #[test]
+    fn post_rate_limit_guard_rejects_406_interstitial_and_passes_normal_responses() {
+        let client = test_client(ClientConfig::default());
+        let interstitial = "<html><head><title>Last.fm - Rate Limited</title></head></html>";
+
+        // 406 interstitial (as served site-wide after edit bursts) yields a RateLimit error
+        // instead of flowing on to edit analysis / delete interpretation.
+        let err = client
+            .check_post_response_for_rate_limit(
+                "https://www.last.fm/user/x/library/edit",
+                http_types::StatusCode::NotAcceptable,
+                interstitial,
+            )
+            .unwrap_err();
+        assert!(matches!(err, LastFmError::RateLimit { retry_after: 60 }));
+
+        // A normal edit response body passes through untouched.
+        assert!(client
+            .check_post_response_for_rate_limit(
+                "https://www.last.fm/user/x/library/edit",
+                http_types::StatusCode::Ok,
+                "<div class=\"alert-success\">Your edit was saved</div>",
+            )
+            .is_ok());
     }
 }

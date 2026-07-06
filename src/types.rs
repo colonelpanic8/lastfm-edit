@@ -964,6 +964,15 @@ pub struct RateLimitConfig {
     pub patterns: Vec<String>,
     /// Additional custom patterns to look for in response bodies
     pub custom_patterns: Vec<String>,
+    /// Patterns checked against the bodies of *successful* (2xx) responses.
+    ///
+    /// Last.fm serves its "requesting a lot of pages" soft-throttle interstitial with an
+    /// HTTP 200 status, so some body detection must run even on success responses. Because
+    /// 2xx pages embed user library content (track/artist/album names), phrases here must be
+    /// specific enough to never collide with such names — e.g. the full interstitial sentence
+    /// fragment, not short phrases like "slow down" (a real Beatles track title).
+    /// Matching is case-insensitive, like the other pattern lists.
+    pub success_patterns: Vec<String>,
 }
 
 impl Default for RateLimitConfig {
@@ -990,6 +999,7 @@ impl Default for RateLimitConfig {
                 "daily limit".to_string(),
             ],
             custom_patterns: vec![],
+            success_patterns: vec!["you're requesting a lot of pages".to_string()],
         }
     }
 }
@@ -1002,6 +1012,7 @@ impl RateLimitConfig {
             detect_by_patterns: false,
             patterns: vec![],
             custom_patterns: vec![],
+            success_patterns: vec![],
         }
     }
 
@@ -1012,6 +1023,7 @@ impl RateLimitConfig {
             detect_by_patterns: false,
             patterns: vec![],
             custom_patterns: vec![],
+            success_patterns: vec![],
         }
     }
 
@@ -1031,6 +1043,7 @@ impl RateLimitConfig {
             detect_by_patterns: false,
             patterns: vec![],
             custom_patterns: patterns,
+            success_patterns: vec![],
         }
     }
 
@@ -1050,10 +1063,10 @@ impl RateLimitConfig {
 /// Configuration for operational delays between requests
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationalDelayConfig {
-    /// Optional delay before each GET request (in milliseconds).
+    /// Delay before each GET request (in milliseconds).
     ///
     /// This is a pragmatic throttle to avoid triggering Last.fm's HTML page rate limits when
-    /// scanning libraries (e.g. `.../library?page=N`).
+    /// scanning libraries (e.g. `.../library?page=N`). Defaults to 500ms; set to 0 to disable.
     pub get_delay_ms: u64,
     /// Delay between multiple edit operations (in milliseconds)
     pub edit_delay_ms: u64,
@@ -1064,7 +1077,7 @@ pub struct OperationalDelayConfig {
 impl Default for OperationalDelayConfig {
     fn default() -> Self {
         Self {
-            get_delay_ms: 0,
+            get_delay_ms: 500,     // throttle library scans
             edit_delay_ms: 1000,   // 1 second
             delete_delay_ms: 1000, // 1 second
         }
@@ -1267,9 +1280,9 @@ pub struct RetryConfig {
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
-            max_retries: 3,
-            base_delay: 5,
-            max_delay: 300, // 5 minutes
+            max_retries: 5,
+            base_delay: 30, // 30 seconds
+            max_delay: 600, // 10 minutes
             enabled: true,
         }
     }

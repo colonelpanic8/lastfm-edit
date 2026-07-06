@@ -99,12 +99,12 @@ where
                     return Err(LastFmError::RateLimit { retry_after });
                 }
 
-                // Calculate delay with exponential backoff
+                // Calculate delay with exponential backoff:
+                // delay = min(retry_after + base_delay * 2^retries, max_delay)
                 let pow = 2u64.checked_pow(retries).unwrap_or(u64::MAX);
                 let base_backoff = config.base_delay.saturating_mul(pow);
                 let delay_exp = retry_after.saturating_add(base_backoff);
-                let delay_legacy = retry_after.saturating_add((retries as u64).saturating_mul(30));
-                let delay = std::cmp::min(std::cmp::min(delay_exp, config.max_delay), delay_legacy);
+                let delay = std::cmp::min(delay_exp, config.max_delay);
 
                 if unbounded {
                     log::info!(

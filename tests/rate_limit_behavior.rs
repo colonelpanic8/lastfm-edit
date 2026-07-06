@@ -39,7 +39,11 @@ impl ScriptedClient {
     }
 
     fn rate_limited() -> (Self, Arc<AtomicUsize>) {
-        Self::with_response(200, RATE_LIMIT_BODY)
+        // Last.fm serves its rate-limit interstitial with a non-success status, and
+        // body-pattern detection is scoped to non-success responses. Use 500 (which is
+        // not one of the specially-handled 429/503/403 statuses) so that detection here
+        // is attributable solely to the body pattern, not status-based detection.
+        Self::with_response(500, RATE_LIMIT_BODY)
     }
 }
 
