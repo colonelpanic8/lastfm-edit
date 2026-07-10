@@ -175,7 +175,46 @@
           '';
         };
 
+        packages.scrobble-scrubber = pkgs.rustPlatform.buildRustPackage {
+          pname = "scrobble-scrubber";
+          version = "0.1.0";
+
+          src = ./.;
+
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
+          # Build only the scrubber CLI out of the workspace.
+          cargoBuildFlags = ["-p" "scrobble-scrubber"];
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+          ];
+
+          buildInputs = with pkgs;
+            [
+              openssl
+              curl
+            ]
+            ++ lib.optionals stdenv.isDarwin [
+              darwin.apple_sdk.frameworks.Security
+              darwin.apple_sdk.frameworks.CoreFoundation
+              darwin.apple_sdk.frameworks.SystemConfiguration
+            ];
+
+          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+
+          # Skip tests in nix build (some tests require filesystem access)
+          doCheck = false;
+        };
+
         packages.default = self.packages.${system}.lastfm-edit;
       }
-    );
+    )
+    // {
+      # System-independent outputs (modules) live outside eachDefaultSystem.
+      homeManagerModules.scrobble-scrubber = import ./nix/hm-module.nix self;
+      homeManagerModules.default = self.homeManagerModules.scrobble-scrubber;
+    };
 }
