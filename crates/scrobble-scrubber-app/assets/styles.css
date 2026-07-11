@@ -102,6 +102,26 @@ body {
   margin-bottom: 12px;
 }
 
+.setup-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.setup-copy h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.setup-copy p {
+  margin: 0;
+  max-width: 620px;
+  line-height: 1.5;
+}
+
 .muted {
   color: var(--muted);
 }

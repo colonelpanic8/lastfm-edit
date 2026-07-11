@@ -116,6 +116,7 @@ pub fn Dashboard() -> Element {
     let handle = core.handle.clone();
     let backend_sync = core.backend.clone();
     let backend_continuous = core.backend.clone();
+    let backend_rules = core.backend.clone();
     let sync_available = core.sync_available;
 
     let ui_read = ui.read();
@@ -207,8 +208,21 @@ pub fn Dashboard() -> Element {
                 span { class: "pill {sync_pill_class}", "{sync_pill}" }
             }
             if core.rules_empty {
-                div { class: "banner warn",
-                    "No active rules — run `scrobble-scrubber rules enable-defaults` and restart."
+                div { class: "card setup-card",
+                    div { class: "setup-copy",
+                        h2 { "Set up cleanup rules" }
+                        p { class: "muted",
+                            "Start with the built-in rule set for cleaning remasters, special editions, and common metadata noise."
+                        }
+                    }
+                    button {
+                        class: "btn primary",
+                        onclick: move |_| {
+                            let _ = backend_rules
+                                .try_send(crate::core::BackendCommand::EnableDefaultRules);
+                        },
+                        "Enable default rules"
+                    }
                 }
             }
             if let PassState::Paused { until, .. } = &ui_read.pass {

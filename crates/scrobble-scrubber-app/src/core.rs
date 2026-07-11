@@ -6,14 +6,15 @@
 
 use lastfm_edit::LastFmEditClientImpl;
 use scrobble_scrubber::{
-    approve_intent, reinstate_intent, reject_intent, Executor, ExecutorOptions, FsScrubberState,
-    Planner, RewriteRulesScrubActionProvider, ScrubFeed, ScrubberActor, ScrubberCommand,
-    ScrubberEvent, ScrubberEventBus, ScrubberHandle, ScrubberState,
+    approve_intent, load_comprehensive_default_rules, reinstate_intent, reject_intent, Executor,
+    ExecutorOptions, FsScrubberState, Planner, RewriteRulesScrubActionProvider, ScrubFeed,
+    ScrubberActor, ScrubberCommand, ScrubberEvent, ScrubberEventBus, ScrubberHandle, ScrubberState,
 };
 use scrobble_store::{ApiSource, FsStorage, Storage, SyncEngine, SyncEventReceiver};
 use serde::Deserialize;
 use std::cell::Cell;
 use std::path::PathBuf;
+use std::process::Command;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -59,6 +60,8 @@ pub enum BackendCommand {
     Reject { id: Uuid, dismiss: bool },
     /// Un-reject a rejected intent. Same out-of-band path.
     Reinstate(Uuid),
+    /// Seed the embedded cleanup rules, then relaunch so the planner is rebuilt with them.
+    EnableDefaultRules,
 }
 
 /// Everything the UI needs to talk to the backend. All Send; lives in dioxus context.
@@ -128,6 +131,43 @@ struct ScrubberSection {
 impl Default for ScrubberSection {
     fn default() -> Self {
         Self { batch_size: 50 }
+    }
+}
+
+fn pass_entry() -> String {
+    std::env::var("LASTFM_EDIT_PASS_ENTRY").unwrap_or_else(|_| "last.fm".to_string())
+}
+
+fn parse_pass_field(output: &str, field: Option<&str>) -> Option<String> {
+    match field {
+        None => output.lines().next(),
+        Some(field) => output.lines().skip(1).find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            key.trim().eq_ignore_ascii_case(field).then(|| value.trim())
+        }),
+    }
+    .filter(|value| !value.is_empty())
+    .map(str::to_string)
+}
+
+fn credential_from_pass(field: Option<&str>) -> Result<Option<String>, String> {
+    let entry = pass_entry();
+    let output = Command::new("pass")
+        .args(["show", &entry])
+        .output()
+        .map_err(|error| format!("could not run pass: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("pass could not read entry {entry}"));
+    }
+    let output = String::from_utf8(output.stdout)
+        .map_err(|_| format!("pass entry {entry} is not valid UTF-8"))?;
+    Ok(parse_pass_field(&output, field))
+}
+
+fn env_or_pass(name: &str, pass_field: Option<&str>) -> Result<Option<String>, String> {
+    match std::env::var(name) {
+        Ok(value) if !value.is_empty() => Ok(Some(value)),
+        _ => credential_from_pass(pass_field),
     }
 }
 
@@ -282,8 +322,38 @@ async fn backend_main(
                     }
                 });
             }
+            BackendCommand::EnableDefaultRules => {
+                match enable_default_rules(state.as_ref()).await {
+                    Ok(count) => {
+                        tracing::info!(count, "default rules enabled; relaunching");
+                        match std::env::current_exe().and_then(|exe| Command::new(exe).spawn()) {
+                            Ok(_) => std::process::exit(0),
+                            Err(error) => tracing::warn!(%error, "could not relaunch app"),
+                        }
+                    }
+                    Err(error) => tracing::warn!(%error, "could not enable default rules"),
+                }
+            }
         }
     }
+}
+
+async fn enable_default_rules(state: &FsScrubberState) -> scrobble_scrubber::Result<usize> {
+    let mut rules = state.load_rules().await?;
+    let existing: std::collections::HashSet<_> =
+        rules.iter().filter_map(|rule| rule.name.clone()).collect();
+    for rule in load_comprehensive_default_rules() {
+        if rule
+            .name
+            .as_ref()
+            .is_none_or(|name| !existing.contains(name))
+        {
+            rules.push(rule);
+        }
+    }
+    let count = rules.len();
+    state.save_rules(&rules).await?;
+    Ok(count)
 }
 
 /// While enabled: sync (when available) → plan incremental → execute, then wait the
@@ -362,9 +432,8 @@ async fn continuous_loop(
 async fn build(command_tx: mpsc::Sender<BackendCommand>) -> Result<BackendParts, StartupError> {
     let config = load_config();
 
-    let username = std::env::var("LASTFM_EDIT_USERNAME")
-        .ok()
-        .filter(|name| !name.is_empty())
+    let username = env_or_pass("LASTFM_EDIT_USERNAME", Some("user"))
+        .map_err(StartupError::Other)?
         .ok_or(StartupError::NoUsername)?;
 
     let store_root = std::env::var("SCROBBLE_STORE_DIR")
@@ -392,13 +461,29 @@ async fn build(command_tx: mpsc::Sender<BackendCommand>) -> Result<BackendParts,
     let rules_empty = rules.is_empty();
     let active_rules_hash = (!rules_empty).then(|| scrobble_scrubber::rules_hash(&rules));
 
-    // Edit client: saved lastfm-edit session, non-blocking so the executor owns pacing.
-    let session = lastfm_edit::SessionPersistence::load_session(&username)
-        .map_err(|e| StartupError::NoSession(e.to_string()))?;
-    let client = LastFmEditClientImpl::from_session(
-        Box::new(http_client::native::NativeClient::new()),
-        session,
-    )
+    // Edit client: prefer the saved session, but bootstrap it from pass when absent.
+    // The Nix app wrapper supplies pass on PATH even when launched from Finder.
+    let client = match lastfm_edit::SessionPersistence::load_session(&username) {
+        Ok(session) => LastFmEditClientImpl::from_session(
+            Box::new(http_client::native::NativeClient::new()),
+            session,
+        ),
+        Err(session_error) => {
+            let password = env_or_pass("LASTFM_EDIT_PASSWORD", None)
+                .map_err(StartupError::NoSession)?
+                .ok_or_else(|| StartupError::NoSession(session_error.to_string()))?;
+            let client = LastFmEditClientImpl::login_with_credentials(
+                Box::new(http_client::native::NativeClient::new()),
+                &username,
+                &password,
+            )
+            .await
+            .map_err(|error| StartupError::NoSession(error.to_string()))?;
+            lastfm_edit::SessionPersistence::save_session(&client.get_session())
+                .map_err(|error| StartupError::NoSession(error.to_string()))?;
+            client
+        }
+    }
     .non_blocking();
 
     let bus = ScrubberEventBus::new();
@@ -427,8 +512,10 @@ async fn build(command_tx: mpsc::Sender<BackendCommand>) -> Result<BackendParts,
         ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
 
     // Sync engine only when an API key is available.
-    let (sync, sync_events) = match std::env::var("LASTFM_EDIT_API_KEY") {
-        Ok(api_key) if !api_key.is_empty() => {
+    let api_key =
+        env_or_pass("LASTFM_EDIT_API_KEY", Some("api-key")).map_err(StartupError::Other)?;
+    let (sync, sync_events) = match api_key {
+        Some(api_key) => {
             let api_client = lastfm_edit::LastFmApiClientImpl::new(
                 Box::new(http_client::native::NativeClient::new()),
                 username.clone(),
@@ -460,4 +547,28 @@ async fn build(command_tx: mpsc::Sender<BackendCommand>) -> Result<BackendParts,
         sync,
         sync_events,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_pass_field;
+
+    const ENTRY: &str = "secret\nuser: IvanMalison\nurl: https://last.fm\napi-key: key\n";
+
+    #[test]
+    fn parses_password_from_first_line() {
+        assert_eq!(parse_pass_field(ENTRY, None).as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn parses_named_fields_case_insensitively() {
+        assert_eq!(
+            parse_pass_field(ENTRY, Some("USER")).as_deref(),
+            Some("IvanMalison")
+        );
+        assert_eq!(
+            parse_pass_field(ENTRY, Some("api-key")).as_deref(),
+            Some("key")
+        );
+    }
 }

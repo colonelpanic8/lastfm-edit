@@ -31,6 +31,7 @@
               # System dependencies for reqwest/openssl
               pkg-config
               openssl
+              curl
 
               # Additional useful tools
               cargo-watch
@@ -81,7 +82,7 @@
 
         packages.lastfm-edit = pkgs.rustPlatform.buildRustPackage {
           pname = "lastfm-edit";
-          version = "4.1.0";
+          version = "7.0.0";
 
           src = ./.;
 
@@ -108,6 +109,70 @@
 
           # Skip tests in nix build (some tests require filesystem access)
           doCheck = false;
+        };
+
+        packages.scrobble-scrubber-app = pkgs.rustPlatform.buildRustPackage {
+          pname = "scrobble-scrubber-app";
+          version = "0.1.0";
+
+          src = ./.;
+
+          cargoLock.lockFile = ./Cargo.lock;
+          cargoBuildFlags = ["-p" "scrobble-scrubber-app"];
+          cargoTestFlags = ["-p" "scrobble-scrubber-app"];
+
+          nativeBuildInputs = with pkgs; [
+            makeWrapper
+            pkg-config
+          ];
+
+          buildInputs = with pkgs;
+            [
+              openssl
+              curl
+            ]
+            ++ lib.optionals stdenv.isLinux [
+              gtk3
+              webkitgtk_4_1
+              glib
+              glib-networking
+              libsoup_3
+            ];
+
+          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+
+          postInstall = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+            app="$out/Applications/Scrobble Scrubber.app"
+            mkdir -p "$app/Contents/MacOS"
+            ln -s "$out/bin/scrobble-scrubber-app" "$app/Contents/MacOS/scrobble-scrubber-app"
+            cat > "$app/Contents/Info.plist" <<'EOF'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+              <key>CFBundleDisplayName</key>
+              <string>Scrobble Scrubber</string>
+              <key>CFBundleExecutable</key>
+              <string>scrobble-scrubber-app</string>
+              <key>CFBundleIdentifier</key>
+              <string>org.colonelpanic.scrobble-scrubber</string>
+              <key>CFBundleName</key>
+              <string>Scrobble Scrubber</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>0.1.0</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>11.0</string>
+            </dict>
+            </plist>
+            EOF
+          '';
+
+          postFixup = ''
+            wrapProgram "$out/bin/scrobble-scrubber-app" \
+              --prefix PATH : ${pkgs.lib.makeBinPath [pkgs.pass pkgs.gnupg]}
+          '';
         };
 
         packages.default = self.packages.${system}.lastfm-edit;
