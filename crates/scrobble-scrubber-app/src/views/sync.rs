@@ -38,7 +38,7 @@ fn fmt_date(ts: u64) -> String {
 #[component]
 pub fn Sync() -> Element {
     let core = use_context::<CoreSignal>();
-    let ui = use_context::<UiSignal>();
+    let mut ui = use_context::<UiSignal>();
 
     // 1s ticker so the rate-limit countdown stays live (mirrors the dashboard).
     let mut now = use_signal(|| chrono::Utc::now().timestamp());
@@ -58,15 +58,19 @@ pub fn Sync() -> Element {
         let Some(Ok(core)) = core.read().clone() else {
             return SyncData::default();
         };
-        let total = core.store.scrobble_count(None).await.unwrap_or(0);
-        let coverage = core.store.load_coverage().await.unwrap_or_default();
-        let sync_state = core.store.load_sync_state().await.unwrap_or_default();
-        SyncData {
-            total,
-            coverage,
-            history_start_uts: sync_state.history_start_uts,
-            last_sync_at: sync_state.last_sync_at,
-        }
+        let store = core.store.clone();
+        crate::background::run_off_ui_thread(async move {
+            let total = store.scrobble_count(None).await.unwrap_or(0);
+            let coverage = store.load_coverage().await.unwrap_or_default();
+            let sync_state = store.load_sync_state().await.unwrap_or_default();
+            SyncData {
+                total,
+                coverage,
+                history_start_uts: sync_state.history_start_uts,
+                last_sync_at: sync_state.last_sync_at,
+            }
+        })
+        .await
     });
 
     // Keyset-paginated feed, accumulated across "Load more" clicks.
@@ -74,18 +78,23 @@ pub fn Sync() -> Element {
     let mut cursor = use_signal(|| None::<(u64, ScrobbleId)>);
     let mut exhausted = use_signal(|| false);
     let mut loading = use_signal(|| false);
+    let mut reindexing = use_signal(|| false);
+    let mut reindex_error = use_signal(|| None::<String>);
 
     // (Re)load the first page when sync makes progress or the user refreshes.
-    let _first_page = use_resource(move || async move {
+    let first_page = use_resource(move || async move {
         let _reload_on = (sync_epoch(), refresh());
         let Some(Ok(core)) = core.read().clone() else {
             return;
         };
-        let page = core
-            .store
-            .recent_scrobbles(None, PAGE_SIZE)
-            .await
-            .unwrap_or_default();
+        let store = core.store.clone();
+        let page = crate::background::run_off_ui_thread(async move {
+            store
+                .recent_scrobbles(None, PAGE_SIZE)
+                .await
+                .unwrap_or_default()
+        })
+        .await;
         let next = page.last().map(|r| (r.uts, r.id.clone()));
         let full = page.len() == PAGE_SIZE;
         feed.set(page);
@@ -105,11 +114,14 @@ pub fn Sync() -> Element {
                 loading.set(false);
                 return;
             };
-            let page = core
-                .store
-                .recent_scrobbles(next, PAGE_SIZE)
-                .await
-                .unwrap_or_default();
+            let store = core.store.clone();
+            let page = crate::background::run_off_ui_thread(async move {
+                store
+                    .recent_scrobbles(next, PAGE_SIZE)
+                    .await
+                    .unwrap_or_default()
+            })
+            .await;
             if page.len() < PAGE_SIZE {
                 exhausted.set(true);
             }
@@ -152,7 +164,9 @@ pub fn Sync() -> Element {
     let is_syncing = ui_read.sync == SyncStatus::Syncing;
 
     let data_read = data.read();
+    let data_loading = *data.state().read() == UseResourceState::Pending;
     let data = data_read.clone().unwrap_or_default();
+    let feed_loading = *first_page.state().read() == UseResourceState::Pending;
     let last_sync = data
         .last_sync_at
         .map(fmt_ts)
@@ -205,23 +219,63 @@ pub fn Sync() -> Element {
                         disabled: !sync_available || is_syncing,
                         title: if sync_available { "" } else { "set LASTFM_EDIT_API_KEY to enable sync" },
                         onclick: move |_| {
-                            let _ = backend_sync.try_send(crate::core::BackendCommand::SyncNow);
+                            ui.with_mut(|state| state.sync = SyncStatus::Syncing);
+                            let backend = backend_sync.clone();
+                            spawn(async move {
+                                if backend
+                                    .send(crate::core::BackendCommand::SyncNow)
+                                    .await
+                                    .is_err()
+                                {
+                                    ui.with_mut(|state| {
+                                        state.sync = SyncStatus::Idle;
+                                        state.error = Some("the backend is not available".into());
+                                    });
+                                }
+                            });
                         },
                         if is_syncing { "Syncing…" } else { "Sync now" }
                     }
                     button {
                         class: "btn",
                         title: "drop and rebuild the local SQLite index from the flat files",
+                        disabled: reindexing(),
                         onclick: move |_| {
-                            let _ = backend_reindex.try_send(crate::core::BackendCommand::Reindex);
+                            if reindexing() {
+                                return;
+                            }
+                            reindexing.set(true);
+                            reindex_error.set(None);
+                            let backend = backend_reindex.clone();
+                            let (completed, receiver) = tokio::sync::oneshot::channel();
+                            spawn(async move {
+                                let result = match backend
+                                    .send(crate::core::BackendCommand::Reindex { completed })
+                                    .await
+                                {
+                                    Ok(()) => receiver.await.unwrap_or_else(|_| {
+                                        Err("the backend stopped unexpectedly".into())
+                                    }),
+                                    Err(_) => Err("the backend is not available".into()),
+                                };
+                                reindexing.set(false);
+                                match result {
+                                    Ok(()) => refresh.set(refresh() + 1),
+                                    Err(error) => reindex_error.set(Some(error)),
+                                }
+                            });
                         },
-                        "Rebuild index"
+                        if reindexing() { "Rebuilding…" } else { "Rebuild index" }
                     }
                     button {
                         class: "btn",
+                        disabled: data_loading,
                         onclick: move |_| refresh.set(refresh() + 1),
-                        "Refresh"
+                        if data_loading { "Refreshing…" } else { "Refresh" }
                     }
+                }
+                if let Some(error) = reindex_error() {
+                    div { class: "banner danger", role: "alert", "{error}" }
                 }
             }
 
@@ -260,7 +314,9 @@ pub fn Sync() -> Element {
 
             div { class: "card",
                 div { class: "lib-panel-title", "Recent scrobbles" }
-                if feed_items.is_empty() {
+                if feed_loading {
+                    div { class: "muted", "Loading recent scrobbles…" }
+                } else if feed_items.is_empty() {
                     div { class: "muted", "no scrobbles yet — sync to populate the mirror" }
                 } else {
                     div { class: "feed-list",

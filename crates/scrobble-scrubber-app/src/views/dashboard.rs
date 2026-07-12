@@ -31,7 +31,7 @@ struct Stats {
 #[component]
 pub fn Dashboard() -> Element {
     let core = use_context::<CoreSignal>();
-    let ui = use_context::<UiSignal>();
+    let mut ui = use_context::<UiSignal>();
 
     // 1s ticker so the rate-limit countdown stays live.
     let mut now = use_signal(|| chrono::Utc::now().timestamp());
@@ -48,67 +48,74 @@ pub fn Dashboard() -> Element {
         let Some(Ok(core)) = core.read().clone() else {
             return Stats::default();
         };
-        let latest_uts = core.store.latest_uts().await.ok().flatten();
-        let (sync_span, sync_total) = match core.store.load_coverage().await {
-            Ok(map) => (
-                map.first()
-                    .zip(map.last())
-                    .map(|(first, last)| (first.start, last.end)),
-                map.total_covered(),
-            ),
-            Err(_) => (None, 0),
-        };
-        let (rule_span, rule_total, rule_coverage_stale) =
-            match core.state.load_provider_coverage("rewrite_rules").await {
-                Ok(provider) => {
-                    // Never-planned stores have no hash; only a *different* hash is stale.
-                    let stale =
-                        provider.rules_hash.is_some() && provider.rules_hash != core.rules_hash;
-                    (
-                        provider
-                            .coverage
-                            .first()
-                            .zip(provider.coverage.last())
-                            .map(|(first, last)| (first.start, last.end)),
-                        provider.coverage.total_covered(),
-                        stale,
-                    )
-                }
-                Err(_) => (None, 0, false),
+        let store = core.store.clone();
+        let state = core.state.clone();
+        let rules_hash = core.rules_hash.clone();
+        crate::background::run_off_ui_thread(async move {
+            let latest_uts = store.latest_uts().await.ok().flatten();
+            let (sync_span, sync_total) = match store.load_coverage().await {
+                Ok(map) => (
+                    map.first()
+                        .zip(map.last())
+                        .map(|(first, last)| (first.start, last.end)),
+                    map.total_covered(),
+                ),
+                Err(_) => (None, 0),
             };
-        let mut stats = Stats {
-            latest_uts,
-            sync_span,
-            sync_total,
-            rule_span,
-            rule_total,
-            rule_coverage_stale,
-            ..Stats::default()
-        };
-        if let Ok(queue) = core.state.load_queue().await {
-            for intent in &queue {
-                let review = review_status(intent);
-                if review == ReviewStatus::NeedsReview {
-                    stats.needs_review += 1;
-                }
-                match work_status(intent) {
-                    // "queued" means accepted and waiting; unreviewed intents are
-                    // counted on the review axis instead.
-                    Some(WorkStatus::Queued) if review == ReviewStatus::Accepted => {
-                        stats.queued += 1;
+            let (rule_span, rule_total, rule_coverage_stale) =
+                match state.load_provider_coverage("rewrite_rules").await {
+                    Ok(provider) => {
+                        // Never-planned stores have no hash; only a *different* hash is stale.
+                        let stale =
+                            provider.rules_hash.is_some() && provider.rules_hash != rules_hash;
+                        (
+                            provider
+                                .coverage
+                                .first()
+                                .zip(provider.coverage.last())
+                                .map(|(first, last)| (first.start, last.end)),
+                            provider.coverage.total_covered(),
+                            stale,
+                        )
                     }
-                    Some(WorkStatus::Partial { .. }) => stats.partial += 1,
-                    Some(WorkStatus::Done) => stats.done += 1,
-                    _ => {}
+                    Err(_) => (None, 0, false),
+                };
+            let mut stats = Stats {
+                latest_uts,
+                sync_span,
+                sync_total,
+                rule_span,
+                rule_total,
+                rule_coverage_stale,
+                ..Stats::default()
+            };
+            if let Ok(queue) = state.load_queue().await {
+                for intent in &queue {
+                    let review = review_status(intent);
+                    if review == ReviewStatus::NeedsReview {
+                        stats.needs_review += 1;
+                    }
+                    match work_status(intent) {
+                        // "queued" means accepted and waiting; unreviewed intents are
+                        // counted on the review axis instead.
+                        Some(WorkStatus::Queued) if review == ReviewStatus::Accepted => {
+                            stats.queued += 1;
+                        }
+                        Some(WorkStatus::Partial { .. }) => stats.partial += 1,
+                        Some(WorkStatus::Done) => stats.done += 1,
+                        _ => {}
+                    }
                 }
             }
-        }
-        stats
+            stats
+        })
+        .await
     });
 
     // Continuous-mode controls (mirrored to the backend loop on toggle).
     let mut continuous = use_signal(|| false);
     let mut interval_input = use_signal(|| "300".to_string());
+    let mut enabling_rules = use_signal(|| false);
 
     let Some(Ok(core)) = core.read().clone() else {
         return rsx! {};
@@ -171,6 +178,7 @@ pub fn Dashboard() -> Element {
 
     let stats_read = stats.read();
     let stats_now = stats_read.clone().unwrap_or_default();
+    let stats_loading = *stats.state().read() == UseResourceState::Pending;
     let latest = stats_now
         .latest_uts
         .map(fmt_ts)
@@ -206,6 +214,9 @@ pub fn Dashboard() -> Element {
                 span { class: "pill {exec_pill_class}", "{exec_pill}" }
                 span { class: "pill {plan_pill_class}", "{plan_pill}" }
                 span { class: "pill {sync_pill_class}", "{sync_pill}" }
+                if stats_loading {
+                    span { class: "pill accent", "Refreshing dashboard…" }
+                }
             }
             if core.rules_empty {
                 div { class: "card setup-card",
@@ -217,11 +228,27 @@ pub fn Dashboard() -> Element {
                     }
                     button {
                         class: "btn primary",
+                        disabled: enabling_rules(),
                         onclick: move |_| {
-                            let _ = backend_rules
-                                .try_send(crate::core::BackendCommand::EnableDefaultRules);
+                            if enabling_rules() {
+                                return;
+                            }
+                            enabling_rules.set(true);
+                            let backend = backend_rules.clone();
+                            spawn(async move {
+                                if backend
+                                    .send(crate::core::BackendCommand::EnableDefaultRules)
+                                    .await
+                                    .is_err()
+                                {
+                                    enabling_rules.set(false);
+                                    ui.with_mut(|state| {
+                                        state.error = Some("the backend is not available".into());
+                                    });
+                                }
+                            });
                         },
-                        "Enable default rules"
+                        if enabling_rules() { "Enabling…" } else { "Enable default rules" }
                     }
                 }
             }
@@ -267,7 +294,20 @@ pub fn Dashboard() -> Element {
                         disabled: !sync_available || ui_read.sync == SyncStatus::Syncing,
                         title: if sync_available { "" } else { "set LASTFM_EDIT_API_KEY to enable sync" },
                         onclick: move |_| {
-                            let _ = backend_sync.try_send(crate::core::BackendCommand::SyncNow);
+                            ui.with_mut(|state| state.sync = SyncStatus::Syncing);
+                            let backend = backend_sync.clone();
+                            spawn(async move {
+                                if backend
+                                    .send(crate::core::BackendCommand::SyncNow)
+                                    .await
+                                    .is_err()
+                                {
+                                    ui.with_mut(|state| {
+                                        state.sync = SyncStatus::Idle;
+                                        state.error = Some("the backend is not available".into());
+                                    });
+                                }
+                            });
                         },
                         if ui_read.sync == SyncStatus::Syncing { "Syncing…" } else { "Sync now" }
                     }
@@ -275,9 +315,24 @@ pub fn Dashboard() -> Element {
                         class: "btn primary",
                         disabled: ui_read.plan != PlanStatus::Idle,
                         onclick: move |_| {
-                            let _ = handle.try_send(ScrubberCommand::PlanFeed(ScrubFeed::Incremental {
-                                window: None,
-                            }));
+                            ui.with_mut(|state| {
+                                state.plan = PlanStatus::Planning { subjects: 0 };
+                            });
+                            let handle = handle.clone();
+                            spawn(async move {
+                                if handle
+                                    .send(ScrubberCommand::PlanFeed(ScrubFeed::Incremental {
+                                        window: None,
+                                    }))
+                                    .await
+                                    .is_err()
+                                {
+                                    ui.with_mut(|state| {
+                                        state.plan = PlanStatus::Idle;
+                                        state.error = Some("the scrubber actor is not available".into());
+                                    });
+                                }
+                            });
                         },
                         "{plan_label}"
                     }
@@ -292,11 +347,22 @@ pub fn Dashboard() -> Element {
                                 .trim()
                                 .parse::<u64>()
                                 .unwrap_or(300);
-                            let _ = backend_continuous
-                                .try_send(crate::core::BackendCommand::SetContinuous {
-                                    enabled,
-                                    interval_secs,
-                                });
+                            let backend = backend_continuous.clone();
+                            spawn(async move {
+                                if backend
+                                    .send(crate::core::BackendCommand::SetContinuous {
+                                        enabled,
+                                        interval_secs,
+                                    })
+                                    .await
+                                    .is_err()
+                                {
+                                    continuous.set(!enabled);
+                                    ui.with_mut(|state| {
+                                        state.error = Some("the backend is not available".into());
+                                    });
+                                }
+                            });
                             continuous.set(enabled);
                         },
                         if continuous() { "Stop continuous" } else { "Start continuous" }

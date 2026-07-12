@@ -1,5 +1,6 @@
 //! scrobble-scrubber desktop app: review and drive scrobble metadata cleanup.
 
+mod background;
 mod components;
 mod core;
 mod desktop;

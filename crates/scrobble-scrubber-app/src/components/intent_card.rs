@@ -6,6 +6,35 @@ use crate::model::{edit_diff, fmt_ts};
 use crate::CoreSignal;
 use dioxus::prelude::*;
 use scrobble_scrubber::{work_status, EditIntent, InstanceStatus, IntentState, WorkStatus};
+use tokio::sync::{mpsc, oneshot};
+
+fn dispatch_action(
+    backend: mpsc::Sender<BackendCommand>,
+    label: &'static str,
+    command: impl FnOnce(oneshot::Sender<Result<(), String>>) -> BackendCommand + 'static,
+    mut pending: Signal<Option<&'static str>>,
+    mut action_error: Signal<Option<String>>,
+) {
+    if pending.peek().is_some() {
+        return;
+    }
+    pending.set(Some(label));
+    action_error.set(None);
+    let (completed, receiver) = oneshot::channel();
+    let command = command(completed);
+    spawn(async move {
+        let result = match backend.send(command).await {
+            Ok(()) => receiver
+                .await
+                .unwrap_or_else(|_| Err("the backend stopped unexpectedly".into())),
+            Err(_) => Err("the backend is not available".into()),
+        };
+        pending.set(None);
+        if let Err(error) = result {
+            action_error.set(Some(error));
+        }
+    });
+}
 
 /// Which view the card is rendered in; picks the action row and state wording.
 #[derive(Clone, Copy, PartialEq)]
@@ -18,6 +47,8 @@ pub enum CardContext {
 #[component]
 pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
     let core = use_context::<CoreSignal>();
+    let pending = use_signal(|| None::<&'static str>);
+    let action_error = use_signal(|| None::<String>);
     let Some(Ok(core)) = core.read().clone() else {
         return rsx! {};
     };
@@ -39,7 +70,7 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
     let total = intent.instances.len();
     let done = intent.done_count();
     let failed = intent.failed_count();
-    let pending = intent.pending_count();
+    let pending_count = intent.pending_count();
     let percent = if total > 0 { done * 100 / total } else { 0 };
     let failures: Vec<(String, u32, String)> = intent
         .instances
@@ -85,8 +116,8 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
                     if failed > 0 {
                         span { ", {failed} failed" }
                     }
-                    if pending > 0 {
-                        span { ", {pending} pending" }
+                    if pending_count > 0 {
+                        span { ", {pending_count} pending" }
                     }
                     div { class: "bar",
                         div { class: "fill", style: "width: {percent}%;" }
@@ -101,37 +132,64 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
             if let IntentState::Abandoned { reason } = &intent.state {
                 div { class: "banner warn", "abandoned: {reason}" }
             }
+            if let Some(error) = action_error() {
+                div { class: "banner danger", role: "alert", "{error}" }
+            }
             match context {
                 CardContext::Review => rsx! {
                     div { class: "actions",
                         button {
                             class: "btn primary",
+                            disabled: pending().is_some(),
                             onclick: move |_| {
-                                let _ = backend.try_send(BackendCommand::Approve(id));
+                                dispatch_action(
+                                    backend.clone(),
+                                    "Approving…",
+                                    move |completed| BackendCommand::Approve { id, completed },
+                                    pending,
+                                    action_error,
+                                );
                             },
                             "Approve"
                         }
                         button {
                             class: "btn",
+                            disabled: pending().is_some(),
                             onclick: move |_| {
-                                let _ = backend_reject
-                                    .try_send(BackendCommand::Reject {
+                                dispatch_action(
+                                    backend_reject.clone(),
+                                    "Rejecting…",
+                                    move |completed| BackendCommand::Reject {
                                         id,
                                         dismiss: false,
-                                    });
+                                        completed,
+                                    },
+                                    pending,
+                                    action_error,
+                                );
                             },
                             "Reject"
                         }
                         button {
                             class: "btn danger",
+                            disabled: pending().is_some(),
                             onclick: move |_| {
-                                let _ = backend_dismiss
-                                    .try_send(BackendCommand::Reject {
+                                dispatch_action(
+                                    backend_dismiss.clone(),
+                                    "Dismissing…",
+                                    move |completed| BackendCommand::Reject {
                                         id,
                                         dismiss: true,
-                                    });
+                                        completed,
+                                    },
+                                    pending,
+                                    action_error,
+                                );
                             },
                             "Reject + dismiss subject"
+                        }
+                        if let Some(label) = pending() {
+                            span { class: "pill accent", "{label}" }
                         }
                     }
                 },
@@ -140,14 +198,21 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
                         button {
                             class: "btn danger",
                             title: "reject this accepted intent so the executor skips it",
+                            disabled: pending().is_some(),
                             onclick: move |_| {
-                                let _ = backend_remove
-                                    .try_send(BackendCommand::Reject {
+                                dispatch_action(
+                                    backend_remove.clone(),
+                                    "Removing…",
+                                    move |completed| BackendCommand::Reject {
                                         id,
                                         dismiss: false,
-                                    });
+                                        completed,
+                                    },
+                                    pending,
+                                    action_error,
+                                );
                             },
-                            "Remove from queue"
+                            if let Some(label) = pending() { "{label}" } else { "Remove from queue" }
                         }
                     }
                 },
@@ -157,11 +222,17 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
                             div { class: "actions",
                                 button {
                                     class: "btn",
+                                    disabled: pending().is_some(),
                                     onclick: move |_| {
-                                        let _ = backend_reinstate
-                                            .try_send(BackendCommand::Reinstate(id));
+                                        dispatch_action(
+                                            backend_reinstate.clone(),
+                                            "Reinstating…",
+                                            move |completed| BackendCommand::Reinstate { id, completed },
+                                            pending,
+                                            action_error,
+                                        );
                                     },
-                                    "Reinstate"
+                                    if let Some(label) = pending() { "{label}" } else { "Reinstate" }
                                 }
                             }
                         }

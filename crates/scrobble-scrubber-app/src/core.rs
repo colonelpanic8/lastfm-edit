@@ -50,7 +50,7 @@ impl std::fmt::Display for StartupError {
 }
 
 /// Control messages for the backend thread (things a [`ScrubberCommand`] can't express).
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum BackendCommand {
     /// Extend sync coverage to now (no-op without an API key).
     SyncNow,
@@ -61,15 +61,27 @@ pub enum BackendCommand {
     StopExecution,
     /// Release an awaiting-approval intent. Runs directly against the durable queue
     /// (not the actor's serial channel), so it stays responsive during an execute pass.
-    Approve(Uuid),
+    Approve {
+        id: Uuid,
+        completed: oneshot::Sender<Result<(), String>>,
+    },
     /// Decline an open intent, optionally dismissing its subject. Same out-of-band path.
-    Reject { id: Uuid, dismiss: bool },
+    Reject {
+        id: Uuid,
+        dismiss: bool,
+        completed: oneshot::Sender<Result<(), String>>,
+    },
     /// Un-reject a rejected intent. Same out-of-band path.
-    Reinstate(Uuid),
+    Reinstate {
+        id: Uuid,
+        completed: oneshot::Sender<Result<(), String>>,
+    },
     /// Seed the embedded cleanup rules, then relaunch so the planner is rebuilt with them.
     EnableDefaultRules,
     /// Drop and rebuild the derived SQLite index from the flat-file source of truth.
-    Reindex,
+    Reindex {
+        completed: oneshot::Sender<Result<(), String>>,
+    },
 }
 
 /// Everything the UI needs to talk to the backend. All Send; lives in dioxus context.
@@ -433,51 +445,72 @@ async fn backend_main(
             // actor's serial command channel, so they resolve during an execute pass's
             // await points instead of queueing behind it. Appends are atomic and the fold
             // is order-tolerant, so this is safe alongside the executor's own appends.
-            BackendCommand::Approve(id) => {
+            BackendCommand::Approve { id, completed } => {
                 let state = state.clone();
                 let handle = handle.clone();
                 tokio::task::spawn_local(async move {
-                    match approve_intent(state.as_ref(), id).await {
+                    let result = approve_intent(state.as_ref(), id)
+                        .await
+                        .map_err(|error| error.to_string());
+                    match &result {
                         Ok(()) => handle
                             .event_bus()
                             .emit(ScrubberEvent::IntentApproved { id }),
                         Err(error) => tracing::warn!(%error, %id, "approve failed"),
                     }
+                    let _ = completed.send(result);
                 });
             }
-            BackendCommand::Reject { id, dismiss } => {
+            BackendCommand::Reject {
+                id,
+                dismiss,
+                completed,
+            } => {
                 let state = state.clone();
                 let handle = handle.clone();
                 tokio::task::spawn_local(async move {
-                    match reject_intent(state.as_ref(), id, dismiss).await {
+                    let result = reject_intent(state.as_ref(), id, dismiss)
+                        .await
+                        .map_err(|error| error.to_string());
+                    match &result {
                         Ok(()) => handle.event_bus().emit(ScrubberEvent::IntentRejected {
                             id,
                             dismissed: dismiss,
                         }),
                         Err(error) => tracing::warn!(%error, %id, "reject failed"),
                     }
+                    let _ = completed.send(result);
                 });
             }
-            BackendCommand::Reinstate(id) => {
+            BackendCommand::Reinstate { id, completed } => {
                 let state = state.clone();
                 let handle = handle.clone();
                 tokio::task::spawn_local(async move {
-                    match reinstate_intent(state.as_ref(), id).await {
+                    let result = reinstate_intent(state.as_ref(), id)
+                        .await
+                        .map_err(|error| error.to_string());
+                    match &result {
                         Ok(()) => handle
                             .event_bus()
                             .emit(ScrubberEvent::IntentReinstated { id }),
                         Err(error) => tracing::warn!(%error, %id, "reinstate failed"),
                     }
+                    let _ = completed.send(result);
                 });
             }
-            BackendCommand::Reindex => {
+            BackendCommand::Reindex { completed } => {
                 // Rebuild the derived index off the command loop so the UI stays responsive.
                 let store = reindex_store.clone();
                 tokio::task::spawn_local(async move {
-                    match store.reindex().await {
+                    let result = crate::background::run_off_ui_thread(async move {
+                        store.reindex().await.map_err(|error| error.to_string())
+                    })
+                    .await;
+                    match &result {
                         Ok(()) => tracing::info!("index rebuilt"),
                         Err(error) => tracing::warn!(%error, "reindex failed"),
                     }
+                    let _ = completed.send(result);
                 });
             }
             BackendCommand::EnableDefaultRules => {

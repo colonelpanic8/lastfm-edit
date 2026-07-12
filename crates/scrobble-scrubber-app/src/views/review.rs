@@ -11,6 +11,8 @@ use scrobble_scrubber::{review_status, EditIntent, ReviewStatus};
 pub fn Review() -> Element {
     let core = use_context::<CoreSignal>();
     let queue = use_queue();
+    let mut approve_progress = use_signal(|| None::<(usize, usize)>);
+    let mut approve_error = use_signal(|| None::<String>);
 
     let queue_read = queue.read();
     let Some(intents) = &*queue_read else {
@@ -40,24 +42,62 @@ pub fn Review() -> Element {
                     span { class: "headline-count", "{header}" }
                     button {
                         class: "btn primary",
+                        disabled: approve_progress().is_some(),
                         onclick: move |_| {
                             let Some(Ok(core)) = core.read().clone() else { return };
                             if let Some(intents) = &*queue.read() {
-                                for intent in intents
+                                let ids: Vec<_> = intents
                                     .iter()
                                     .filter(|i| review_status(i) == ReviewStatus::NeedsReview)
-                                {
-                                    let _ = core
-                                        .backend
-                                        .try_send(BackendCommand::Approve(intent.id));
-                                }
+                                    .map(|intent| intent.id)
+                                    .collect();
+                                let total = ids.len();
+                                let backend = core.backend.clone();
+                                approve_progress.set(Some((0, total)));
+                                approve_error.set(None);
+                                spawn(async move {
+                                    for (index, id) in ids.into_iter().enumerate() {
+                                        let (completed, receiver) = tokio::sync::oneshot::channel();
+                                        if backend
+                                            .send(BackendCommand::Approve { id, completed })
+                                            .await
+                                            .is_err()
+                                        {
+                                            approve_error.set(Some("the backend is not available".into()));
+                                            break;
+                                        }
+                                        match receiver.await {
+                                            Ok(Ok(())) => approve_progress.set(Some((index + 1, total))),
+                                            Ok(Err(error)) => {
+                                                approve_error.set(Some(error));
+                                                break;
+                                            }
+                                            Err(_) => {
+                                                approve_error.set(Some("the backend stopped unexpectedly".into()));
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    approve_progress.set(None);
+                                });
                             }
                         },
-                        "Approve all ({count})"
+                        if let Some((done, total)) = approve_progress() {
+                            "Approving… {done}/{total}"
+                        } else {
+                            "Approve all ({count})"
+                        }
                     }
                 }
+                if let Some(error) = approve_error() {
+                    div { class: "banner danger", role: "alert", "{error}" }
+                }
                 for intent in pending {
-                    IntentCard { intent: intent.clone(), context: CardContext::Review }
+                    IntentCard {
+                        key: "{intent.id}",
+                        intent: intent.clone(),
+                        context: CardContext::Review,
+                    }
                 }
             }
         }

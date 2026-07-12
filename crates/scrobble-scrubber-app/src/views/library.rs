@@ -73,45 +73,43 @@ pub fn Library() -> Element {
         let Some(Ok(core)) = core.read().clone() else {
             return LibraryData::default();
         };
-        let total = core.store.scrobble_count(None).await.unwrap_or(0);
-        let latest_uts = core.store.latest_uts().await.ok().flatten();
-        let (sync_span, sync_total, last_sync_at) = match core.store.load_coverage().await {
-            Ok(map) => {
-                let last_sync_at = core
-                    .store
-                    .load_sync_state()
-                    .await
-                    .ok()
-                    .and_then(|s| s.last_sync_at);
-                (
-                    map.first()
-                        .zip(map.last())
-                        .map(|(first, last)| (first.start, last.end)),
-                    map.total_covered(),
-                    last_sync_at,
-                )
+        let store = core.store.clone();
+        crate::background::run_off_ui_thread(async move {
+            let total = store.scrobble_count(None).await.unwrap_or(0);
+            let latest_uts = store.latest_uts().await.ok().flatten();
+            let (sync_span, sync_total, last_sync_at) = match store.load_coverage().await {
+                Ok(map) => {
+                    let last_sync_at = store
+                        .load_sync_state()
+                        .await
+                        .ok()
+                        .and_then(|s| s.last_sync_at);
+                    (
+                        map.first()
+                            .zip(map.last())
+                            .map(|(first, last)| (first.start, last.end)),
+                        map.total_covered(),
+                        last_sync_at,
+                    )
+                }
+                Err(_) => (None, 0, None),
+            };
+            let artists = store
+                .top_artists(25, range.clone())
+                .await
+                .unwrap_or_default();
+            let albums = store.top_albums(None, 25, range).await.unwrap_or_default();
+            LibraryData {
+                total,
+                latest_uts,
+                sync_span,
+                sync_total,
+                last_sync_at,
+                artists,
+                albums,
             }
-            Err(_) => (None, 0, None),
-        };
-        let artists = core
-            .store
-            .top_artists(25, range.clone())
-            .await
-            .unwrap_or_default();
-        let albums = core
-            .store
-            .top_albums(None, 25, range)
-            .await
-            .unwrap_or_default();
-        LibraryData {
-            total,
-            latest_uts,
-            sync_span,
-            sync_total,
-            last_sync_at,
-            artists,
-            albums,
-        }
+        })
+        .await
     });
 
     let drill = use_resource(move || async move {
@@ -123,20 +121,23 @@ pub fn Library() -> Element {
         let Some(Ok(core)) = core.read().clone() else {
             return DrillData::default();
         };
-        let tracks = core
-            .store
-            .top_tracks(Some(&artist), 25, range.clone())
-            .await
-            .unwrap_or_default();
-        let albums = core
-            .store
-            .top_albums(Some(&artist), 25, range)
-            .await
-            .unwrap_or_default();
-        DrillData { tracks, albums }
+        let store = core.store.clone();
+        crate::background::run_off_ui_thread(async move {
+            let tracks = store
+                .top_tracks(Some(&artist), 25, range.clone())
+                .await
+                .unwrap_or_default();
+            let albums = store
+                .top_albums(Some(&artist), 25, range)
+                .await
+                .unwrap_or_default();
+            DrillData { tracks, albums }
+        })
+        .await
     });
 
     let data_read = data.read();
+    let data_loading = *data.state().read() == UseResourceState::Pending;
     let Some(data) = &*data_read else {
         return rsx! {
             div { class: "page",
@@ -207,8 +208,9 @@ pub fn Library() -> Element {
                 }
                 button {
                     class: "btn",
+                    disabled: data_loading,
                     onclick: move |_| refresh.set(refresh() + 1),
-                    "Refresh"
+                    if data_loading { "Refreshing…" } else { "Refresh" }
                 }
             }
             if total == 0 {
@@ -217,6 +219,7 @@ pub fn Library() -> Element {
                 if let Some(artist) = selected_artist() {
                     {
                         let drill_read = drill.read();
+                        let drill_loading = *drill.state().read() == UseResourceState::Pending;
                         let drill = drill_read.clone().unwrap_or_default();
                         let track_max = drill.tracks.first().map(|t| t.count).unwrap_or(1).max(1);
                         let album_max = drill.albums.first().map(|a| a.count).unwrap_or(1).max(1);
@@ -229,6 +232,9 @@ pub fn Library() -> Element {
                                         onclick: move |_| selected_artist.set(None),
                                         "← back"
                                     }
+                                }
+                                if drill_loading {
+                                    div { class: "muted", "Loading artist details…" }
                                 }
                                 div { class: "lib-panels",
                                     div {

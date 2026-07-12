@@ -81,7 +81,11 @@ pub fn History() -> Element {
         let Some(Ok(core)) = core.read().clone() else {
             return Vec::new();
         };
-        core.store.load_edit_log().await.unwrap_or_default()
+        let store = core.store.clone();
+        crate::background::run_off_ui_thread(async move {
+            store.load_edit_log().await.unwrap_or_default()
+        })
+        .await
     });
 
     let queue_read = queue.read();
@@ -96,6 +100,7 @@ pub fn History() -> Element {
 
     let log_read = edit_log.read();
     let log_entries = log_read.as_deref().unwrap_or(&[]);
+    let edit_log_loading = *edit_log.state().read() == UseResourceState::Pending;
 
     let count = |t: Tab| match t {
         Tab::EditLog => log_entries.len(),
@@ -138,7 +143,9 @@ pub fn History() -> Element {
                 }
             }
             if tab() == Tab::EditLog {
-                if log_visible.is_empty() {
+                if edit_log_loading {
+                    div { class: "card muted", "Loading edit log…" }
+                } else if log_visible.is_empty() {
                     div { class: "card muted", "{empty_label}" }
                 }
                 for entry in log_visible {
@@ -174,7 +181,11 @@ pub fn History() -> Element {
                     div { class: "card muted", "{empty_label}" }
                 }
                 for intent in visible {
-                    IntentCard { intent: intent.clone(), context: CardContext::History }
+                    IntentCard {
+                        key: "{intent.id}",
+                        intent: intent.clone(),
+                        context: CardContext::History,
+                    }
                 }
             }
         }

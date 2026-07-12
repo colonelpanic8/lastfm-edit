@@ -33,7 +33,8 @@ pub(crate) fn use_queue() -> Resource<Vec<EditIntent>> {
         let Some(Ok(core)) = core.read().clone() else {
             return Vec::new();
         };
-        match core.state.load_queue().await {
+        let state = core.state.clone();
+        match crate::background::run_off_ui_thread(async move { state.load_queue().await }).await {
             Ok(intents) => {
                 tracing::debug!(count = intents.len(), "queue loaded");
                 intents

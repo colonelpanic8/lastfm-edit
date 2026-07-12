@@ -12,7 +12,7 @@ use scrobble_scrubber::{work_queue_view, ScrubberCommand};
 #[component]
 pub fn WorkQueue() -> Element {
     let core = use_context::<CoreSignal>();
-    let ui = use_context::<UiSignal>();
+    let mut ui = use_context::<UiSignal>();
     let queue = use_queue();
     let mut budget_input = use_signal(String::new);
 
@@ -121,8 +121,22 @@ pub fn WorkQueue() -> Element {
                         disabled: !is_idle,
                         onclick: move |_| {
                             let max_edits = budget_input.peek().trim().parse::<u32>().ok();
-                            let _ = handle_exec
-                                .try_send(ScrubberCommand::ExecuteOnce { max_edits });
+                            ui.with_mut(|state| {
+                                state.pass = PassState::Running(Default::default());
+                            });
+                            let handle = handle_exec.clone();
+                            spawn(async move {
+                                if handle
+                                    .send(ScrubberCommand::ExecuteOnce { max_edits })
+                                    .await
+                                    .is_err()
+                                {
+                                    ui.with_mut(|state| {
+                                        state.pass = PassState::Idle;
+                                        state.error = Some("the scrubber actor is not available".into());
+                                    });
+                                }
+                            });
                         },
                         "Execute"
                     }
@@ -138,7 +152,10 @@ pub fn WorkQueue() -> Element {
                         disabled: is_idle,
                         title: "interrupt the in-flight execute pass; unfinished intents stay in progress",
                         onclick: move |_| {
-                            let _ = backend_stop.try_send(BackendCommand::StopExecution);
+                            let backend = backend_stop.clone();
+                            spawn(async move {
+                                let _ = backend.send(BackendCommand::StopExecution).await;
+                            });
                         },
                         "Stop execution"
                     }
@@ -148,7 +165,11 @@ pub fn WorkQueue() -> Element {
                 div { class: "card muted", "nothing queued for execution" }
             }
             for item in view.items {
-                IntentCard { intent: item.intent, context: CardContext::WorkQueue }
+                IntentCard {
+                    key: "{item.intent.id}",
+                    intent: item.intent,
+                    context: CardContext::WorkQueue,
+                }
             }
         }
     }
