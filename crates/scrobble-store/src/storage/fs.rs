@@ -15,7 +15,7 @@
 //! including duplicated or interleaved lines — folds back into the same state.
 
 use super::index::Index;
-use super::{AppendStats, ArtistCount, Storage, SyncState, TrackCount};
+use super::{AlbumCount, AppendStats, ArtistCount, Storage, SyncState, TrackCount};
 use crate::coverage::{CoverageMap, Segment};
 use crate::error::Result;
 use crate::id::ScrobbleId;
@@ -448,6 +448,19 @@ impl Storage for FsStorage {
         self.with_index(|index| index.top_tracks(artist, limit, &range))
     }
 
+    async fn top_albums(
+        &self,
+        artist: Option<&str>,
+        limit: usize,
+        range: Option<Range<u64>>,
+    ) -> Result<Vec<AlbumCount>> {
+        self.with_index(|index| index.top_albums(artist, limit, &range))
+    }
+
+    async fn scrobble_count(&self, range: Option<Range<u64>>) -> Result<u64> {
+        self.with_index(|index| index.scrobble_count(&range))
+    }
+
     async fn artist_scrobbles(
         &self,
         artist: &str,
@@ -492,6 +505,13 @@ mod tests {
             fetched_at,
             deleted: false,
             v: 1,
+        }
+    }
+
+    fn rec_album(uts: u64, artist: &str, track: &str, album: Option<&str>) -> ScrobbleRecord {
+        ScrobbleRecord {
+            album: album.map(str::to_string),
+            ..rec(uts, artist, track, 1)
         }
     }
 
@@ -683,6 +703,54 @@ mod tests {
         store.append_scrobbles(&[dead]).await.unwrap();
         let artists = store.top_artists(10, None).await.unwrap();
         assert_eq!(artists.iter().find(|a| a.artist == "A").unwrap().count, 2);
+    }
+
+    #[tokio::test]
+    async fn top_albums_and_scrobble_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsStorage::open(dir.path()).unwrap();
+        store
+            .append_scrobbles(&[
+                rec_album(JAN, "A", "x", Some("One")),
+                rec_album(JAN + 60, "A", "y", Some("One")),
+                rec_album(JAN + 120, "A", "z", Some("Two")),
+                rec_album(FEB, "B", "w", Some("Three")),
+                rec_album(FEB + 60, "A", "n", None),
+                rec_album(FEB + 120, "A", "e", Some("")),
+            ])
+            .await
+            .unwrap();
+
+        let albums = store.top_albums(None, 10, None).await.unwrap();
+        assert_eq!(
+            albums[0],
+            AlbumCount {
+                artist: "A".into(),
+                album: "One".into(),
+                count: 2
+            }
+        );
+        // None and empty albums are excluded.
+        assert_eq!(albums.len(), 3);
+
+        let a_albums = store.top_albums(Some("A"), 10, None).await.unwrap();
+        assert_eq!(a_albums.len(), 2);
+        assert!(a_albums.iter().all(|a| a.artist == "A"));
+
+        assert_eq!(store.scrobble_count(None).await.unwrap(), 6);
+        assert_eq!(store.scrobble_count(Some(JAN..JAN + 121)).await.unwrap(), 3);
+
+        // Tombstones drop out of both aggregates.
+        store
+            .append_scrobbles(&[rec_album(JAN, "A", "x", Some("One")).into_tombstone(9)])
+            .await
+            .unwrap();
+        assert_eq!(store.scrobble_count(None).await.unwrap(), 5);
+        let albums = store.top_albums(None, 10, None).await.unwrap();
+        assert_eq!(
+            albums.iter().find(|a| a.album == "One").map(|a| a.count),
+            Some(1)
+        );
     }
 
     #[tokio::test]
