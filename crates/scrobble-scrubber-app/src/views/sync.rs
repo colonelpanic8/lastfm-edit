@@ -6,10 +6,10 @@ use crate::model::{fmt_ts, SyncStatus};
 use crate::{CoreSignal, UiSignal};
 use chrono::{DateTime, Local};
 use dioxus::prelude::*;
-use scrobble_store::{CoverageMap, ScrobbleId, ScrobbleRecord, Storage};
+use scrobble_store::{CoverageMap, ScrobbleGroup, Storage};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// One page of the recent-scrobbles feed.
+/// One page of grouped scrobble-history search results.
 const PAGE_SIZE: usize = 50;
 
 /// Status/coverage figures, reloaded when a sync completes (or on manual refresh).
@@ -73,33 +73,48 @@ pub fn Sync() -> Element {
         .await
     });
 
-    // Keyset-paginated feed, accumulated across "Load more" clicks.
-    let mut feed = use_signal(Vec::<ScrobbleRecord>::new);
-    let mut cursor = use_signal(|| None::<(u64, ScrobbleId)>);
+    // Debounced SQLite-backed search, accumulated across "Load more" clicks.
+    let mut query = use_signal(String::new);
+    let mut debounced_query = use_signal(String::new);
+    let _debounce = use_resource(move || async move {
+        let value = query();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        debounced_query.set(value);
+    });
+
+    let mut groups = use_signal(Vec::<ScrobbleGroup>::new);
     let mut exhausted = use_signal(|| false);
     let mut loading = use_signal(|| false);
+    let mut history_error = use_signal(|| None::<String>);
     let mut reindexing = use_signal(|| false);
     let mut reindex_error = use_signal(|| None::<String>);
 
-    // (Re)load the first page when sync makes progress or the user refreshes.
-    let first_page = use_resource(move || async move {
+    // (Re)load the first page when the query changes, sync makes progress, or the user refreshes.
+    let _first_page = use_resource(move || async move {
         let _reload_on = (sync_epoch(), refresh());
+        let search = debounced_query();
         let Some(Ok(core)) = core.read().clone() else {
             return;
         };
         let store = core.store.clone();
-        let page = crate::background::run_off_ui_thread(async move {
-            store
-                .recent_scrobbles(None, PAGE_SIZE)
-                .await
-                .unwrap_or_default()
+        loading.set(true);
+        history_error.set(None);
+        let result = crate::background::run_off_ui_thread(async move {
+            store.search_scrobbles(&search, 0, PAGE_SIZE).await
         })
         .await;
-        let next = page.last().map(|r| (r.uts, r.id.clone()));
-        let full = page.len() == PAGE_SIZE;
-        feed.set(page);
-        cursor.set(next);
-        exhausted.set(!full);
+        match result {
+            Ok(page) => {
+                let full = page.len() == PAGE_SIZE;
+                groups.set(page);
+                exhausted.set(!full);
+            }
+            Err(error) => {
+                groups.set(Vec::new());
+                exhausted.set(true);
+                history_error.set(Some(error.to_string()));
+            }
+        }
         loading.set(false);
     });
 
@@ -108,27 +123,37 @@ pub fn Sync() -> Element {
             return;
         }
         loading.set(true);
-        let next = cursor.peek().clone();
+        let search = debounced_query.peek().clone();
+        let offset = groups.peek().len();
         spawn(async move {
             let Some(Ok(core)) = core.read().clone() else {
                 loading.set(false);
                 return;
             };
             let store = core.store.clone();
-            let page = crate::background::run_off_ui_thread(async move {
+            let task_search = search.clone();
+            let result = crate::background::run_off_ui_thread(async move {
                 store
-                    .recent_scrobbles(next, PAGE_SIZE)
+                    .search_scrobbles(&task_search, offset, PAGE_SIZE)
                     .await
-                    .unwrap_or_default()
             })
             .await;
-            if page.len() < PAGE_SIZE {
-                exhausted.set(true);
+            match result {
+                Ok(page) => {
+                    if query.peek().as_str() != search || debounced_query.peek().as_str() != search
+                    {
+                        loading.set(false);
+                        return;
+                    }
+                    if page.len() < PAGE_SIZE {
+                        exhausted.set(true);
+                    }
+                    groups.with_mut(|current| current.extend(page));
+                }
+                Err(error) => {
+                    history_error.set(Some(error.to_string()));
+                }
             }
-            if let Some(last) = page.last() {
-                cursor.set(Some((last.uts, last.id.clone())));
-            }
-            feed.with_mut(|f| f.extend(page));
             loading.set(false);
         });
     };
@@ -166,7 +191,6 @@ pub fn Sync() -> Element {
     let data_read = data.read();
     let data_loading = *data.state().read() == UseResourceState::Pending;
     let data = data_read.clone().unwrap_or_default();
-    let feed_loading = *first_page.state().read() == UseResourceState::Pending;
     let last_sync = data
         .last_sync_at
         .map(fmt_ts)
@@ -189,7 +213,8 @@ pub fn Sync() -> Element {
         .map(|seg| seg.end.max(now_ts))
         .unwrap_or(now_ts);
 
-    let feed_items = feed.read();
+    let history_groups = groups.read();
+    let search_pending = query() != debounced_query();
 
     rsx! {
         div { class: "page",
@@ -312,23 +337,55 @@ pub fn Sync() -> Element {
                 }
             }
 
-            div { class: "card",
-                div { class: "lib-panel-title", "Recent scrobbles" }
-                if feed_loading {
-                    div { class: "muted", "Loading recent scrobbles…" }
-                } else if feed_items.is_empty() {
-                    div { class: "muted", "no scrobbles yet — sync to populate the mirror" }
+            div { class: "card history-card",
+                div { class: "history-heading",
+                    div {
+                        div { class: "lib-panel-title", "Scrobble history" }
+                        div { class: "muted history-help", "Identical artist, track, and album metadata is grouped across timestamps." }
+                    }
+                    input {
+                        class: "history-search",
+                        r#type: "text",
+                        value: "{query}",
+                        placeholder: "Search artist, track, or album…",
+                        oninput: move |event| {
+                            query.set(event.value());
+                            groups.set(Vec::new());
+                            exhausted.set(false);
+                            history_error.set(None);
+                        },
+                    }
+                }
+                if let Some(error) = history_error() {
+                    div { class: "banner danger", "history search failed: {error}" }
+                } else if history_groups.is_empty() && (loading() || search_pending) {
+                    div { class: "muted", "Searching…" }
+                } else if history_groups.is_empty() {
+                    div { class: "muted",
+                        if debounced_query().is_empty() {
+                            "no scrobbles yet — sync to populate the mirror"
+                        } else {
+                            "no matching scrobbles"
+                        }
+                    }
                 } else {
                     div { class: "feed-list",
-                        for rec in feed_items.iter() {
+                        for group in history_groups.iter() {
                             div { class: "feed-row",
-                                span { class: "feed-time mono", "{fmt_ts(rec.uts)}" }
-                                span { class: "feed-main", "{rec.artist} — {rec.track}" }
-                                if let Some(album) = &rec.album {
+                                span { class: "feed-time mono",
+                                    if group.count == 1 {
+                                        "{fmt_ts(group.latest_uts)}"
+                                    } else {
+                                        "{fmt_ts(group.first_uts)} → {fmt_ts(group.latest_uts)}"
+                                    }
+                                }
+                                span { class: "feed-main", "{group.artist} — {group.track}" }
+                                if let Some(album) = &group.album {
                                     if !album.is_empty() {
                                         span { class: "feed-album muted", "{album}" }
                                     }
                                 }
+                                span { class: "pill feed-count", "{group.count}×" }
                             }
                         }
                     }

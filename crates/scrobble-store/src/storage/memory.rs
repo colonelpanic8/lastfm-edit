@@ -1,6 +1,6 @@
 //! In-memory storage backend for tests and ephemeral use.
 
-use super::{AlbumCount, AppendStats, ArtistCount, Storage, SyncState, TrackCount};
+use super::{AlbumCount, AppendStats, ArtistCount, ScrobbleGroup, Storage, SyncState, TrackCount};
 use crate::coverage::CoverageMap;
 use crate::error::Result;
 use crate::id::ScrobbleId;
@@ -241,6 +241,61 @@ impl Storage for MemoryStorage {
         Ok(live)
     }
 
+    async fn search_scrobbles(
+        &self,
+        query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleGroup>> {
+        let terms: Vec<String> = query
+            .split_whitespace()
+            .map(|term| term.to_lowercase())
+            .collect();
+        let inner = self.inner.lock().unwrap();
+        let mut groups: std::collections::BTreeMap<
+            (String, String, Option<String>),
+            ScrobbleGroup,
+        > = std::collections::BTreeMap::new();
+        for rec in inner.records.values().filter(|rec| !rec.deleted) {
+            let fields = [
+                rec.artist.to_lowercase(),
+                rec.track.to_lowercase(),
+                rec.album.as_deref().unwrap_or_default().to_lowercase(),
+            ];
+            if !terms
+                .iter()
+                .all(|term| fields.iter().any(|field| field.contains(term)))
+            {
+                continue;
+            }
+            let key = (rec.artist.clone(), rec.track.clone(), rec.album.clone());
+            groups
+                .entry(key)
+                .and_modify(|group| {
+                    group.count += 1;
+                    group.first_uts = group.first_uts.min(rec.uts);
+                    group.latest_uts = group.latest_uts.max(rec.uts);
+                })
+                .or_insert_with(|| ScrobbleGroup {
+                    artist: rec.artist.clone(),
+                    track: rec.track.clone(),
+                    album: rec.album.clone(),
+                    count: 1,
+                    first_uts: rec.uts,
+                    latest_uts: rec.uts,
+                });
+        }
+        let mut groups: Vec<_> = groups.into_values().collect();
+        groups.sort_by(|a, b| {
+            b.latest_uts
+                .cmp(&a.latest_uts)
+                .then_with(|| a.artist.to_lowercase().cmp(&b.artist.to_lowercase()))
+                .then_with(|| a.track.to_lowercase().cmp(&b.track.to_lowercase()))
+                .then_with(|| a.album.cmp(&b.album))
+        });
+        Ok(groups.into_iter().skip(offset).take(limit).collect())
+    }
+
     async fn reindex(&self) -> Result<()> {
         Ok(()) // no derived state
     }
@@ -476,6 +531,28 @@ mod tests {
         let after = store.recent_scrobbles(None, 10).await.unwrap();
         assert_eq!(after.len(), 3);
         assert!(after.iter().all(|r| r.uts != 30));
+    }
+
+    #[tokio::test]
+    async fn search_scrobbles_groups_and_pages() {
+        let store = MemoryStorage::new();
+        store
+            .append_scrobbles(&[
+                rec(10, "Boards of Canada", "Roygbiv", 1),
+                rec(20, "Boards of Canada", "Roygbiv", 1),
+                rec(30, "Boards of Canada", "Dayvan Cowboy", 1),
+            ])
+            .await
+            .unwrap();
+
+        let grouped = store.search_scrobbles("boards royg", 0, 10).await.unwrap();
+        assert_eq!(grouped.len(), 1);
+        assert_eq!(grouped[0].count, 2);
+        assert_eq!((grouped[0].first_uts, grouped[0].latest_uts), (10, 20));
+
+        let page = store.search_scrobbles("boards", 1, 1).await.unwrap();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].track, "Roygbiv");
     }
 
     #[tokio::test]

@@ -68,6 +68,17 @@ pub struct AlbumCount {
     pub count: u64,
 }
 
+/// Scrobbles with identical artist, track, and album metadata, collapsed across plays.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScrobbleGroup {
+    pub artist: String,
+    pub track: String,
+    pub album: Option<String>,
+    pub count: u64,
+    pub first_uts: u64,
+    pub latest_uts: u64,
+}
+
 /// The storage backend contract.
 ///
 /// Writes are last-write-wins by [`ScrobbleId`] with `fetched_at` as the tiebreaker;
@@ -163,6 +174,16 @@ pub trait Storage: Send + Sync {
         before: Option<(u64, ScrobbleId)>,
         limit: usize,
     ) -> Result<Vec<ScrobbleRecord>>;
+
+    /// Search artist, track, and album text, returning identical scrobbles grouped across
+    /// timestamps. Terms are case-insensitive and all whitespace-separated terms must match
+    /// at least one field. Results are newest-first and support incremental offset paging.
+    async fn search_scrobbles(
+        &self,
+        query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleGroup>>;
 
     /// Drop and rebuild any derived index from the source of truth. A no-op for backends
     /// without derived state.
