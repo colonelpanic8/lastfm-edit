@@ -48,7 +48,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut ui: UiSignal = use_signal(model::UiState::default);
+    let ui: UiSignal = use_signal(model::UiState::default);
     let mut core_state: CoreSignal = use_signal(|| None);
 
     // Boot the backend thread once; the UI keeps the event pump (signal writes stay on
@@ -62,23 +62,6 @@ fn App() -> Element {
                 .expect("backend receiver already taken");
             match ready.await {
                 Ok(Ok(core)) => {
-                    let handle = core.handle.clone();
-                    spawn(async move {
-                        let mut rx = handle.subscribe();
-                        loop {
-                            match rx.recv().await {
-                                Ok(event) => {
-                                    tracing::debug!(?event, "scrubber event");
-                                    ui.with_mut(|state| model::reduce(state, &event));
-                                }
-                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                                    continue
-                                }
-                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                            }
-                        }
-                    });
-
                     // Smoke-test hook: auto-plan shortly after boot.
                     if std::env::var("SCRUBBER_APP_AUTOPLAN").is_ok() {
                         let handle = core.handle.clone();
@@ -93,8 +76,7 @@ fn App() -> Element {
                         });
                     }
 
-                    tracing::info!("backend booted");
-                    core_state.set(Some(Ok(Rc::new(core))));
+                    install_core(core, core_state, ui);
                 }
                 Ok(Err(error)) => {
                     tracing::warn!(%error, "backend boot failed");
@@ -116,4 +98,23 @@ fn App() -> Element {
         document::Style { "{APP_CSS}" }
         views::Shell {}
     }
+}
+
+fn install_core(core: core::AppCore, mut core_state: CoreSignal, mut ui: UiSignal) {
+    let handle = core.handle.clone();
+    spawn(async move {
+        let mut rx = handle.subscribe();
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    tracing::debug!(?event, "scrubber event");
+                    ui.with_mut(|state| model::reduce(state, &event));
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+    tracing::info!("backend booted");
+    core_state.set(Some(Ok(Rc::new(core))));
 }

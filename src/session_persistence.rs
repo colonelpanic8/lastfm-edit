@@ -1,7 +1,11 @@
 use crate::types::{LastFmEditSession, LastFmError};
 use crate::Result;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::PathBuf;
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 /// Configurable session manager for storing session data in XDG directories.
 ///
@@ -68,9 +72,23 @@ impl SessionManager {
             .to_json()
             .map_err(|e| LastFmError::Http(format!("Failed to serialize session: {e}")))?;
 
-        // Write to file
-        fs::write(&session_path, session_json)
+        // Session cookies grant account access, so never create a world-readable file.
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options
+            .open(&session_path)
+            .map_err(|e| LastFmError::Http(format!("Failed to open session file: {e}")))?;
+        file.write_all(session_json.as_bytes())
             .map_err(|e| LastFmError::Http(format!("Failed to write session file: {e}")))?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o600))
+                .map_err(|e| LastFmError::Http(format!("Failed to protect session file: {e}")))?;
+        }
 
         log::debug!("Session saved to: {}", session_path.display());
         Ok(())

@@ -200,7 +200,8 @@ body {
 }
 
 input[type="number"],
-input[type="text"] {
+input[type="text"],
+input[type="password"] {
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text);
@@ -208,6 +209,63 @@ input[type="text"] {
   border-radius: var(--radius);
   font-size: 13px;
   width: 90px;
+}
+
+/* ---- login --------------------------------------------------------------- */
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-panel {
+  width: min(100%, 380px);
+}
+
+.login-brand {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.login-panel h1 {
+  font-size: 24px;
+  margin: 0 0 22px;
+}
+
+.login-form {
+  display: grid;
+  gap: 8px;
+}
+
+.login-form label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 38px;
+}
+
+.login-form .banner {
+  margin: 8px 0 0;
+}
+
+.login-status {
+  min-height: 34px;
+  padding-top: 8px;
+  font-size: 12px;
+}
+
+.login-submit {
+  min-height: 38px;
+  margin-top: 4px;
 }
 
 /* ---- pills / banners ------------------------------------------------------ */

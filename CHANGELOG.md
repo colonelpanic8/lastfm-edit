@@ -1,6 +1,6 @@
 # Changelog
 
-## lastfm-edit 7.0.0 (unreleased)
+## lastfm-edit 7.0.1 (unreleased)
 
 ### Breaking changes
 

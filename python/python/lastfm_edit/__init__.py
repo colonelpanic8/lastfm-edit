@@ -39,7 +39,7 @@ from ._lastfm_edit import (
     PyLastFmEditSession as LastFmEditSession,
 )
 
-__version__ = "4.0.0"
+__version__ = "4.0.1"
 
 __all__ = [
     "LastFmEditClient",

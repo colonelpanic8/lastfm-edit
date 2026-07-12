@@ -21,6 +21,29 @@
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = ["rust-src" "rust-analyzer"];
         };
+
+        rustSource = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type: let
+            relPath = pkgs.lib.removePrefix "${toString ./.}/" (toString path);
+            firstComponent = builtins.head (pkgs.lib.splitString "/" relPath);
+            baseName = baseNameOf path;
+          in
+            pkgs.lib.cleanSourceFilter path type
+            && !(builtins.elem firstComponent [
+              ".direnv"
+              ".git"
+              ".github"
+              "coverage"
+              "python"
+              "target"
+            ])
+            && !(builtins.elem baseName [
+              ".envrc"
+              "result"
+            ])
+            && !(pkgs.lib.hasPrefix "result-" baseName);
+        };
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs;
@@ -82,9 +105,9 @@
 
         packages.lastfm-edit = pkgs.rustPlatform.buildRustPackage {
           pname = "lastfm-edit";
-          version = "7.0.0";
+          version = "7.0.1";
 
-          src = ./.;
+          src = rustSource;
 
           cargoLock = {
             lockFile = ./Cargo.lock;
@@ -111,20 +134,93 @@
           doCheck = false;
         };
 
-        packages.scrobble-scrubber-app = pkgs.rustPlatform.buildRustPackage {
-          pname = "scrobble-scrubber-app";
-          version = "0.1.0";
+        packages.scrobble-store = pkgs.rustPlatform.buildRustPackage {
+          pname = "scrobble-store";
+          version = "0.1.1";
 
-          src = ./.;
+          src = rustSource;
 
-          cargoLock.lockFile = ./Cargo.lock;
-          cargoBuildFlags = ["-p" "scrobble-scrubber-app"];
-          cargoTestFlags = ["-p" "scrobble-scrubber-app"];
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
+          cargoBuildFlags = ["-p" "scrobble-store"];
 
           nativeBuildInputs = with pkgs; [
-            makeWrapper
             pkg-config
           ];
+
+          buildInputs = with pkgs;
+            [
+              openssl
+              curl
+            ]
+            ++ lib.optionals stdenv.isDarwin [
+              darwin.apple_sdk.frameworks.Security
+              darwin.apple_sdk.frameworks.CoreFoundation
+              darwin.apple_sdk.frameworks.SystemConfiguration
+            ];
+
+          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+
+          # Skip tests in nix build (some tests require filesystem access)
+          doCheck = false;
+        };
+
+        packages.scrobble-scrubber = pkgs.rustPlatform.buildRustPackage {
+          pname = "scrobble-scrubber";
+          version = "0.1.1";
+
+          src = rustSource;
+
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
+          cargoBuildFlags = ["-p" "scrobble-scrubber"];
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+          ];
+
+          buildInputs = with pkgs;
+            [
+              openssl
+              curl
+            ]
+            ++ lib.optionals stdenv.isDarwin [
+              darwin.apple_sdk.frameworks.Security
+              darwin.apple_sdk.frameworks.CoreFoundation
+              darwin.apple_sdk.frameworks.SystemConfiguration
+            ];
+
+          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+
+          # Skip tests in nix build (some tests require filesystem access)
+          doCheck = false;
+        };
+
+        packages.scrobble-scrubber-app = pkgs.rustPlatform.buildRustPackage {
+          pname = "scrobble-scrubber-app";
+          version = "0.1.1";
+
+          src = rustSource;
+
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
+          cargoBuildFlags = ["-p" "scrobble-scrubber-app"];
+
+          nativeBuildInputs = with pkgs;
+            [
+              makeWrapper
+              pkg-config
+            ]
+            ++ lib.optionals stdenv.isLinux [
+              copyDesktopItems
+              wrapGAppsHook3
+            ];
 
           buildInputs = with pkgs;
             [
@@ -137,7 +233,28 @@
               glib
               glib-networking
               libsoup_3
+              libappindicator-gtk3
+              xdotool
+            ]
+            ++ lib.optionals stdenv.isDarwin [
+              darwin.apple_sdk.frameworks.Security
+              darwin.apple_sdk.frameworks.CoreFoundation
+              darwin.apple_sdk.frameworks.SystemConfiguration
             ];
+
+          desktopItems = pkgs.lib.optionals pkgs.stdenv.isLinux [
+            (pkgs.makeDesktopItem {
+              name = "scrobble-scrubber";
+              desktopName = "Scrobble Scrubber";
+              genericName = "Last.fm Scrobble Editor";
+              comment = "Review and drive Last.fm scrobble metadata cleanup";
+              exec = "scrobble-scrubber-app";
+              icon = "audio-x-generic";
+              terminal = false;
+              categories = ["AudioVideo" "Audio"];
+              startupNotify = true;
+            })
+          ];
 
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
@@ -161,7 +278,7 @@
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>CFBundleShortVersionString</key>
-              <string>0.1.0</string>
+              <string>0.1.1</string>
               <key>LSMinimumSystemVersion</key>
               <string>11.0</string>
             </dict>
@@ -173,37 +290,6 @@
             wrapProgram "$out/bin/scrobble-scrubber-app" \
               --prefix PATH : ${pkgs.lib.makeBinPath [pkgs.pass pkgs.gnupg]}
           '';
-        };
-
-        packages.scrobble-scrubber = pkgs.rustPlatform.buildRustPackage {
-          pname = "scrobble-scrubber";
-          version = "0.1.0";
-
-          src = ./.;
-
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-
-          # Build only the scrubber CLI out of the workspace.
-          cargoBuildFlags = ["-p" "scrobble-scrubber"];
-
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-          ];
-
-          buildInputs = with pkgs;
-            [
-              openssl
-              curl
-            ]
-            ++ lib.optionals stdenv.isDarwin [
-              darwin.apple_sdk.frameworks.Security
-              darwin.apple_sdk.frameworks.CoreFoundation
-              darwin.apple_sdk.frameworks.SystemConfiguration
-            ];
-
-          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
           # Skip tests in nix build (some tests require filesystem access)
           doCheck = false;

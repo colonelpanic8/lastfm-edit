@@ -1,6 +1,6 @@
 [package]
 name = "scrobble-scrubber-app"
-version = "0.1.0"
+version = "0.1.1"
 description = "Dioxus desktop UI for scrobble-scrubber"
 edition.workspace = true
 license.workspace = true
@@ -10,6 +10,7 @@ publish = false
 [[bin]]
 name = "scrobble-scrubber-app"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 dioxus = { version = "=0.7.9", default-features = false, features = ["launch", "lib"] }

@@ -1,6 +1,6 @@
 [package]
 name = "lastfm-edit"
-version = "7.0.0"
+version = "7.0.1"
 edition = "2021"
 description = "Rust crate for programmatic access to Last.fm's scrobble editing functionality via web scraping"
 license = "MIT"
@@ -12,6 +12,7 @@ exclude = [".claude/", ".codex/", "AGENTS.md", "Cargo.toml.orig", "coverage/"]
 
 [workspace]
 members = ["crates/*"]
+exclude = ["python"]
 
 [workspace.package]
 edition = "2021"
@@ -19,9 +20,9 @@ license = "MIT"
 repository = "https://github.com/colonelpanic8/lastfm-edit"
 
 [workspace.dependencies]
-lastfm-edit = { path = ".", version = "7.0.0" }
-scrobble-store = { path = "crates/scrobble-store", version = "0.1.0" }
-scrobble-scrubber = { path = "crates/scrobble-scrubber", version = "0.1.0", default-features = false }
+lastfm-edit = { path = ".", version = "7.0.1" }
+scrobble-store = { path = "crates/scrobble-store", version = "0.1.1" }
+scrobble-scrubber = { path = "crates/scrobble-scrubber", version = "0.1.1", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }

@@ -11,7 +11,7 @@ use scrobble_scrubber::{
     ScrubberActor, ScrubberCommand, ScrubberEvent, ScrubberEventBus, ScrubberHandle, ScrubberState,
 };
 use scrobble_store::{ApiSource, FsStorage, Storage, SyncEngine, SyncEventReceiver};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 use std::path::PathBuf;
 use std::process::Command;
@@ -26,6 +26,12 @@ pub enum StartupError {
     NoUsername,
     NoSession(String),
     Other(String),
+}
+
+impl StartupError {
+    pub fn needs_login(&self) -> bool {
+        matches!(self, Self::NoUsername | Self::NoSession(_))
+    }
 }
 
 impl std::fmt::Display for StartupError {
@@ -95,6 +101,19 @@ struct FileConfig {
     store: StoreSection,
     executor: ExecutorSection,
     scrubber: ScrubberSection,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+struct AuthConfig {
+    username: Option<String>,
+    api_key: Option<String>,
+}
+
+struct LoginCredentials {
+    username: String,
+    password: String,
+    api_key: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -172,12 +191,7 @@ fn env_or_pass(name: &str, pass_field: Option<&str>) -> Result<Option<String>, S
 }
 
 fn load_config() -> FileConfig {
-    let path = std::env::var("SCROBBLE_SCRUBBER_CONFIG")
-        .map(PathBuf::from)
-        .ok()
-        .or_else(|| {
-            dirs::config_dir().map(|dir| dir.join("scrobble-scrubber").join("config.toml"))
-        });
+    let path = config_path();
     match path {
         Some(path) if path.exists() => std::fs::read_to_string(&path)
             .ok()
@@ -187,9 +201,102 @@ fn load_config() -> FileConfig {
     }
 }
 
+fn config_path() -> Option<PathBuf> {
+    std::env::var("SCROBBLE_SCRUBBER_CONFIG")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| dirs::config_dir().map(|dir| dir.join("scrobble-scrubber/config.toml")))
+}
+
+fn auth_path() -> Option<PathBuf> {
+    config_path().and_then(|path| path.parent().map(|dir| dir.join("auth.toml")))
+}
+
+fn load_auth_config() -> AuthConfig {
+    let Some(path) = auth_path() else {
+        return AuthConfig::default();
+    };
+    match path {
+        path if path.exists() => std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|content| toml::from_str(&content).ok())
+            .unwrap_or_default(),
+        _ => AuthConfig::default(),
+    }
+}
+
+fn save_auth_config(auth: &AuthConfig) -> Result<(), StartupError> {
+    let path = auth_path()
+        .ok_or_else(|| StartupError::Other("cannot determine authentication path".into()))?;
+    let environment_path = path.with_file_name("environment");
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| StartupError::Other(e.to_string()))?;
+    }
+    let content = toml::to_string(auth).map_err(|e| StartupError::Other(e.to_string()))?;
+    write_private_file(&path, &content)?;
+
+    if let Some(api_key) = &auth.api_key {
+        let escaped = api_key.replace('\\', "\\\\").replace('"', "\\\"");
+        write_private_file(
+            &environment_path,
+            &format!("LASTFM_EDIT_API_KEY=\"{escaped}\"\n"),
+        )?;
+    }
+    Ok(())
+}
+
+fn write_private_file(path: &std::path::Path, content: &str) -> Result<(), StartupError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|e| StartupError::Other(e.to_string()))?;
+    std::io::Write::write_all(&mut file, content.as_bytes())
+        .map_err(|e| StartupError::Other(e.to_string()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| StartupError::Other(e.to_string()))?;
+    }
+    Ok(())
+}
+
+pub fn configured_username() -> String {
+    std::env::var("LASTFM_EDIT_USERNAME")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| load_auth_config().username)
+        .unwrap_or_default()
+}
+
 /// Spawn the backend thread. The receiver resolves once the stack is up (or failed);
 /// a dropped sender means the backend thread died before reporting.
 pub fn start() -> oneshot::Receiver<Result<AppCore, StartupError>> {
+    spawn_backend(None)
+}
+
+/// Authenticate, persist the resulting website session, and start the backend.
+pub fn login_and_start(
+    username: String,
+    password: String,
+    api_key: Option<String>,
+) -> oneshot::Receiver<Result<AppCore, StartupError>> {
+    spawn_backend(Some(LoginCredentials {
+        username,
+        password,
+        api_key,
+    }))
+}
+
+fn spawn_backend(
+    login: Option<LoginCredentials>,
+) -> oneshot::Receiver<Result<AppCore, StartupError>> {
     let (ready_tx, ready_rx) = oneshot::channel();
     let (command_tx, command_rx) = mpsc::channel::<BackendCommand>(16);
 
@@ -201,7 +308,10 @@ pub fn start() -> oneshot::Receiver<Result<AppCore, StartupError>> {
                 .build()
                 .expect("backend tokio runtime");
             let local = tokio::task::LocalSet::new();
-            local.block_on(&runtime, backend_main(command_tx, command_rx, ready_tx));
+            local.block_on(
+                &runtime,
+                backend_main(command_tx, command_rx, ready_tx, login),
+            );
         })
         .expect("spawn backend thread");
 
@@ -212,8 +322,43 @@ async fn backend_main(
     command_tx: mpsc::Sender<BackendCommand>,
     mut commands: mpsc::Receiver<BackendCommand>,
     ready: oneshot::Sender<Result<AppCore, StartupError>>,
+    login: Option<LoginCredentials>,
 ) {
-    let parts = match build(command_tx).await {
+    let selected_username = match login {
+        Some(credentials) => {
+            let client = match LastFmEditClientImpl::login_with_credentials(
+                Box::new(http_client::native::NativeClient::new()),
+                &credentials.username,
+                &credentials.password,
+            )
+            .await
+            {
+                Ok(client) => client,
+                Err(error) => {
+                    let _ = ready.send(Err(StartupError::NoSession(error.to_string())));
+                    return;
+                }
+            };
+            if let Err(error) = lastfm_edit::SessionPersistence::save_session(&client.get_session())
+            {
+                let _ = ready.send(Err(StartupError::Other(error.to_string())));
+                return;
+            }
+            let mut auth = load_auth_config();
+            auth.username = Some(credentials.username.clone());
+            if credentials.api_key.is_some() {
+                auth.api_key = credentials.api_key;
+            }
+            if let Err(error) = save_auth_config(&auth) {
+                let _ = ready.send(Err(error));
+                return;
+            }
+            Some(credentials.username)
+        }
+        None => None,
+    };
+
+    let parts = match build(command_tx, selected_username).await {
         Ok(parts) => parts,
         Err(error) => {
             let _ = ready.send(Err(error));
@@ -429,12 +574,22 @@ async fn continuous_loop(
 }
 
 /// Build the full backend stack; runs on the backend thread.
-async fn build(command_tx: mpsc::Sender<BackendCommand>) -> Result<BackendParts, StartupError> {
+async fn build(
+    command_tx: mpsc::Sender<BackendCommand>,
+    selected_username: Option<String>,
+) -> Result<BackendParts, StartupError> {
     let config = load_config();
+    let auth = load_auth_config();
 
-    let username = env_or_pass("LASTFM_EDIT_USERNAME", Some("user"))
-        .map_err(StartupError::Other)?
-        .ok_or(StartupError::NoUsername)?;
+    let configured_username = selected_username
+        .or_else(|| std::env::var("LASTFM_EDIT_USERNAME").ok())
+        .filter(|name| !name.is_empty())
+        .or(auth.username);
+    let username = match configured_username {
+        Some(username) => Some(username),
+        None => env_or_pass("LASTFM_EDIT_USERNAME", Some("user")).map_err(StartupError::Other)?,
+    }
+    .ok_or(StartupError::NoUsername)?;
 
     let store_root = std::env::var("SCROBBLE_STORE_DIR")
         .map(PathBuf::from)
@@ -512,10 +667,16 @@ async fn build(command_tx: mpsc::Sender<BackendCommand>) -> Result<BackendParts,
         ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
 
     // Sync engine only when an API key is available.
-    let api_key =
-        env_or_pass("LASTFM_EDIT_API_KEY", Some("api-key")).map_err(StartupError::Other)?;
+    let configured_api_key = std::env::var("LASTFM_EDIT_API_KEY")
+        .ok()
+        .filter(|key| !key.is_empty())
+        .or(auth.api_key);
+    let api_key = match configured_api_key {
+        Some(api_key) => Some(api_key),
+        None => env_or_pass("LASTFM_EDIT_API_KEY", Some("api-key")).map_err(StartupError::Other)?,
+    };
     let (sync, sync_events) = match api_key {
-        Some(api_key) => {
+        Some(api_key) if !api_key.is_empty() => {
             let api_client = lastfm_edit::LastFmApiClientImpl::new(
                 Box::new(http_client::native::NativeClient::new()),
                 username.clone(),

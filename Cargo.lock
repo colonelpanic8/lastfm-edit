@@ -3178,7 +3178,7 @@ dependencies = [
 
 [[package]]
 name = "lastfm-edit"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5108,7 +5108,7 @@ dependencies = [
 
 [[package]]
 name = "scrobble-scrubber"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5135,7 +5135,7 @@ dependencies = [
 
 [[package]]
 name = "scrobble-scrubber-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "dioxus",
@@ -5155,7 +5155,7 @@ dependencies = [
 
 [[package]]
 name = "scrobble-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",

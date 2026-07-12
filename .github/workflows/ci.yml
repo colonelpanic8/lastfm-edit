@@ -30,6 +30,16 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install desktop system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libayatana-appindicator3-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            pkg-config
+
       - name: Cache dependencies
         uses: actions/cache@v4
         with:

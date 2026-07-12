@@ -1518,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "lastfm-edit"
-version = "4.0.0"
+version = "7.0.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1542,7 +1542,7 @@ dependencies = [
 
 [[package]]
 name = "lastfm-edit-python"
-version = "4.0.0"
+version = "4.0.1"
 dependencies = [
  "http-client-2",
  "lastfm-edit",

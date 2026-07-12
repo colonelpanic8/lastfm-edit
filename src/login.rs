@@ -236,26 +236,16 @@ impl LoginManager {
             log::debug!("📄 Login response HTML content (short): {response_html}");
         }
 
-        // Check if we were redirected away from login page (success indicator)
+        // A challenge/interstitial can also omit the normal login form, so only the
+        // authenticated session cookie checked above is sufficient for success.
         let has_login_form = self.check_for_login_form(&response_html);
         log::debug!("🔍 Final login validation:");
         log::debug!("   - Response contains login form: {has_login_form}");
         log::debug!("   - Response status: {}", response.status());
 
-        if !has_login_form && response.status() == 200 {
-            log::info!("✅ Login successful - no login form detected in response");
-            Ok(LastFmEditSession::new(
-                username.to_string(),
-                cookies,
-                Some(csrf_token),
-                self.base_url.clone(),
-            ))
-        } else {
-            // Parse and return error message
-            let error_msg = self.parse_login_error(&response_html);
-            log::warn!("❌ Login failed: {error_msg}");
-            Err(LastFmError::Auth(error_msg))
-        }
+        let error_msg = self.parse_login_error(&response_html);
+        log::warn!("❌ Login failed: {error_msg}");
+        Err(LastFmError::Auth(error_msg))
     }
 
     /// Handle 403 Forbidden responses

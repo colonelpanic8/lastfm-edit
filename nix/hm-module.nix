@@ -76,6 +76,15 @@ in {
       description = "Extra environment variables for the service.";
     };
 
+    environmentFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = "%h/.config/scrobble-scrubber/environment";
+      description = ''
+        Optional systemd environment file. The desktop app writes its saved
+        API key here after login; a missing file is ignored.
+      '';
+    };
+
     extraArgs = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
@@ -102,6 +111,7 @@ in {
         );
         Restart = "on-failure";
         RestartSec = 30;
+        EnvironmentFile = lib.optional (cfg.environmentFile != null) "-${cfg.environmentFile}";
         Environment =
           ["RUST_LOG=${cfg.logLevel}"]
           ++ lib.optional (cfg.username != null) "LASTFM_EDIT_USERNAME=${cfg.username}"
