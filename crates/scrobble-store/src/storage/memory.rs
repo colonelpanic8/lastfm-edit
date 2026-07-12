@@ -57,7 +57,7 @@ fn top_by_key<K: Ord + Clone, F: Fn(&ScrobbleRecord) -> K>(
     }
     let mut entries: Vec<(K, u64)> = counts.into_iter().collect();
     // Descending by count; key order (already deterministic from BTreeMap) breaks ties.
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     entries.truncate(limit);
     entries
 }
