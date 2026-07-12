@@ -492,6 +492,84 @@ input[type="password"] {
   margin-bottom: 12px;
 }
 
+/* ---- library --------------------------------------------------------------- */
+
+.lib-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.lib-panel-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+}
+
+.lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lib-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+}
+
+.lib-row.clickable {
+  cursor: pointer;
+}
+
+.lib-row.clickable:hover {
+  background: var(--surface-2);
+}
+
+.lib-rank {
+  flex-shrink: 0;
+  width: 22px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lib-name {
+  flex-shrink: 0;
+  width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.lib-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.lib-bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.lib-count {
+  flex-shrink: 0;
+  width: 48px;
+  text-align: right;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
 /* ---- scrollbars ------------------------------------------------------------ */
 
 ::-webkit-scrollbar {

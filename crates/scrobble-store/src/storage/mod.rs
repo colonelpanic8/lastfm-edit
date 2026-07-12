@@ -60,6 +60,14 @@ pub struct TrackCount {
     pub count: u64,
 }
 
+/// An album (artist + album) with an aggregate scrobble count.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlbumCount {
+    pub artist: String,
+    pub album: String,
+    pub count: u64,
+}
+
 /// The storage backend contract.
 ///
 /// Writes are last-write-wins by [`ScrobbleId`] with `fetched_at` as the tiebreaker;
@@ -122,6 +130,17 @@ pub trait Storage: Send + Sync {
         limit: usize,
         range: Option<Range<u64>>,
     ) -> Result<Vec<TrackCount>>;
+
+    /// Most-scrobbled albums, optionally restricted to one artist and/or a time range.
+    async fn top_albums(
+        &self,
+        artist: Option<&str>,
+        limit: usize,
+        range: Option<Range<u64>>,
+    ) -> Result<Vec<AlbumCount>>;
+
+    /// Count of live scrobbles, optionally restricted to a time range.
+    async fn scrobble_count(&self, range: Option<Range<u64>>) -> Result<u64>;
 
     /// All live scrobbles of an artist, ascending by `uts`, optionally within a range.
     async fn artist_scrobbles(

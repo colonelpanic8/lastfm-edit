@@ -1,6 +1,6 @@
 //! In-memory storage backend for tests and ephemeral use.
 
-use super::{AppendStats, ArtistCount, Storage, SyncState, TrackCount};
+use super::{AlbumCount, AppendStats, ArtistCount, Storage, SyncState, TrackCount};
 use crate::coverage::CoverageMap;
 use crate::error::Result;
 use crate::id::ScrobbleId;
@@ -177,6 +177,37 @@ impl Storage for MemoryStorage {
         )
     }
 
+    async fn top_albums(
+        &self,
+        artist: Option<&str>,
+        limit: usize,
+        range: Option<Range<u64>>,
+    ) -> Result<Vec<AlbumCount>> {
+        let inner = self.inner.lock().unwrap();
+        let mut live = live_in_range(inner.records.values(), &range);
+        if let Some(artist) = artist {
+            live.retain(|rec| rec.artist == artist);
+        }
+        live.retain(|rec| rec.album.as_deref().is_some_and(|album| !album.is_empty()));
+        Ok(top_by_key(
+            &live,
+            |rec| (rec.artist.clone(), rec.album.clone().unwrap_or_default()),
+            limit,
+        )
+        .into_iter()
+        .map(|((artist, album), count)| AlbumCount {
+            artist,
+            album,
+            count,
+        })
+        .collect())
+    }
+
+    async fn scrobble_count(&self, range: Option<Range<u64>>) -> Result<u64> {
+        let inner = self.inner.lock().unwrap();
+        Ok(live_in_range(inner.records.values(), &range).len() as u64)
+    }
+
     async fn artist_scrobbles(
         &self,
         artist: &str,
@@ -210,6 +241,13 @@ mod tests {
             fetched_at,
             deleted: false,
             v: 1,
+        }
+    }
+
+    fn rec_album(uts: u64, artist: &str, track: &str, album: Option<&str>) -> ScrobbleRecord {
+        ScrobbleRecord {
+            album: album.map(str::to_string),
+            ..rec(uts, artist, track, 1)
         }
     }
 
@@ -323,6 +361,58 @@ mod tests {
 
         let scrobbles = store.artist_scrobbles("A", None).await.unwrap();
         assert_eq!(scrobbles.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn top_albums_and_scrobble_count() {
+        let store = MemoryStorage::new();
+        store
+            .append_scrobbles(&[
+                rec_album(1, "A", "x", Some("One")),
+                rec_album(2, "A", "y", Some("One")),
+                rec_album(3, "A", "z", Some("Two")),
+                rec_album(4, "B", "w", Some("Three")),
+                rec_album(5, "A", "n", None),
+                rec_album(6, "A", "e", Some("")),
+            ])
+            .await
+            .unwrap();
+
+        // Grouped by artist+album, descending by count; None/empty albums excluded.
+        let albums = store.top_albums(None, 10, None).await.unwrap();
+        assert_eq!(
+            albums[0],
+            AlbumCount {
+                artist: "A".into(),
+                album: "One".into(),
+                count: 2
+            }
+        );
+        assert_eq!(albums.len(), 3);
+        assert!(albums
+            .iter()
+            .all(|a| !a.album.is_empty() && a.album != "Three" || a.artist == "B"));
+
+        // Artist filter.
+        let a_albums = store.top_albums(Some("A"), 10, None).await.unwrap();
+        assert_eq!(a_albums.len(), 2);
+        assert!(a_albums.iter().all(|a| a.artist == "A"));
+
+        // scrobble_count counts every live record, album or not.
+        assert_eq!(store.scrobble_count(None).await.unwrap(), 6);
+        assert_eq!(store.scrobble_count(Some(1..4)).await.unwrap(), 3);
+
+        // Deleted records drop out of both.
+        store
+            .append_scrobbles(&[rec_album(1, "A", "x", Some("One")).into_tombstone(9)])
+            .await
+            .unwrap();
+        assert_eq!(store.scrobble_count(None).await.unwrap(), 5);
+        let albums = store.top_albums(None, 10, None).await.unwrap();
+        assert_eq!(
+            albums.iter().find(|a| a.album == "One").map(|a| a.count),
+            Some(1)
+        );
     }
 
     #[tokio::test]

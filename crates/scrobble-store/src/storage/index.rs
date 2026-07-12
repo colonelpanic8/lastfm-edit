@@ -7,13 +7,13 @@
 
 use crate::error::{Result, StoreError};
 use crate::record::ScrobbleRecord;
-use crate::storage::{ArtistCount, TrackCount};
+use crate::storage::{AlbumCount, ArtistCount, TrackCount};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 pub(crate) struct Index {
     conn: Connection,
@@ -92,6 +92,7 @@ impl Index {
                          uts INTEGER NOT NULL,
                          artist TEXT NOT NULL,
                          track TEXT NOT NULL,
+                         album TEXT,
                          fetched_at INTEGER NOT NULL,
                          deleted INTEGER NOT NULL,
                          json TEXT NOT NULL
@@ -201,12 +202,13 @@ impl Index {
         {
             let mut upsert = tx
                 .prepare(
-                    "INSERT INTO scrobbles (id, uts, artist, track, fetched_at, deleted, json)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                    "INSERT INTO scrobbles (id, uts, artist, track, album, fetched_at, deleted, json)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
                      ON CONFLICT(id) DO UPDATE SET
                          uts = excluded.uts,
                          artist = excluded.artist,
                          track = excluded.track,
+                         album = excluded.album,
                          fetched_at = excluded.fetched_at,
                          deleted = excluded.deleted,
                          json = excluded.json
@@ -224,6 +226,7 @@ impl Index {
                                 rec.uts as i64,
                                 rec.artist,
                                 rec.track,
+                                rec.album,
                                 rec.fetched_at as i64,
                                 rec.deleted as i64,
                                 line,
@@ -336,6 +339,48 @@ impl Index {
             })
             .map_err(sqlite_err)?;
         rows.collect::<std::result::Result<_, _>>()
+            .map_err(sqlite_err)
+    }
+
+    pub(crate) fn top_albums(
+        &self,
+        artist: Option<&str>,
+        limit: usize,
+        range: &Option<Range<u64>>,
+    ) -> Result<Vec<AlbumCount>> {
+        let (lo, hi) = range_bounds(range);
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT artist, album, COUNT(*) AS n FROM scrobbles
+                 WHERE deleted = 0 AND uts >= ?1 AND uts < ?2
+                   AND album IS NOT NULL AND album != ''
+                   AND (?3 IS NULL OR artist = ?3)
+                 GROUP BY artist, album ORDER BY n DESC, artist ASC, album ASC LIMIT ?4",
+            )
+            .map_err(sqlite_err)?;
+        let rows = statement
+            .query_map(params![lo, hi, artist, limit as i64], |row| {
+                Ok(AlbumCount {
+                    artist: row.get(0)?,
+                    album: row.get(1)?,
+                    count: row.get::<_, i64>(2)? as u64,
+                })
+            })
+            .map_err(sqlite_err)?;
+        rows.collect::<std::result::Result<_, _>>()
+            .map_err(sqlite_err)
+    }
+
+    pub(crate) fn scrobble_count(&self, range: &Option<Range<u64>>) -> Result<u64> {
+        let (lo, hi) = range_bounds(range);
+        self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM scrobbles
+                 WHERE deleted = 0 AND uts >= ?1 AND uts < ?2",
+                params![lo, hi],
+                |row| row.get::<_, i64>(0).map(|n| n as u64),
+            )
             .map_err(sqlite_err)
     }
 
