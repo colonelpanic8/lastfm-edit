@@ -88,7 +88,10 @@ async fn actor_processes_consider_and_execute_commands() {
             let store = Arc::new(MemoryStorage::new());
             let state = Arc::new(MemoryScrubberState::new());
             let dirty = record(100, "You And I - Remastered 2011");
-            store.append_scrobbles(&[dirty.clone()]).await.unwrap();
+            store
+                .append_scrobbles(std::slice::from_ref(&dirty))
+                .await
+                .unwrap();
 
             let mut client = MockLastFmEditClient::new();
             client
@@ -244,7 +247,10 @@ async fn sync_bridge_turns_discoveries_into_intents_and_forwards_events() {
             let store = Arc::new(MemoryStorage::new());
             let state = Arc::new(MemoryScrubberState::new());
             let dirty = record(100, "You And I - Remastered 2011");
-            store.append_scrobbles(&[dirty.clone()]).await.unwrap();
+            store
+                .append_scrobbles(std::slice::from_ref(&dirty))
+                .await
+                .unwrap();
 
             let planner = planner(store.clone(), state.clone());
             let bus = planner.event_bus();

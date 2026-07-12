@@ -568,15 +568,24 @@ mod tests {
         let store = FsStorage::open(dir.path()).unwrap();
 
         let a = rec(JAN, "A", "x", 1);
-        store.append_scrobbles(&[a.clone()]).await.unwrap();
+        store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         // Idempotent re-append writes nothing.
-        let stats = store.append_scrobbles(&[a.clone()]).await.unwrap();
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         assert_eq!(stats.unchanged, 1);
 
         let mut newer = a.clone();
         newer.fetched_at = 2;
         newer.album = Some("Corrected".to_string());
-        let stats = store.append_scrobbles(&[newer.clone()]).await.unwrap();
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&newer))
+            .await
+            .unwrap();
         assert_eq!(stats.updated, 1);
 
         // Two lines on disk, one logical record.
@@ -597,7 +606,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = FsStorage::open(dir.path()).unwrap();
         let a = rec(JAN, "A", "x", 1);
-        store.append_scrobbles(&[a.clone()]).await.unwrap();
+        store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         store
             .append_scrobbles(&[a.clone().into_tombstone(2)])
             .await

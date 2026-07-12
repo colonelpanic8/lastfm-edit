@@ -333,7 +333,10 @@ mod tests {
         let store = MemoryStorage::new();
         let a = rec(100, "A", "x", 10);
 
-        let stats = store.append_scrobbles(&[a.clone()]).await.unwrap();
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         assert_eq!(
             stats,
             AppendStats {
@@ -344,14 +347,20 @@ mod tests {
         );
 
         // Re-append: unchanged.
-        let stats = store.append_scrobbles(&[a.clone()]).await.unwrap();
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         assert_eq!(stats.unchanged, 1);
 
         // Newer observation with different content: updated.
         let mut newer = a.clone();
         newer.fetched_at = 20;
         newer.album = Some("Album".to_string());
-        let stats = store.append_scrobbles(&[newer.clone()]).await.unwrap();
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&newer))
+            .await
+            .unwrap();
         assert_eq!(stats.updated, 1);
         assert_eq!(store.get_scrobble(&a.id).await.unwrap().unwrap(), newer);
 
@@ -368,7 +377,10 @@ mod tests {
     async fn tombstones_hide_from_reads_but_remain_gettable() {
         let store = MemoryStorage::new();
         let a = rec(100, "A", "x", 10);
-        store.append_scrobbles(&[a.clone()]).await.unwrap();
+        store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         store
             .append_scrobbles(&[a.clone().into_tombstone(20)])
             .await

@@ -592,7 +592,10 @@ async fn resumes_in_progress_before_ready() {
 async fn vanished_subject_completes_without_touching_lastfm() {
     let store = Arc::new(MemoryStorage::new());
     let rec = record(100);
-    store.append_scrobbles(&[rec.clone()]).await.unwrap();
+    store
+        .append_scrobbles(std::slice::from_ref(&rec))
+        .await
+        .unwrap();
     let state = Arc::new(MemoryScrubberState::new());
     queue_ready_intent(state.as_ref()).await;
 
