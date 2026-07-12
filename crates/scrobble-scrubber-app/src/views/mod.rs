@@ -2,6 +2,7 @@
 
 pub mod dashboard;
 pub mod history;
+pub mod library;
 pub mod review;
 pub mod work_queue;
 
@@ -12,6 +13,7 @@ use scrobble_scrubber::{review_status, EditIntent, ReviewStatus, ScrubberState};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ActiveView {
     Dashboard,
+    Library,
     Review,
     WorkQueue,
     History,
@@ -76,6 +78,7 @@ pub fn Shell() -> Element {
                 main { class: "content",
                         match active() {
                             ActiveView::Dashboard => rsx! { dashboard::Dashboard {} },
+                            ActiveView::Library => rsx! { library::Library {} },
                             ActiveView::Review => rsx! { review::Review {} },
                             ActiveView::WorkQueue => rsx! { work_queue::WorkQueue {} },
                             ActiveView::History => rsx! { history::History {} },
@@ -117,6 +120,7 @@ fn Nav(active: Signal<ActiveView>) -> Element {
         nav { class: "sidebar",
             div { class: "brand", "Scrobble Scrubber" }
             {item(ActiveView::Dashboard, "Dashboard", 0)}
+            {item(ActiveView::Library, "Library", 0)}
             {item(ActiveView::Review, "Review", needs_review)}
             {item(ActiveView::WorkQueue, "Work Queue", 0)}
             {item(ActiveView::History, "History", 0)}
