@@ -219,6 +219,28 @@ impl Storage for MemoryStorage {
         Ok(live)
     }
 
+    async fn recent_scrobbles(
+        &self,
+        before: Option<(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>> {
+        let inner = self.inner.lock().unwrap();
+        let mut live: Vec<ScrobbleRecord> = inner
+            .records
+            .values()
+            .filter(|rec| !rec.deleted)
+            .filter(|rec| match &before {
+                Some((uts, id)) => rec.uts < *uts || (rec.uts == *uts && rec.id < *id),
+                None => true,
+            })
+            .cloned()
+            .collect();
+        // Descending by (uts, id) — the reverse of the ascending order used elsewhere.
+        live.sort_by(|a, b| b.uts.cmp(&a.uts).then_with(|| b.id.cmp(&a.id)));
+        live.truncate(limit);
+        Ok(live)
+    }
+
     async fn reindex(&self) -> Result<()> {
         Ok(()) // no derived state
     }
@@ -413,6 +435,47 @@ mod tests {
             albums.iter().find(|a| a.album == "One").map(|a| a.count),
             Some(1)
         );
+    }
+
+    #[tokio::test]
+    async fn recent_scrobbles_descending_keyset_pagination() {
+        let store = MemoryStorage::new();
+        store
+            .append_scrobbles(&[
+                rec(10, "A", "x", 1),
+                rec(10, "A", "y", 1), // same uts, different id
+                rec(20, "A", "z", 1),
+                rec(30, "B", "w", 1),
+            ])
+            .await
+            .unwrap();
+
+        let mut all = Vec::new();
+        let mut cursor: Option<(u64, ScrobbleId)> = None;
+        loop {
+            let page = store.recent_scrobbles(cursor.clone(), 2).await.unwrap();
+            if page.is_empty() {
+                break;
+            }
+            cursor = page.last().map(|r| (r.uts, r.id.clone()));
+            all.extend(page);
+        }
+        assert_eq!(all.len(), 4);
+        assert_eq!(all[0].uts, 30);
+        assert!(all
+            .windows(2)
+            .all(|w| (w[0].uts, w[0].id.as_str()) >= (w[1].uts, w[1].id.as_str())));
+        let ids: std::collections::HashSet<_> = all.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(ids.len(), 4);
+
+        // Tombstones excluded.
+        store
+            .append_scrobbles(&[rec(30, "B", "w", 1).into_tombstone(9)])
+            .await
+            .unwrap();
+        let after = store.recent_scrobbles(None, 10).await.unwrap();
+        assert_eq!(after.len(), 3);
+        assert!(after.iter().all(|r| r.uts != 30));
     }
 
     #[tokio::test]

@@ -570,6 +570,76 @@ input[type="password"] {
   font-size: 12px;
 }
 
+/* ---- sync ------------------------------------------------------------------- */
+
+.cov-track {
+  position: relative;
+  height: 14px;
+  width: 100%;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cov-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  min-width: 1px;
+}
+
+.cov-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+}
+
+.feed-row:hover {
+  background: var(--surface-2);
+}
+
+.feed-time {
+  flex-shrink: 0;
+  width: 152px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.feed-main {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.feed-album {
+  flex-shrink: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
 /* ---- scrollbars ------------------------------------------------------------ */
 
 ::-webkit-scrollbar {

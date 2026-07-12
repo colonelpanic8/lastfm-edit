@@ -469,6 +469,14 @@ impl Storage for FsStorage {
         self.with_index(|index| index.artist_scrobbles(artist, &range))
     }
 
+    async fn recent_scrobbles(
+        &self,
+        before: Option<(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>> {
+        self.with_index(|index| index.recent_scrobbles(before.as_ref(), limit))
+    }
+
     async fn reindex(&self) -> Result<()> {
         let mut guard = self.index.lock().unwrap();
         if let Some(index) = guard.take() {
@@ -751,6 +759,68 @@ mod tests {
             albums.iter().find(|a| a.album == "One").map(|a| a.count),
             Some(1)
         );
+    }
+
+    #[tokio::test]
+    async fn recent_scrobbles_descending_keyset_pagination() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsStorage::open(dir.path()).unwrap();
+        // Two records share JAN (different track → different id); the rest are spread out.
+        store
+            .append_scrobbles(&[
+                rec(JAN, "A", "x", 1),
+                rec(JAN, "A", "y", 1),
+                rec(JAN + 60, "A", "z", 1),
+                rec(FEB, "B", "w", 1),
+                rec(FEB + 60, "B", "v", 1),
+            ])
+            .await
+            .unwrap();
+
+        // Newest-first, no cursor.
+        let p1 = store.recent_scrobbles(None, 2).await.unwrap();
+        assert_eq!(p1.len(), 2);
+        assert_eq!(p1[0].uts, FEB + 60);
+        assert_eq!(p1[1].uts, FEB);
+
+        // Walk every page with the keyset cursor; expect no gaps or duplicates.
+        let mut all = Vec::new();
+        let mut cursor: Option<(u64, ScrobbleId)> = None;
+        loop {
+            let page = store.recent_scrobbles(cursor.clone(), 2).await.unwrap();
+            if page.is_empty() {
+                break;
+            }
+            cursor = page.last().map(|r| (r.uts, r.id.clone()));
+            all.extend(page);
+        }
+        assert_eq!(all.len(), 5);
+        let ids: std::collections::HashSet<_> = all.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(ids.len(), 5, "no duplicate records across pages");
+        // Fully descending, including the same-second id tiebreak.
+        assert!(all
+            .windows(2)
+            .all(|w| (w[0].uts, w[0].id.as_str()) >= (w[1].uts, w[1].id.as_str())));
+        // The two JAN records are adjacent at the tail (oldest), both present.
+        assert_eq!(all[3].uts, JAN);
+        assert_eq!(all[4].uts, JAN);
+
+        // Tombstones are excluded.
+        store
+            .append_scrobbles(&[rec(FEB + 60, "B", "v", 1).into_tombstone(9)])
+            .await
+            .unwrap();
+        let after = store.recent_scrobbles(None, 10).await.unwrap();
+        assert_eq!(after.len(), 4);
+        assert!(after.iter().all(|r| r.uts != FEB + 60));
+
+        // Records appended after an earlier query are picked up (index catch_up).
+        store
+            .append_scrobbles(&[rec(FEB + 120, "B", "n", 1)])
+            .await
+            .unwrap();
+        let fresh = store.recent_scrobbles(None, 1).await.unwrap();
+        assert_eq!(fresh[0].uts, FEB + 120);
     }
 
     #[tokio::test]

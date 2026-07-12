@@ -108,6 +108,9 @@ pub struct UiState {
     pub sync: SyncStatus,
     /// Bumped whenever queue contents may have changed; views reload on change.
     pub queue_epoch: u64,
+    /// Bumped when a sync completes or new scrobbles are discovered; the Sync view's
+    /// recent-scrobbles feed reloads (resetting to the first page) on change.
+    pub sync_epoch: u64,
     pub error: Option<String>,
 }
 
@@ -219,8 +222,16 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
         }
         ScrubberEvent::Sync(sync) => match sync {
             SyncEvent::SyncStarted { .. } => state.sync = SyncStatus::Syncing,
-            SyncEvent::SyncCompleted { .. } | SyncEvent::SyncFailed { .. } => {
+            SyncEvent::SyncCompleted { .. } => {
                 state.sync = SyncStatus::Idle;
+                // New scrobbles may have landed; the Sync feed should refresh.
+                state.sync_epoch += 1;
+            }
+            SyncEvent::SyncFailed { .. } => {
+                state.sync = SyncStatus::Idle;
+            }
+            SyncEvent::ScrobblesDiscovered { .. } => {
+                state.sync_epoch += 1;
             }
             SyncEvent::SyncPaused {
                 reason: PauseReason::RateLimited { until_estimate },
@@ -645,6 +656,38 @@ mod tests {
             },
         );
         assert_eq!(state.queue_epoch, before + 1);
+    }
+
+    #[test]
+    fn reduce_bumps_sync_epoch_on_sync_progress() {
+        use scrobble_store::{SyncEvent, SyncStats};
+        let mut state = UiState::default();
+        assert_eq!(state.sync_epoch, 0);
+        reduce(
+            &mut state,
+            &ScrubberEvent::Sync(SyncEvent::ScrobblesDiscovered {
+                new: 3,
+                updated: 0,
+                oldest: Some(1),
+                newest: Some(2),
+            }),
+        );
+        assert_eq!(state.sync_epoch, 1);
+        reduce(
+            &mut state,
+            &ScrubberEvent::Sync(SyncEvent::SyncCompleted {
+                stats: SyncStats::default(),
+            }),
+        );
+        assert_eq!(state.sync_epoch, 2);
+        // A failure updates status but must not bump the feed epoch.
+        reduce(
+            &mut state,
+            &ScrubberEvent::Sync(SyncEvent::SyncFailed {
+                error: "boom".into(),
+            }),
+        );
+        assert_eq!(state.sync_epoch, 2);
     }
 
     #[test]

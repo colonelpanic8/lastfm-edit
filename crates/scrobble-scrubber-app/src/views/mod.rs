@@ -4,6 +4,7 @@ pub mod dashboard;
 pub mod history;
 pub mod library;
 pub mod review;
+pub mod sync;
 pub mod work_queue;
 
 use crate::{CoreSignal, UiSignal};
@@ -14,6 +15,7 @@ use scrobble_scrubber::{review_status, EditIntent, ReviewStatus, ScrubberState};
 pub enum ActiveView {
     Dashboard,
     Library,
+    Sync,
     Review,
     WorkQueue,
     History,
@@ -52,6 +54,7 @@ pub fn Shell() -> Element {
         Ok("review") => ActiveView::Review,
         Ok("work") | Ok("work-queue") | Ok("queue") => ActiveView::WorkQueue,
         Ok("history") => ActiveView::History,
+        Ok("sync") => ActiveView::Sync,
         _ => ActiveView::Dashboard,
     });
     let core = use_context::<CoreSignal>();
@@ -79,6 +82,7 @@ pub fn Shell() -> Element {
                         match active() {
                             ActiveView::Dashboard => rsx! { dashboard::Dashboard {} },
                             ActiveView::Library => rsx! { library::Library {} },
+                            ActiveView::Sync => rsx! { sync::Sync {} },
                             ActiveView::Review => rsx! { review::Review {} },
                             ActiveView::WorkQueue => rsx! { work_queue::WorkQueue {} },
                             ActiveView::History => rsx! { history::History {} },
@@ -121,6 +125,7 @@ fn Nav(active: Signal<ActiveView>) -> Element {
             div { class: "brand", "Scrobble Scrubber" }
             {item(ActiveView::Dashboard, "Dashboard", 0)}
             {item(ActiveView::Library, "Library", 0)}
+            {item(ActiveView::Sync, "Sync", 0)}
             {item(ActiveView::Review, "Review", needs_review)}
             {item(ActiveView::WorkQueue, "Work Queue", 0)}
             {item(ActiveView::History, "History", 0)}

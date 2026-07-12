@@ -6,6 +6,7 @@
 //! the flat files. Nothing in it is authoritative.
 
 use crate::error::{Result, StoreError};
+use crate::id::ScrobbleId;
 use crate::record::ScrobbleRecord;
 use crate::storage::{AlbumCount, ArtistCount, TrackCount};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -400,6 +401,39 @@ impl Index {
             .map_err(sqlite_err)?;
         let rows = statement
             .query_map(params![artist, lo, hi], |row| row.get::<_, String>(0))
+            .map_err(sqlite_err)?;
+        let mut records = Vec::new();
+        for json in rows {
+            let json = json.map_err(sqlite_err)?;
+            records.push(serde_json::from_str(&json)?);
+        }
+        Ok(records)
+    }
+
+    pub(crate) fn recent_scrobbles(
+        &self,
+        before: Option<&(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>> {
+        // NULL cursor (no `before`) short-circuits the keyset predicate via `?1 IS NULL`.
+        let (cursor_uts, cursor_id): (Option<i64>, Option<&str>) = match before {
+            Some((uts, id)) => (Some(*uts as i64), Some(id.as_str())),
+            None => (None, None),
+        };
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT json FROM scrobbles
+                 WHERE deleted = 0
+                   AND (?1 IS NULL OR uts < ?1 OR (uts = ?1 AND id < ?2))
+                 ORDER BY uts DESC, id DESC
+                 LIMIT ?3",
+            )
+            .map_err(sqlite_err)?;
+        let rows = statement
+            .query_map(params![cursor_uts, cursor_id, limit as i64], |row| {
+                row.get::<_, String>(0)
+            })
             .map_err(sqlite_err)?;
         let mut records = Vec::new();
         for json in rows {

@@ -149,6 +149,21 @@ pub trait Storage: Send + Sync {
         range: Option<Range<u64>>,
     ) -> Result<Vec<ScrobbleRecord>>;
 
+    /// Live scrobbles strictly before the cursor (or the newest, when `before` is `None`),
+    /// ordered descending by `(uts, id)`. Keyset pagination: pass the last returned record's
+    /// `(uts, id)` back as the next cursor to fetch the following page; there are no gaps or
+    /// duplicates across pages.
+    ///
+    /// The `id` tiebreak is compared lexicographically (matching [`ScrobbleId`]'s `Ord` and
+    /// the SQLite index's `TEXT` ordering). Because ids share the `"{uts}-"` prefix within a
+    /// single second, that only distinguishes same-second scrobbles, where the two orderings
+    /// agree — so pagination is stable regardless of backend.
+    async fn recent_scrobbles(
+        &self,
+        before: Option<(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>>;
+
     /// Drop and rebuild any derived index from the source of truth. A no-op for backends
     /// without derived state.
     async fn reindex(&self) -> Result<()>;

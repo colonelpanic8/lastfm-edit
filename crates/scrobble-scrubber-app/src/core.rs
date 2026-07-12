@@ -68,6 +68,8 @@ pub enum BackendCommand {
     Reinstate(Uuid),
     /// Seed the embedded cleanup rules, then relaunch so the planner is rebuilt with them.
     EnableDefaultRules,
+    /// Drop and rebuild the derived SQLite index from the flat-file source of truth.
+    Reindex,
 }
 
 /// Everything the UI needs to talk to the backend. All Send; lives in dioxus context.
@@ -374,6 +376,7 @@ async fn backend_main(
 
     let handle = core.handle.clone();
     let store = core.store.clone();
+    let reindex_store = core.store.clone();
     let state = core.state.clone();
     if ready.send(Ok(core)).is_err() {
         return; // UI gone before boot finished
@@ -464,6 +467,16 @@ async fn backend_main(
                             .event_bus()
                             .emit(ScrubberEvent::IntentReinstated { id }),
                         Err(error) => tracing::warn!(%error, %id, "reinstate failed"),
+                    }
+                });
+            }
+            BackendCommand::Reindex => {
+                // Rebuild the derived index off the command loop so the UI stays responsive.
+                let store = reindex_store.clone();
+                tokio::task::spawn_local(async move {
+                    match store.reindex().await {
+                        Ok(()) => tracing::info!("index rebuilt"),
+                        Err(error) => tracing::warn!(%error, "reindex failed"),
                     }
                 });
             }
