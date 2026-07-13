@@ -120,7 +120,9 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
         }
         upgraded.source = RecordSource::Scrape;
         upgraded.fetched_at = Self::now();
-        self.store.append_scrobbles(&[upgraded.clone()]).await?;
+        self.store
+            .append_scrobbles(std::slice::from_ref(&upgraded))
+            .await?;
         Ok(upgraded)
     }
 

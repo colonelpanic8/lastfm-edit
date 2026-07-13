@@ -604,6 +604,24 @@ input[type="password"] {
   gap: 2px;
 }
 
+.history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.history-help {
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+input.history-search {
+  width: min(420px, 48%);
+  min-width: 240px;
+}
+
 .feed-row {
   display: flex;
   align-items: baseline;
@@ -618,9 +636,15 @@ input[type="password"] {
 
 .feed-time {
   flex-shrink: 0;
-  width: 152px;
+  width: 315px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.feed-count {
+  flex-shrink: 0;
+  min-width: 48px;
+  justify-content: center;
 }
 
 .feed-main {
@@ -638,6 +662,25 @@ input[type="password"] {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .history-heading {
+    flex-direction: column;
+  }
+
+  input.history-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .feed-row {
+    flex-wrap: wrap;
+  }
+
+  .feed-time {
+    width: 100%;
+  }
 }
 
 /* ---- scrollbars ------------------------------------------------------------ */

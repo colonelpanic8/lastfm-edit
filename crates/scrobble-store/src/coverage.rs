@@ -425,7 +425,7 @@ mod tests {
             let a = rng.next() % UNIVERSE;
             let b = rng.next() % UNIVERSE;
             let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
-            if rng.next() % 2 == 0 {
+            if rng.next().is_multiple_of(2) {
                 map.insert(Segment::new(lo, hi, step));
                 model[lo as usize..hi as usize].fill(true);
             } else {

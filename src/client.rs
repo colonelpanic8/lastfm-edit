@@ -1755,7 +1755,7 @@ impl LastFmEditClientImpl {
                 log::debug!("🔍 Response length: {} chars", content.len());
                 log::debug!(
                     "🔍 Response preview (first 200 chars): {}",
-                    &content.chars().take(200).collect::<String>()
+                    content.chars().take(200).collect::<String>()
                 );
             }
         } else {

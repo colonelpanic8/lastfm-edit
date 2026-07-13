@@ -141,7 +141,7 @@ impl LoginManager {
         log::debug!("📤 Form body length: {} chars", form_string.len());
         log::debug!("📤 Form body (masked): {form_string}");
         log::debug!("📤 Request headers: Referer={}, Origin={}, Content-Type=application/x-www-form-urlencoded", 
-            login_url, &self.base_url);
+            login_url, self.base_url);
 
         request.set_body(form_string);
 

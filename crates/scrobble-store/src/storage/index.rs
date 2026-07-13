@@ -8,8 +8,8 @@
 use crate::error::{Result, StoreError};
 use crate::id::ScrobbleId;
 use crate::record::ScrobbleRecord;
-use crate::storage::{AlbumCount, ArtistCount, TrackCount};
-use rusqlite::{params, Connection, OptionalExtension};
+use crate::storage::{AlbumCount, ArtistCount, ScrobbleGroup, TrackCount};
+use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -442,6 +442,73 @@ impl Index {
         }
         Ok(records)
     }
+
+    pub(crate) fn search_scrobbles(
+        &self,
+        query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleGroup>> {
+        let terms: Vec<String> = query
+            .split_whitespace()
+            .map(|term| format!("%{}%", escape_like(term)))
+            .collect();
+        let filters = std::iter::repeat_n(
+            "(artist LIKE ? ESCAPE '\\' COLLATE NOCASE
+               OR track LIKE ? ESCAPE '\\' COLLATE NOCASE
+               OR COALESCE(album, '') LIKE ? ESCAPE '\\' COLLATE NOCASE)",
+            terms.len(),
+        )
+        .collect::<Vec<_>>()
+        .join(" AND ");
+        let filter_sql = if filters.is_empty() {
+            String::new()
+        } else {
+            format!(" AND {filters}")
+        };
+        let sql = format!(
+            "SELECT artist, track, album, COUNT(*), MIN(uts), MAX(uts)
+             FROM scrobbles
+             WHERE deleted = 0{filter_sql}
+             GROUP BY artist, track, album
+             ORDER BY MAX(uts) DESC, artist COLLATE NOCASE ASC,
+                      track COLLATE NOCASE ASC, album COLLATE NOCASE ASC
+             LIMIT ? OFFSET ?"
+        );
+        let mut values = Vec::with_capacity(terms.len() * 3 + 2);
+        for term in &terms {
+            values.extend([
+                Value::Text(term.clone()),
+                Value::Text(term.clone()),
+                Value::Text(term.clone()),
+            ]);
+        }
+        values.push(Value::Integer(limit as i64));
+        values.push(Value::Integer(offset as i64));
+
+        let mut statement = self.conn.prepare(&sql).map_err(sqlite_err)?;
+        let rows = statement
+            .query_map(params_from_iter(values), |row| {
+                Ok(ScrobbleGroup {
+                    artist: row.get(0)?,
+                    track: row.get(1)?,
+                    album: row.get(2)?,
+                    count: row.get::<_, i64>(3)? as u64,
+                    first_uts: row.get::<_, i64>(4)? as u64,
+                    latest_uts: row.get::<_, i64>(5)? as u64,
+                })
+            })
+            .map_err(sqlite_err)?;
+        rows.collect::<std::result::Result<_, _>>()
+            .map_err(sqlite_err)
+    }
+}
+
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 fn range_bounds(range: &Option<Range<u64>>) -> (i64, i64) {

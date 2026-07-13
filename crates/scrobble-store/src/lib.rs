@@ -25,7 +25,8 @@ pub use id::ScrobbleId;
 pub use record::{Provenanced, RecordSource, ScrobbleRecord};
 pub use source::{ApiSource, ScrapeSource, ScrobbleSource, SourcePage};
 pub use storage::{
-    AlbumCount, AppendStats, ArtistCount, FsStorage, MemoryStorage, Storage, SyncState, TrackCount,
+    AlbumCount, AppendStats, ArtistCount, FsStorage, MemoryStorage, ScrobbleGroup, Storage,
+    SyncState, TrackCount,
 };
 pub use sync::{
     PauseReason, SyncEngine, SyncEvent, SyncEventBus, SyncEventReceiver, SyncMode, SyncOptions,

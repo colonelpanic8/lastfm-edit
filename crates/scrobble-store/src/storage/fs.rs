@@ -15,7 +15,7 @@
 //! including duplicated or interleaved lines — folds back into the same state.
 
 use super::index::Index;
-use super::{AlbumCount, AppendStats, ArtistCount, Storage, SyncState, TrackCount};
+use super::{AlbumCount, AppendStats, ArtistCount, ScrobbleGroup, Storage, SyncState, TrackCount};
 use crate::coverage::{CoverageMap, Segment};
 use crate::error::Result;
 use crate::id::ScrobbleId;
@@ -477,6 +477,15 @@ impl Storage for FsStorage {
         self.with_index(|index| index.recent_scrobbles(before.as_ref(), limit))
     }
 
+    async fn search_scrobbles(
+        &self,
+        query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleGroup>> {
+        self.with_index(|index| index.search_scrobbles(query, offset, limit))
+    }
+
     async fn reindex(&self) -> Result<()> {
         let mut guard = self.index.lock().unwrap();
         if let Some(index) = guard.take() {
@@ -559,15 +568,24 @@ mod tests {
         let store = FsStorage::open(dir.path()).unwrap();
 
         let a = rec(JAN, "A", "x", 1);
-        store.append_scrobbles(&[a.clone()]).await.unwrap();
+        store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         // Idempotent re-append writes nothing.
-        let stats = store.append_scrobbles(&[a.clone()]).await.unwrap();
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         assert_eq!(stats.unchanged, 1);
 
         let mut newer = a.clone();
         newer.fetched_at = 2;
         newer.album = Some("Corrected".to_string());
-        let stats = store.append_scrobbles(&[newer.clone()]).await.unwrap();
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&newer))
+            .await
+            .unwrap();
         assert_eq!(stats.updated, 1);
 
         // Two lines on disk, one logical record.
@@ -588,7 +606,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = FsStorage::open(dir.path()).unwrap();
         let a = rec(JAN, "A", "x", 1);
-        store.append_scrobbles(&[a.clone()]).await.unwrap();
+        store
+            .append_scrobbles(std::slice::from_ref(&a))
+            .await
+            .unwrap();
         store
             .append_scrobbles(&[a.clone().into_tombstone(2)])
             .await
@@ -821,6 +842,62 @@ mod tests {
             .unwrap();
         let fresh = store.recent_scrobbles(None, 1).await.unwrap();
         assert_eq!(fresh[0].uts, FEB + 120);
+    }
+
+    #[tokio::test]
+    async fn search_scrobbles_groups_matches_and_catches_up_incrementally() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsStorage::open(dir.path()).unwrap();
+        store
+            .append_scrobbles(&[
+                rec_album(
+                    JAN,
+                    "Boards of Canada",
+                    "Roygbiv",
+                    Some("Music Has the Right"),
+                ),
+                rec_album(
+                    JAN + 60,
+                    "Boards of Canada",
+                    "Roygbiv",
+                    Some("Music Has the Right"),
+                ),
+                rec_album(FEB, "Boards of Canada", "Dayvan Cowboy", Some("Campfire")),
+                rec_album(FEB + 60, "Other", "Roygbiv", None),
+            ])
+            .await
+            .unwrap();
+
+        let results = store.search_scrobbles("boards royg", 0, 10).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].count, 2);
+        assert_eq!(results[0].first_uts, JAN);
+        assert_eq!(results[0].latest_uts, JAN + 60);
+
+        // Album is part of identity, and LIKE wildcards in user input stay literal.
+        assert_eq!(
+            store.search_scrobbles("camp", 0, 10).await.unwrap().len(),
+            1
+        );
+        assert!(store.search_scrobbles("%", 0, 10).await.unwrap().is_empty());
+
+        // A later append is visible without an explicit rebuild.
+        store
+            .append_scrobbles(&[rec_album(
+                FEB + 120,
+                "Boards of Canada",
+                "Roygbiv",
+                Some("Music Has the Right"),
+            )])
+            .await
+            .unwrap();
+        let refreshed = store.search_scrobbles("roygbiv", 0, 10).await.unwrap();
+        assert_eq!(refreshed[0].count, 3);
+        assert_eq!(refreshed[0].latest_uts, FEB + 120);
+
+        let second_page = store.search_scrobbles("roygbiv", 1, 1).await.unwrap();
+        assert_eq!(second_page.len(), 1);
+        assert_eq!(second_page[0].artist, "Other");
     }
 
     #[tokio::test]

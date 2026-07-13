@@ -73,7 +73,7 @@ pub fn apply_all_rules(
                     "Applied rewrite rule '{}' to track '{}' by '{}'",
                     rule_name,
                     edit.track_name_original.as_deref().unwrap_or("unknown"),
-                    &edit.artist_name_original
+                    edit.artist_name_original
                 );
             }
         }
