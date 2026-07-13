@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let start = idx.saturating_sub(120);
             let end = (idx + p.len() + 120).min(body.len());
             println!("\nMATCH pattern {p:?} at byte {idx}:");
-            println!("...{}...", &body[start..end].replace('\n', " "));
+            println!("...{}...", body[start..end].replace('\n', " "));
         }
     }
     println!("first 400 bytes:\n{}", &body[..400.min(body.len())]);

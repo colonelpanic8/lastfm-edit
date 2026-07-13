@@ -111,10 +111,10 @@ pub fn History() -> Element {
         .iter()
         .filter(|i| matches(tab(), &i.state))
         .collect();
-    visible.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    visible.sort_by_key(|intent| std::cmp::Reverse(intent.updated_at));
 
     let mut log_visible: Vec<&EditLogEntry> = log_entries.iter().collect();
-    log_visible.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    log_visible.sort_by_key(|entry| std::cmp::Reverse(entry.updated_at));
 
     let empty_label = match tab() {
         Tab::Applied => "nothing applied yet",

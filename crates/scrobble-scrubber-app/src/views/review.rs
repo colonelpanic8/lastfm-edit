@@ -28,7 +28,7 @@ pub fn Review() -> Element {
         .iter()
         .filter(|i| review_status(i) == ReviewStatus::NeedsReview)
         .collect();
-    pending.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    pending.sort_by_key(|intent| std::cmp::Reverse(intent.updated_at));
     let count = pending.len();
     let header = format!("{count} proposals need review");
 

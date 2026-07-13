@@ -71,7 +71,7 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
     let done = intent.done_count();
     let failed = intent.failed_count();
     let pending_count = intent.pending_count();
-    let percent = if total > 0 { done * 100 / total } else { 0 };
+    let percent = (done * 100).checked_div(total).unwrap_or(0);
     let failures: Vec<(String, u32, String)> = intent
         .instances
         .iter()
