@@ -1,14 +1,14 @@
 [package]
 name = "scrobble-scrubber"
-version = "0.1.1"
+version = "0.1.2"
 description = "Rules engine for automatic editing of Last.fm scrobbles"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
-lastfm-edit.workspace = true
-scrobble-store.workspace = true
+lastfm-edit = { workspace = true, default-features = false }
+scrobble-store = { workspace = true, default-features = false }
 chrono.workspace = true
 thiserror.workspace = true
 serde.workspace = true

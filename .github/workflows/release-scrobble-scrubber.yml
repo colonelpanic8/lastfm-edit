@@ -1,0 +1,229 @@
+name: Release Scrobble Scrubber
+
+on:
+  push:
+    tags:
+      - "scrobble-scrubber-v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing scrobble-scrubber-vX.Y.Z tag to build and publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scrobble-scrubber-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+
+      - name: Validate synchronized versions and tag
+        id: version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          manifest_version() {
+            sed -n 's/^version = "\([^"]*\)"/\1/p' "$1" | head -n 1
+          }
+
+          app_version="$(manifest_version crates/scrobble-scrubber-app/Cargo.toml)"
+          scrubber_version="$(manifest_version crates/scrobble-scrubber/Cargo.toml)"
+          store_version="$(manifest_version crates/scrobble-store/Cargo.toml)"
+
+          if [[ -z "$app_version" ]]; then
+            echo "Could not read Scrobble Scrubber version" >&2
+            exit 1
+          fi
+          if [[ "$app_version" != "$scrubber_version" ]] || [[ "$app_version" != "$store_version" ]]; then
+            echo "Scrobble app-family versions must match: app=$app_version scrubber=$scrubber_version store=$store_version" >&2
+            exit 1
+          fi
+
+          expected_tag="scrobble-scrubber-v$app_version"
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Release tag $RELEASE_TAG does not match $expected_tag" >&2
+            exit 1
+          fi
+
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$app_version" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Build signed Android release
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Configure Nix cache
+        uses: cachix/cachix-action@v15
+        with:
+          name: nix-community
+          skipPush: true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-scrobble-scrubber-android-${{ hashFiles('flake.lock', 'Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-scrobble-scrubber-android-
+
+      - name: Build signed APK and AAB
+        env:
+          ANDROID_SIGNING_KEYSTORE_BASE64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+          ANDROID_SIGNING_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEYSTORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: nix run .#dioxus-android-release
+
+      - name: Collect Android artifacts
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-assets
+          mapfile -t signed_apks < <(
+            find target/dx/scrobble-scrubber-app/release/android \
+              -path '*/build/outputs/apk/release/*-signed.apk' \
+              -type f | sort
+          )
+          if [[ "${#signed_apks[@]}" -eq 0 ]]; then
+            echo "No signed Android APK was produced" >&2
+            exit 1
+          fi
+
+          mapfile -t artifacts < <(
+            find target/dx/scrobble-scrubber-app/release/android \
+              \( -path '*/build/outputs/apk/release/*-signed.apk' -o -path '*/build/outputs/bundle/release/*-signed.aab' \) \
+              -type f | sort
+          )
+          if [[ "${#artifacts[@]}" -ne 2 ]]; then
+            echo "Expected one signed APK and one signed AAB, found ${#artifacts[@]} artifacts" >&2
+            exit 1
+          fi
+          for artifact in "${artifacts[@]}"; do
+            cp -v "$artifact" "release-assets/scrobble-scrubber-${APP_VERSION}-android-$(basename "$artifact")"
+          done
+          ls -lh release-assets
+
+      - name: Save Android release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrobble-scrubber-android-${{ needs.metadata.outputs.version }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30
+
+  desktop:
+    name: Build Linux desktop release
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Configure Nix cache
+        uses: cachix/cachix-action@v15
+        with:
+          name: nix-community
+          skipPush: true
+
+      - name: Build Linux desktop bundle
+        env:
+          SCROBBLE_SCRUBBER_DESKTOP_OUT_DIR: ${{ github.workspace }}/release-assets
+        run: nix run .#dioxus-desktop-release
+
+      - name: Save Linux desktop release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrobble-scrubber-linux-${{ needs.metadata.outputs.version }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish verified GitHub release
+    needs: [metadata, android, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Add checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum ./* > SHA256SUMS
+          ls -lh
+
+      - name: Create or repair GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          APP_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+            gh release edit "$RELEASE_TAG" \
+              --title "Scrobble Scrubber $APP_VERSION" \
+              --draft=false \
+              --prerelease=false
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --verify-tag \
+              --title "Scrobble Scrubber $APP_VERSION" \
+              --generate-notes
+          fi

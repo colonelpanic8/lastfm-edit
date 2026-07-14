@@ -61,5 +61,75 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --verbose
 
-      - name: Build release
-        run: cargo build --workspace --release --verbose
+      - name: Build Dioxus desktop app
+        run: cargo build -p scrobble-scrubber-app --release --no-default-features --features desktop --verbose
+
+      - name: Build remaining release workspace
+        run: cargo build --workspace --exclude scrobble-scrubber-app --release --verbose
+
+  android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Configure Nix cache
+        uses: cachix/cachix-action@v15
+        with:
+          name: nix-community
+          skipPush: true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-dioxus-android-gradle-${{ hashFiles('flake.lock', 'Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-dioxus-android-gradle-
+
+      - name: Build Android debug APK
+        run: nix run .#dioxus-android-debug
+
+      - name: Collect Android debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p ci-artifacts/android
+          mapfile -t apks < <(
+            find target/dx/scrobble-scrubber-app/debug/android \
+              -path '*/build/outputs/apk/debug/*.apk' \
+              -type f \
+              | sort
+          )
+
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo "No Android debug APK was produced" >&2
+            exit 1
+          fi
+
+          for apk in "${apks[@]}"; do
+            cp -v "$apk" "ci-artifacts/android/scrobble-scrubber-android-debug-$(basename "$apk")"
+          done
+
+          ls -lh ci-artifacts/android
+
+      - name: Save Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrobble-scrubber-android-debug
+          path: ci-artifacts/android/*
+          if-no-files-found: error
+          retention-days: 14

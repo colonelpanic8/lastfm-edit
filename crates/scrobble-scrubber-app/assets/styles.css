@@ -683,6 +683,57 @@ input.history-search {
   }
 }
 
+@media (max-width: 700px) {
+  .shell {
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .nav-item {
+    flex: 0 0 auto;
+    padding: 8px 10px;
+  }
+
+  .content {
+    padding: 16px max(14px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom))
+      max(14px, env(safe-area-inset-left));
+  }
+
+  .setup-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .grid,
+  .lib-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lib-name {
+    width: min(42vw, 210px);
+  }
+
+  .intent .actions {
+    flex-wrap: wrap;
+  }
+}
+
 /* ---- scrollbars ------------------------------------------------------------ */
 
 ::-webkit-scrollbar {

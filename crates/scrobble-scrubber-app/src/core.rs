@@ -167,10 +167,12 @@ impl Default for ScrubberSection {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn pass_entry() -> String {
     std::env::var("LASTFM_EDIT_PASS_ENTRY").unwrap_or_else(|_| "last.fm".to_string())
 }
 
+#[cfg(any(not(target_os = "android"), test))]
 fn parse_pass_field(output: &str, field: Option<&str>) -> Option<String> {
     match field {
         None => output.lines().next(),
@@ -183,6 +185,7 @@ fn parse_pass_field(output: &str, field: Option<&str>) -> Option<String> {
     .map(str::to_string)
 }
 
+#[cfg(not(target_os = "android"))]
 fn credential_from_pass(field: Option<&str>) -> Result<Option<String>, String> {
     let entry = pass_entry();
     let output = Command::new("pass")
@@ -195,6 +198,13 @@ fn credential_from_pass(field: Option<&str>) -> Result<Option<String>, String> {
     let output = String::from_utf8(output.stdout)
         .map_err(|_| format!("pass entry {entry} is not valid UTF-8"))?;
     Ok(parse_pass_field(&output, field))
+}
+
+#[cfg(target_os = "android")]
+fn credential_from_pass(_field: Option<&str>) -> Result<Option<String>, String> {
+    // Android has no password-store executable. A missing credential makes a
+    // fresh install render the in-app login form instead of a fatal error.
+    Ok(None)
 }
 
 fn env_or_pass(name: &str, pass_field: Option<&str>) -> Result<Option<String>, String> {
@@ -215,15 +225,67 @@ fn load_config() -> FileConfig {
     }
 }
 
+fn app_files_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "android")]
+    {
+        let files_dir = manganis::android::with_activity(|env, activity| {
+            let directory = env
+                .call_method(activity, "getFilesDir", "()Ljava/io/File;", &[])
+                .ok()?
+                .l()
+                .ok()?;
+            let absolute_path = env
+                .call_method(&directory, "getAbsolutePath", "()Ljava/lang/String;", &[])
+                .ok()?
+                .l()
+                .ok()?;
+            let absolute_path = jni::objects::JString::from(absolute_path);
+            let absolute_path: String = env.get_string(&absolute_path).ok()?.into();
+            Some(PathBuf::from(absolute_path))
+        });
+        return files_dir.or_else(dirs::data_dir);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        None
+    }
+}
+
+fn default_config_path(files_dir: Option<&std::path::Path>) -> Option<PathBuf> {
+    files_dir
+        .map(|dir| dir.join("scrobble-scrubber/config.toml"))
+        .or_else(|| dirs::config_dir().map(|dir| dir.join("scrobble-scrubber/config.toml")))
+}
+
 fn config_path() -> Option<PathBuf> {
     std::env::var("SCROBBLE_SCRUBBER_CONFIG")
         .map(PathBuf::from)
         .ok()
-        .or_else(|| dirs::config_dir().map(|dir| dir.join("scrobble-scrubber/config.toml")))
+        .or_else(|| default_config_path(app_files_dir().as_deref()))
 }
 
 fn auth_path() -> Option<PathBuf> {
     config_path().and_then(|path| path.parent().map(|dir| dir.join("auth.toml")))
+}
+
+fn session_manager() -> lastfm_edit::SessionManager {
+    match app_files_dir() {
+        Some(files_dir) => lastfm_edit::SessionManager::with_data_dir("lastfm-edit", files_dir),
+        None => lastfm_edit::SessionManager::new("lastfm-edit"),
+    }
+}
+
+fn default_store_root(username: &str, files_dir: Option<&std::path::Path>) -> Option<PathBuf> {
+    files_dir
+        .map(|dir| dir.join("scrobble-store").join(username))
+        .or_else(|| dirs::data_dir().map(|dir| dir.join("scrobble-store").join(username)))
+}
+
+fn http_client() -> Result<Box<dyn http_client::HttpClient + Send + Sync>, StartupError> {
+    crate::http::RustlsReqwestClient::new()
+        .map(|client| Box::new(client) as Box<dyn http_client::HttpClient + Send + Sync>)
+        .map_err(StartupError::Other)
 }
 
 fn load_auth_config() -> AuthConfig {
@@ -341,7 +403,13 @@ async fn backend_main(
     let selected_username = match login {
         Some(credentials) => {
             let client = match LastFmEditClientImpl::login_with_credentials(
-                Box::new(http_client::native::NativeClient::new()),
+                match http_client() {
+                    Ok(client) => client,
+                    Err(error) => {
+                        let _ = ready.send(Err(error));
+                        return;
+                    }
+                },
                 &credentials.username,
                 &credentials.password,
             )
@@ -353,8 +421,7 @@ async fn backend_main(
                     return;
                 }
             };
-            if let Err(error) = lastfm_edit::SessionPersistence::save_session(&client.get_session())
-            {
+            if let Err(error) = session_manager().save_session(&client.get_session()) {
                 let _ = ready.send(Err(StartupError::Other(error.to_string())));
                 return;
             }
@@ -641,7 +708,7 @@ async fn build(
         .map(PathBuf::from)
         .ok()
         .or_else(|| config.store.root.clone())
-        .or_else(|| dirs::data_dir().map(|dir| dir.join("scrobble-store").join(&username)))
+        .or_else(|| default_store_root(&username, app_files_dir().as_deref()))
         .ok_or_else(|| StartupError::Other("cannot determine store root".into()))?;
     let state_dir = config
         .store
@@ -664,23 +731,19 @@ async fn build(
 
     // Edit client: prefer the saved session, but bootstrap it from pass when absent.
     // The Nix app wrapper supplies pass on PATH even when launched from Finder.
-    let client = match lastfm_edit::SessionPersistence::load_session(&username) {
-        Ok(session) => LastFmEditClientImpl::from_session(
-            Box::new(http_client::native::NativeClient::new()),
-            session,
-        ),
+    let sessions = session_manager();
+    let client = match sessions.load_session(&username) {
+        Ok(session) => LastFmEditClientImpl::from_session(http_client()?, session),
         Err(session_error) => {
             let password = env_or_pass("LASTFM_EDIT_PASSWORD", None)
                 .map_err(StartupError::NoSession)?
                 .ok_or_else(|| StartupError::NoSession(session_error.to_string()))?;
-            let client = LastFmEditClientImpl::login_with_credentials(
-                Box::new(http_client::native::NativeClient::new()),
-                &username,
-                &password,
-            )
-            .await
-            .map_err(|error| StartupError::NoSession(error.to_string()))?;
-            lastfm_edit::SessionPersistence::save_session(&client.get_session())
+            let client =
+                LastFmEditClientImpl::login_with_credentials(http_client()?, &username, &password)
+                    .await
+                    .map_err(|error| StartupError::NoSession(error.to_string()))?;
+            sessions
+                .save_session(&client.get_session())
                 .map_err(|error| StartupError::NoSession(error.to_string()))?;
             client
         }
@@ -723,11 +786,8 @@ async fn build(
     };
     let (sync, sync_events) = match api_key {
         Some(api_key) if !api_key.is_empty() => {
-            let api_client = lastfm_edit::LastFmApiClientImpl::new(
-                Box::new(http_client::native::NativeClient::new()),
-                username.clone(),
-                api_key,
-            );
+            let api_client =
+                lastfm_edit::LastFmApiClientImpl::new(http_client()?, username.clone(), api_key);
             let engine = SyncEngine::new(
                 store.clone() as Arc<dyn Storage>,
                 Arc::new(ApiSource::new(api_client)),
@@ -758,7 +818,8 @@ async fn build(
 
 #[cfg(test)]
 mod tests {
-    use super::parse_pass_field;
+    use super::{default_config_path, default_store_root, parse_pass_field};
+    use std::path::Path;
 
     const ENTRY: &str = "secret\nuser: IvanMalison\nurl: https://last.fm\napi-key: key\n";
 
@@ -776,6 +837,20 @@ mod tests {
         assert_eq!(
             parse_pass_field(ENTRY, Some("api-key")).as_deref(),
             Some("key")
+        );
+    }
+
+    #[test]
+    fn mobile_paths_stay_beneath_the_private_files_directory() {
+        let files_dir = Path::new("/data/user/0/org.example.app/files");
+
+        assert_eq!(
+            default_config_path(Some(files_dir)).unwrap(),
+            files_dir.join("scrobble-scrubber/config.toml")
+        );
+        assert_eq!(
+            default_store_root("listener", Some(files_dir)).unwrap(),
+            files_dir.join("scrobble-store/listener")
         );
     }
 }
