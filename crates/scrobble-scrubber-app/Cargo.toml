@@ -1,7 +1,7 @@
 [package]
 name = "scrobble-scrubber-app"
-version = "0.1.1"
-description = "Dioxus desktop UI for scrobble-scrubber"
+version = "0.1.2"
+description = "Dioxus desktop and mobile UI for scrobble-scrubber"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -10,15 +10,16 @@ publish = false
 [[bin]]
 name = "scrobble-scrubber-app"
 path = "src/main.rs"
-test = false
+test = true
 
 [dependencies]
-dioxus = { version = "=0.7.9", default-features = false, features = ["launch", "lib"] }
+dioxus = { version = "=0.7.6", default-features = false, features = ["launch", "lib"] }
 scrobble-scrubber = { workspace = true, default-features = false }
-scrobble-store.workspace = true
-lastfm-edit.workspace = true
-http-client = { version = "^6.6.3", package = "http-client-2", default-features = false, features = ["curl_client"] }
-tokio = { version = "1", default-features = false, features = ["rt", "sync", "time", "macros"] }
+scrobble-store = { workspace = true, default-features = false }
+lastfm-edit = { workspace = true, default-features = false }
+http-client = { version = "^6.6.3", package = "http-client-2", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["brotli", "deflate", "gzip", "rustls-tls"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "sync", "time", "macros"] }
 toml = "0.8"
 chrono.workspace = true
 serde.workspace = true
@@ -28,6 +29,15 @@ futures-util = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+manganis = "=0.7.6"
+
+[dev-dependencies]
+flate2 = "1"
+
 [features]
 default = ["desktop"]
 desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
+android = ["mobile"]

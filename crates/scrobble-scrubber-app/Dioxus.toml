@@ -2,5 +2,5 @@
 name = "ScrobbleScrubber"
 
 [bundle]
-identifier = "org.colonelpanic.scrobble-scrubber"
+identifier = "org.colonelpanic.scrobblescrubber"
 publisher = "Ivan Malison"

@@ -220,3 +220,16 @@ app:
 
 app-run:
     cargo run -p scrobble-scrubber-app
+
+# Build the desktop app as a platform-native release bundle.
+app-desktop-release *args:
+    nix run .#dioxus-desktop-release -- "$@"
+
+# Build the Dioxus client as an Android debug APK.
+app-android-build *args:
+    nix run .#dioxus-android-debug -- "$@"
+
+# Build signed Android release artifacts. Set ANDROID_SIGNING_* as documented in
+# crates/scrobble-scrubber-app/README.md.
+app-android-release *args:
+    nix run .#dioxus-android-release -- "$@"

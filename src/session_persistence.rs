@@ -15,6 +15,7 @@ use std::os::unix::fs::OpenOptionsExt;
 #[derive(Clone, Debug)]
 pub struct SessionManager {
     app_name: String,
+    data_dir: Option<PathBuf>,
 }
 
 impl SessionManager {
@@ -25,7 +26,28 @@ impl SessionManager {
     pub fn new(app_name: impl Into<String>) -> Self {
         Self {
             app_name: app_name.into(),
+            data_dir: None,
         }
+    }
+
+    /// Create a session manager rooted in an explicit application data directory.
+    ///
+    /// This is useful on platforms such as Android where the process does not have
+    /// an XDG home, but the application has a private files directory.
+    pub fn with_data_dir(app_name: impl Into<String>, data_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            app_name: app_name.into(),
+            data_dir: Some(data_dir.into()),
+        }
+    }
+
+    fn data_dir(&self) -> Result<PathBuf> {
+        self.data_dir
+            .clone()
+            .or_else(dirs::data_dir)
+            .ok_or_else(|| {
+                LastFmError::Http("Cannot determine application data directory".to_string())
+            })
     }
 
     /// Get the session file path for a given username using the configured app name.
@@ -39,8 +61,7 @@ impl SessionManager {
     /// Returns the path where the session should be stored, or an error if
     /// the XDG data directory cannot be determined.
     pub fn get_session_path(&self, username: &str) -> Result<PathBuf> {
-        let data_dir = dirs::data_dir()
-            .ok_or_else(|| LastFmError::Http("Cannot determine XDG data directory".to_string()))?;
+        let data_dir = self.data_dir()?;
 
         let session_dir = data_dir.join(&self.app_name).join("users").join(username);
 
@@ -166,8 +187,7 @@ impl SessionManager {
     /// # Returns
     /// Returns a vector of usernames that have saved sessions.
     pub fn list_saved_users(&self) -> Result<Vec<String>> {
-        let data_dir = dirs::data_dir()
-            .ok_or_else(|| LastFmError::Http("Cannot determine XDG data directory".to_string()))?;
+        let data_dir = self.data_dir()?;
 
         let users_dir = data_dir.join(&self.app_name).join("users");
 
@@ -311,5 +331,16 @@ mod tests {
     fn test_session_exists_nonexistent() {
         let fake_username = format!("nonexistent_user_{}", std::process::id());
         assert!(!SessionPersistence::session_exists(&fake_username));
+    }
+
+    #[test]
+    fn explicit_data_dir_keeps_sessions_under_the_app_private_root() {
+        let private_files = PathBuf::from("/data/user/0/org.example.app/files");
+        let manager = SessionManager::with_data_dir("lastfm-edit", &private_files);
+
+        assert_eq!(
+            manager.get_session_path("mobile-user").unwrap(),
+            private_files.join("lastfm-edit/users/mobile-user/session.json")
+        );
     }
 }

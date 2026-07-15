@@ -1,5 +1,15 @@
 # Changelog
 
+## Scrobble Scrubber 0.1.2 (2026-07-13)
+
+- Add an Android build with a mobile-responsive interface and app-private storage.
+- Make the existing Last.fm username/password form work on fresh mobile installs without
+  relying on desktop environment variables or `pass`; passwords are never persisted.
+- Use a cross-platform Rustls HTTP transport that preserves the login response semantics
+  needed to capture Last.fm session cookies.
+- Add tag-driven release automation for a signed Android APK/AAB and Linux desktop
+  package. The GitHub release is published only after both builds pass.
+
 ## lastfm-edit 7.0.1 (unreleased)
 
 ### Breaking changes

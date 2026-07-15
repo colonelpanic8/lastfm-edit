@@ -1,9 +1,11 @@
-//! scrobble-scrubber desktop app: review and drive scrobble metadata cleanup.
+//! Scrobble Scrubber app: review and drive scrobble metadata cleanup.
 
 mod background;
 mod components;
 mod core;
+#[cfg(feature = "desktop")]
 mod desktop;
+mod http;
 mod model;
 mod views;
 
@@ -23,7 +25,7 @@ static BACKEND_READY: std::sync::Mutex<
     Option<tokio::sync::oneshot::Receiver<Result<core::AppCore, core::StartupError>>>,
 > = std::sync::Mutex::new(None);
 
-fn main() {
+fn initialize() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -44,7 +46,15 @@ fn main() {
         .expect("tokio runtime");
     let _guard = runtime.enter();
 
+    #[cfg(feature = "desktop")]
     desktop::launch_app();
+
+    #[cfg(not(feature = "desktop"))]
+    dioxus::launch(App);
+}
+
+fn main() {
+    initialize();
 }
 
 #[component]
