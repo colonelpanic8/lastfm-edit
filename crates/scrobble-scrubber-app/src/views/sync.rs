@@ -6,10 +6,10 @@ use crate::model::{fmt_ts, SyncStatus};
 use crate::{CoreSignal, UiSignal};
 use chrono::{DateTime, Local};
 use dioxus::prelude::*;
-use scrobble_store::{CoverageMap, ScrobbleGroup, Storage};
+use scrobble_store::{CoverageMap, ScrobbleRecord, Storage};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// One page of grouped scrobble-history search results.
+/// One page of chronological scrobble-history search results.
 const PAGE_SIZE: usize = 50;
 
 /// Status/coverage figures, reloaded when a sync completes (or on manual refresh).
@@ -82,7 +82,7 @@ pub fn Sync() -> Element {
         debounced_query.set(value);
     });
 
-    let mut groups = use_signal(Vec::<ScrobbleGroup>::new);
+    let mut scrobbles = use_signal(Vec::<ScrobbleRecord>::new);
     let mut exhausted = use_signal(|| false);
     let mut loading = use_signal(|| false);
     let mut history_error = use_signal(|| None::<String>);
@@ -100,17 +100,19 @@ pub fn Sync() -> Element {
         loading.set(true);
         history_error.set(None);
         let result = crate::background::run_off_ui_thread(async move {
-            store.search_scrobbles(&search, 0, PAGE_SIZE).await
+            store
+                .search_recent_scrobbles(&search, None, PAGE_SIZE)
+                .await
         })
         .await;
         match result {
             Ok(page) => {
                 let full = page.len() == PAGE_SIZE;
-                groups.set(page);
+                scrobbles.set(page);
                 exhausted.set(!full);
             }
             Err(error) => {
-                groups.set(Vec::new());
+                scrobbles.set(Vec::new());
                 exhausted.set(true);
                 history_error.set(Some(error.to_string()));
             }
@@ -124,7 +126,10 @@ pub fn Sync() -> Element {
         }
         loading.set(true);
         let search = debounced_query.peek().clone();
-        let offset = groups.peek().len();
+        let cursor = scrobbles
+            .peek()
+            .last()
+            .map(|record| (record.uts, record.id.clone()));
         spawn(async move {
             let Some(Ok(core)) = core.read().clone() else {
                 loading.set(false);
@@ -134,7 +139,7 @@ pub fn Sync() -> Element {
             let task_search = search.clone();
             let result = crate::background::run_off_ui_thread(async move {
                 store
-                    .search_scrobbles(&task_search, offset, PAGE_SIZE)
+                    .search_recent_scrobbles(&task_search, cursor, PAGE_SIZE)
                     .await
             })
             .await;
@@ -148,7 +153,7 @@ pub fn Sync() -> Element {
                     if page.len() < PAGE_SIZE {
                         exhausted.set(true);
                     }
-                    groups.with_mut(|current| current.extend(page));
+                    scrobbles.with_mut(|current| current.extend(page));
                 }
                 Err(error) => {
                     history_error.set(Some(error.to_string()));
@@ -213,7 +218,7 @@ pub fn Sync() -> Element {
         .map(|seg| seg.end.max(now_ts))
         .unwrap_or(now_ts);
 
-    let history_groups = groups.read();
+    let history_scrobbles = scrobbles.read();
     let search_pending = query() != debounced_query();
 
     rsx! {
@@ -341,7 +346,7 @@ pub fn Sync() -> Element {
                 div { class: "history-heading",
                     div {
                         div { class: "lib-panel-title", "Scrobble history" }
-                        div { class: "muted history-help", "Identical artist, track, and album metadata is grouped across timestamps." }
+                        div { class: "muted history-help", "Individual scrobbles in chronological order, newest first." }
                     }
                     input {
                         class: "history-search",
@@ -350,7 +355,7 @@ pub fn Sync() -> Element {
                         placeholder: "Search artist, track, or album…",
                         oninput: move |event| {
                             query.set(event.value());
-                            groups.set(Vec::new());
+                            scrobbles.set(Vec::new());
                             exhausted.set(false);
                             history_error.set(None);
                         },
@@ -358,9 +363,9 @@ pub fn Sync() -> Element {
                 }
                 if let Some(error) = history_error() {
                     div { class: "banner danger", "history search failed: {error}" }
-                } else if history_groups.is_empty() && (loading() || search_pending) {
+                } else if history_scrobbles.is_empty() && (loading() || search_pending) {
                     div { class: "muted", "Searching…" }
-                } else if history_groups.is_empty() {
+                } else if history_scrobbles.is_empty() {
                     div { class: "muted",
                         if debounced_query().is_empty() {
                             "no scrobbles yet — sync to populate the mirror"
@@ -370,22 +375,17 @@ pub fn Sync() -> Element {
                     }
                 } else {
                     div { class: "feed-list",
-                        for group in history_groups.iter() {
+                        for scrobble in history_scrobbles.iter() {
                             div { class: "feed-row",
                                 span { class: "feed-time mono",
-                                    if group.count == 1 {
-                                        "{fmt_ts(group.latest_uts)}"
-                                    } else {
-                                        "{fmt_ts(group.first_uts)} → {fmt_ts(group.latest_uts)}"
-                                    }
+                                    "{fmt_ts(scrobble.uts)}"
                                 }
-                                span { class: "feed-main", "{group.artist} — {group.track}" }
-                                if let Some(album) = &group.album {
+                                span { class: "feed-main", "{scrobble.artist} — {scrobble.track}" }
+                                if let Some(album) = &scrobble.album {
                                     if !album.is_empty() {
                                         span { class: "feed-album muted", "{album}" }
                                     }
                                 }
-                                span { class: "pill feed-count", "{group.count}×" }
                             }
                         }
                     }

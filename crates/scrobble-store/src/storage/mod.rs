@@ -175,6 +175,17 @@ pub trait Storage: Send + Sync {
         limit: usize,
     ) -> Result<Vec<ScrobbleRecord>>;
 
+    /// Search artist, track, and album text while preserving the individual chronological
+    /// scrobble feed. Results and cursor semantics match [`Storage::recent_scrobbles`].
+    /// Terms are case-insensitive and all whitespace-separated terms must match at least
+    /// one field.
+    async fn search_recent_scrobbles(
+        &self,
+        query: &str,
+        before: Option<(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>>;
+
     /// Search artist, track, and album text, returning identical scrobbles grouped across
     /// timestamps. Terms are case-insensitive and all whitespace-separated terms must match
     /// at least one field. Results are newest-first and support incremental offset paging.

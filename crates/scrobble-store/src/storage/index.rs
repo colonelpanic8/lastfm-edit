@@ -443,6 +443,66 @@ impl Index {
         Ok(records)
     }
 
+    pub(crate) fn search_recent_scrobbles(
+        &self,
+        query: &str,
+        before: Option<&(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>> {
+        let terms: Vec<String> = query
+            .split_whitespace()
+            .map(|term| format!("%{}%", escape_like(term)))
+            .collect();
+        let filters = std::iter::repeat_n(
+            "(artist LIKE ? ESCAPE '\\' COLLATE NOCASE
+               OR track LIKE ? ESCAPE '\\' COLLATE NOCASE
+               OR COALESCE(album, '') LIKE ? ESCAPE '\\' COLLATE NOCASE)",
+            terms.len(),
+        )
+        .collect::<Vec<_>>()
+        .join(" AND ");
+        let filter_sql = if filters.is_empty() {
+            String::new()
+        } else {
+            format!(" AND {filters}")
+        };
+        let sql = format!(
+            "SELECT json FROM scrobbles
+             WHERE deleted = 0{filter_sql}
+               AND (? IS NULL OR uts < ? OR (uts = ? AND id < ?))
+             ORDER BY uts DESC, id DESC
+             LIMIT ?"
+        );
+        let mut values = Vec::with_capacity(terms.len() * 3 + 5);
+        for term in &terms {
+            values.extend([
+                Value::Text(term.clone()),
+                Value::Text(term.clone()),
+                Value::Text(term.clone()),
+            ]);
+        }
+        match before {
+            Some((uts, id)) => values.extend([
+                Value::Integer(*uts as i64),
+                Value::Integer(*uts as i64),
+                Value::Integer(*uts as i64),
+                Value::Text(id.as_str().to_string()),
+            ]),
+            None => values.extend([Value::Null, Value::Null, Value::Null, Value::Null]),
+        }
+        values.push(Value::Integer(limit as i64));
+
+        let mut statement = self.conn.prepare(&sql).map_err(sqlite_err)?;
+        let rows = statement
+            .query_map(params_from_iter(values), |row| row.get::<_, String>(0))
+            .map_err(sqlite_err)?;
+        let mut records = Vec::new();
+        for json in rows {
+            records.push(serde_json::from_str(&json.map_err(sqlite_err)?)?);
+        }
+        Ok(records)
+    }
+
     pub(crate) fn search_scrobbles(
         &self,
         query: &str,

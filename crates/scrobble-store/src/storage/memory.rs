@@ -241,6 +241,42 @@ impl Storage for MemoryStorage {
         Ok(live)
     }
 
+    async fn search_recent_scrobbles(
+        &self,
+        query: &str,
+        before: Option<(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>> {
+        let terms: Vec<String> = query
+            .split_whitespace()
+            .map(|term| term.to_lowercase())
+            .collect();
+        let inner = self.inner.lock().unwrap();
+        let mut live: Vec<ScrobbleRecord> = inner
+            .records
+            .values()
+            .filter(|rec| !rec.deleted)
+            .filter(|rec| match &before {
+                Some((uts, id)) => rec.uts < *uts || (rec.uts == *uts && rec.id < *id),
+                None => true,
+            })
+            .filter(|rec| {
+                let fields = [
+                    rec.artist.to_lowercase(),
+                    rec.track.to_lowercase(),
+                    rec.album.as_deref().unwrap_or_default().to_lowercase(),
+                ];
+                terms
+                    .iter()
+                    .all(|term| fields.iter().any(|field| field.contains(term)))
+            })
+            .cloned()
+            .collect();
+        live.sort_by(|a, b| b.uts.cmp(&a.uts).then_with(|| b.id.cmp(&a.id)));
+        live.truncate(limit);
+        Ok(live)
+    }
+
     async fn search_scrobbles(
         &self,
         query: &str,
@@ -565,6 +601,35 @@ mod tests {
         let page = store.search_scrobbles("boards", 1, 1).await.unwrap();
         assert_eq!(page.len(), 1);
         assert_eq!(page[0].track, "Roygbiv");
+    }
+
+    #[tokio::test]
+    async fn search_recent_scrobbles_filters_and_pages_newest_first() {
+        let store = MemoryStorage::new();
+        store
+            .append_scrobbles(&[
+                rec(10, "Boards of Canada", "Roygbiv", 1),
+                rec(20, "Boards of Canada", "Roygbiv", 1),
+                rec(30, "Boards of Canada", "Dayvan Cowboy", 1),
+                rec(40, "Other", "Roygbiv", 1),
+            ])
+            .await
+            .unwrap();
+
+        let first = store
+            .search_recent_scrobbles("boards royg", None, 1)
+            .await
+            .unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].uts, 20);
+
+        let cursor = Some((first[0].uts, first[0].id.clone()));
+        let second = store
+            .search_recent_scrobbles("boards royg", cursor, 1)
+            .await
+            .unwrap();
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].uts, 10);
     }
 
     #[tokio::test]

@@ -641,12 +641,6 @@ input.history-search {
   font-size: 12px;
 }
 
-.feed-count {
-  flex-shrink: 0;
-  min-width: 48px;
-  justify-content: center;
-}
-
 .feed-main {
   flex: 1;
   overflow: hidden;

@@ -477,6 +477,15 @@ impl Storage for FsStorage {
         self.with_index(|index| index.recent_scrobbles(before.as_ref(), limit))
     }
 
+    async fn search_recent_scrobbles(
+        &self,
+        query: &str,
+        before: Option<(u64, ScrobbleId)>,
+        limit: usize,
+    ) -> Result<Vec<ScrobbleRecord>> {
+        self.with_index(|index| index.search_recent_scrobbles(query, before.as_ref(), limit))
+    }
+
     async fn search_scrobbles(
         &self,
         query: &str,
@@ -898,6 +907,36 @@ mod tests {
         let second_page = store.search_scrobbles("roygbiv", 1, 1).await.unwrap();
         assert_eq!(second_page.len(), 1);
         assert_eq!(second_page[0].artist, "Other");
+    }
+
+    #[tokio::test]
+    async fn search_recent_scrobbles_filters_and_pages_newest_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FsStorage::open(dir.path()).unwrap();
+        store
+            .append_scrobbles(&[
+                rec(10, "Boards of Canada", "Roygbiv", 1),
+                rec(20, "Boards of Canada", "Roygbiv", 1),
+                rec(30, "Boards of Canada", "Dayvan Cowboy", 1),
+                rec(40, "Other", "Roygbiv", 1),
+            ])
+            .await
+            .unwrap();
+
+        let first = store
+            .search_recent_scrobbles("boards royg", None, 1)
+            .await
+            .unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].uts, 20);
+
+        let cursor = Some((first[0].uts, first[0].id.clone()));
+        let second = store
+            .search_recent_scrobbles("boards royg", cursor, 1)
+            .await
+            .unwrap();
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].uts, 10);
     }
 
     #[tokio::test]
