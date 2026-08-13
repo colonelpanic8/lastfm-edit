@@ -180,6 +180,15 @@ struct FileConfig {
     scrubber: ScrubberSection,
     store: StoreSection,
     executor: ExecutorSection,
+    lastfm: LastfmSection,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct LastfmSection {
+    /// Used to re-login automatically when the saved lastfm-edit session has
+    /// expired (last.fm sessions last about a year).
+    password: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -396,22 +405,55 @@ async fn plan(
 // Execute
 // =====================================================================================
 
-fn build_edit_client(username: &str) -> Result<lastfm_edit::LastFmEditClientImpl> {
-    let session = lastfm_edit::SessionPersistence::load_session(username).map_err(|e| {
-        format!(
-            "no saved lastfm-edit session for {username} ({e}); log in once with the lastfm-edit CLI"
-        )
-    })?;
-    let client = lastfm_edit::LastFmEditClientImpl::from_session(
+async fn build_edit_client(ctx: &Context) -> Result<lastfm_edit::LastFmEditClientImpl> {
+    let username = &ctx.username;
+    match lastfm_edit::SessionPersistence::load_session(username) {
+        Ok(session) => {
+            let client = lastfm_edit::LastFmEditClientImpl::from_session(
+                Box::new(http_client::native::NativeClient::new()),
+                session,
+            );
+            if client.validate_session().await {
+                // Non-blocking: rate limits surface as errors so the executor owns all
+                // pacing.
+                return Ok(client.non_blocking());
+            }
+            log::warn!("saved lastfm-edit session for {username} is expired or invalid");
+        }
+        Err(e) => log::warn!("no saved lastfm-edit session for {username}: {e}"),
+    }
+
+    // Fresh login when credentials are available; otherwise refuse to start rather
+    // than run every edit into "no scrobble forms" failures against logged-out pages.
+    let password = ctx
+        .config
+        .lastfm
+        .password
+        .clone()
+        .or_else(|| std::env::var("LASTFM_EDIT_PASSWORD").ok())
+        .ok_or_else(|| {
+            format!(
+                "last.fm session for {username} is expired or missing and no password is \
+                 available; log in once with the lastfm-edit CLI, or set [lastfm] password \
+                 in config.toml / LASTFM_EDIT_PASSWORD"
+            )
+        })?;
+    log::info!("logging in to last.fm as {username}…");
+    let client = lastfm_edit::LastFmEditClientImpl::login_with_credentials(
         Box::new(http_client::native::NativeClient::new()),
-        session,
-    );
-    // Non-blocking: rate limits surface as errors so the executor owns all pacing.
+        username,
+        &password,
+    )
+    .await
+    .map_err(|e| format!("last.fm login for {username} failed: {e}"))?;
+    if let Err(e) = lastfm_edit::SessionPersistence::save_session(&client.get_session()) {
+        log::warn!("could not persist refreshed last.fm session: {e}");
+    }
     Ok(client.non_blocking())
 }
 
 async fn execute(ctx: &Context, max_edits: Option<u32>, follow: bool) -> Result<()> {
-    let client = build_edit_client(&ctx.username)?;
+    let client = build_edit_client(ctx).await?;
     let bus = ScrubberEventBus::new();
     let executor = Executor::new(
         ctx.store.clone() as Arc<dyn Storage>,
@@ -484,7 +526,7 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     let engine = SyncEngine::new(ctx.store.clone() as Arc<dyn Storage>, source);
 
     let bus = ScrubberEventBus::new();
-    let edit_client = build_edit_client(&ctx.username)?;
+    let edit_client = build_edit_client(ctx).await?;
     let executor = Executor::new(
         ctx.store.clone() as Arc<dyn Storage>,
         ctx.state.clone() as Arc<dyn ScrubberState>,
