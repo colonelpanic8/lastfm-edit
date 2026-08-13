@@ -579,9 +579,16 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         })
     };
 
-    // Sync + plan cycle.
+    // Sync + plan cycle. If the executor task ever ends while we're still supposed
+    // to be running, the daemon would keep syncing and planning while silently never
+    // applying anything — fail loudly instead so supervision can see it.
     let mut cycle: u64 = 0;
+    let mut executor_died = false;
     while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+        if exec_task.is_finished() {
+            executor_died = !stop.load(std::sync::atomic::Ordering::Relaxed);
+            break;
+        }
         cycle += 1;
         bus.emit(ScrubberEvent::CycleStarted { n: cycle });
         if let Err(err) = engine.extend_to_present().await {
@@ -593,15 +600,24 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         bus.emit(ScrubberEvent::CycleCompleted { n: cycle });
         bus.emit(ScrubberEvent::Sleeping { seconds: interval });
         let mut waited = 0;
-        while waited < interval && !stop.load(std::sync::atomic::Ordering::Relaxed) {
+        while waited < interval
+            && !stop.load(std::sync::atomic::Ordering::Relaxed)
+            && !exec_task.is_finished()
+        {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             waited += 1;
         }
     }
 
-    let _ = exec_task.await;
+    let exec_result = exec_task.await;
     printer.abort();
     eprintln!();
+    if executor_died {
+        return Err(match exec_result {
+            Err(join_err) => format!("executor task died: {join_err}").into(),
+            Ok(()) => "executor task exited unexpectedly".to_string().into(),
+        });
+    }
     println!("stopped after {cycle} cycle(s)");
     Ok(())
 }
