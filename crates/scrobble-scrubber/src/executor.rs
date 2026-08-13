@@ -445,6 +445,12 @@ impl<C: LastFmEditClient> Executor<C> {
                     continue;
                 }
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
+                // Auth failures are session-wide, not instance-specific: abort the pass
+                // instead of burning this instance's attempts (and eventually abandoning
+                // the intent) on edits that cannot succeed until someone re-logs-in.
+                Err(err @ StoreError::LastFm(lastfm_edit::LastFmError::Auth(_))) => {
+                    return Err(err.into())
+                }
                 Err(err) => {
                     return Ok(InstanceOutcome::Failed {
                         error: format!("prepare failed: {err}"),
@@ -479,6 +485,10 @@ impl<C: LastFmEditClient> Executor<C> {
                     });
                 }
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
+                // Session-wide failure: abort the pass rather than burn attempts.
+                Err(err @ StoreError::LastFm(lastfm_edit::LastFmError::Auth(_))) => {
+                    return Err(err.into())
+                }
                 Err(err) => {
                     return Ok(InstanceOutcome::Failed {
                         error: err.to_string(),
