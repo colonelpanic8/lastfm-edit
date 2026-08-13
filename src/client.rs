@@ -67,6 +67,16 @@ fn guard_client(client: Box<dyn HttpClient + Send + Sync>) -> Arc<dyn HttpClient
     Arc::new(PanicGuardClient(client))
 }
 
+/// True when a last.fm page was rendered for a logged-out visitor.
+///
+/// Logged-out library pages still render the chartlist, but omit the
+/// `form[data-edit-scrobble]` elements and link actions through `/login?next=...`
+/// instead. A missing-forms parse failure on such a page actually means the session
+/// has expired, which callers need to distinguish from a page-shape change.
+fn page_indicates_logged_out(html: &str) -> bool {
+    html.contains("/login?next=")
+}
+
 impl LastFmEditClientImpl {
     /// Custom URL encoding for Last.fm paths
     fn lastfm_encode(&self, input: &str) -> String {
@@ -1063,6 +1073,11 @@ impl LastFmEditClientImpl {
                 log::warn!(
                     "Failed to locate scrobble edit forms for '{track_name}' by '{artist_name}'. Last URL tried: {url}. Wrote HTML to /tmp/lastfm-edit-track-page-no-forms.html"
                 );
+                if page_indicates_logged_out(html) {
+                    return crate::LastFmError::Auth(format!(
+                        "session expired or logged out: track page for '{track_name}' by '{artist_name}' shows a login link and no edit forms"
+                    ));
+                }
             }
 
             crate::LastFmError::Parse(format!(
@@ -2255,6 +2270,18 @@ mod tests {
     fn is_rate_limit_response_matches_captured_rate_limited_page() {
         let client = test_client(ClientConfig::default());
         assert!(client.is_rate_limit_response(RATE_LIMITED_PAGE));
+    }
+
+    #[test]
+    fn page_indicates_logged_out_detects_login_links() {
+        // Logged-out library pages route actions through /login?next=...
+        assert!(page_indicates_logged_out(
+            r#"<a href="/login?next=/user/someone/library">Set track as current obsession</a>"#
+        ));
+        // A logged-in page with edit forms has no such link.
+        assert!(!page_indicates_logged_out(
+            r#"<form method="POST" data-edit-scrobble><input name="track_name"></form>"#
+        ));
     }
 
     /// HTTP client stub that panics inside `send`, like http-client's isahc adapter
