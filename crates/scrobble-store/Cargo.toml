@@ -1,6 +1,6 @@
 [package]
 name = "scrobble-store"
-version = "0.1.2"
+version = "0.1.3"
 description = "Offline synchronization and local storage for Last.fm scrobbles"
 edition.workspace = true
 license.workspace = true

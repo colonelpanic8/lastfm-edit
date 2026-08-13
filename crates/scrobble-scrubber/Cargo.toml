@@ -1,6 +1,6 @@
 [package]
 name = "scrobble-scrubber"
-version = "0.1.2"
+version = "0.1.3"
 description = "Rules engine for automatic editing of Last.fm scrobbles"
 edition.workspace = true
 license.workspace = true
