@@ -29,6 +29,44 @@ pub struct LastFmEditClientImpl {
     api_key: Option<String>,
 }
 
+/// Converts panics inside the wrapped client's `send` into `http_types::Error`s.
+///
+/// Some backends panic on malformed upstream data — e.g. http-client's isahc adapter
+/// calls `http_types::Response::new(status_u16)`, which panics for any status code
+/// outside the `http_types::StatusCode` enum. Such a panic unwinds through whatever
+/// task drove the request, which can silently kill long-running callers.
+#[derive(Debug)]
+struct PanicGuardClient(Box<dyn HttpClient + Send + Sync>);
+
+#[async_trait]
+impl HttpClient for PanicGuardClient {
+    async fn send(&self, req: Request) -> std::result::Result<Response, http_types::Error> {
+        use futures::FutureExt;
+        match std::panic::AssertUnwindSafe(self.0.send(req))
+            .catch_unwind()
+            .await
+        {
+            Ok(result) => result,
+            Err(panic) => {
+                let msg = panic
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+                    .or_else(|| panic.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "non-string panic payload".to_string());
+                Err(http_types::Error::from_str(
+                    http_types::StatusCode::InternalServerError,
+                    format!("HTTP client panicked: {msg}"),
+                ))
+            }
+        }
+    }
+}
+
+/// Wrap a caller-supplied HTTP client so backend panics surface as request errors.
+fn guard_client(client: Box<dyn HttpClient + Send + Sync>) -> Arc<dyn HttpClient + Send + Sync> {
+    Arc::new(PanicGuardClient(client))
+}
+
 impl LastFmEditClientImpl {
     /// Custom URL encoding for Last.fm paths
     fn lastfm_encode(&self, input: &str) -> String {
@@ -39,7 +77,7 @@ impl LastFmEditClientImpl {
         client: Box<dyn HttpClient + Send + Sync>,
         session: LastFmEditSession,
     ) -> Self {
-        Self::from_session_with_arc(Arc::from(client), session)
+        Self::from_session_with_arc(guard_client(client), session)
     }
 
     fn from_session_with_arc(
@@ -68,7 +106,7 @@ impl LastFmEditClientImpl {
         username: &str,
         password: &str,
     ) -> Result<Self> {
-        let client_arc: Arc<dyn HttpClient + Send + Sync> = Arc::from(client);
+        let client_arc: Arc<dyn HttpClient + Send + Sync> = guard_client(client);
         let login_manager =
             crate::login::LoginManager::new(client_arc.clone(), "https://www.last.fm".to_string());
         let session = login_manager.login(username, password).await?;
@@ -80,7 +118,7 @@ impl LastFmEditClientImpl {
         session: LastFmEditSession,
         config: ClientConfig,
     ) -> Self {
-        Self::from_session_with_client_config_arc(Arc::from(client), session, config)
+        Self::from_session_with_client_config_arc(guard_client(client), session, config)
     }
 
     pub async fn login_with_credentials_and_client_config(
@@ -89,7 +127,7 @@ impl LastFmEditClientImpl {
         password: &str,
         config: ClientConfig,
     ) -> Result<Self> {
-        let client_arc: Arc<dyn HttpClient + Send + Sync> = Arc::from(client);
+        let client_arc: Arc<dyn HttpClient + Send + Sync> = guard_client(client);
         let login_manager =
             crate::login::LoginManager::new(client_arc.clone(), "https://www.last.fm".to_string());
         let session = login_manager.login(username, password).await?;
@@ -105,7 +143,7 @@ impl LastFmEditClientImpl {
         rate_limit_config: RateLimitConfig,
     ) -> Self {
         Self::from_session_with_config_arc(
-            Arc::from(client),
+            guard_client(client),
             session,
             retry_config,
             rate_limit_config,
@@ -119,7 +157,7 @@ impl LastFmEditClientImpl {
         retry_config: RetryConfig,
         rate_limit_config: RateLimitConfig,
     ) -> Result<Self> {
-        let client_arc: Arc<dyn HttpClient + Send + Sync> = Arc::from(client);
+        let client_arc: Arc<dyn HttpClient + Send + Sync> = guard_client(client);
         let login_manager =
             crate::login::LoginManager::new(client_arc.clone(), "https://www.last.fm".to_string());
         let session = login_manager.login(username, password).await?;
@@ -136,7 +174,7 @@ impl LastFmEditClientImpl {
         session: LastFmEditSession,
         broadcaster: Arc<SharedEventBroadcaster>,
     ) -> Self {
-        Self::from_session_with_broadcaster_arc(Arc::from(client), session, broadcaster)
+        Self::from_session_with_broadcaster_arc(guard_client(client), session, broadcaster)
     }
 
     fn from_session_with_client_config_arc(
@@ -2217,6 +2255,35 @@ mod tests {
     fn is_rate_limit_response_matches_captured_rate_limited_page() {
         let client = test_client(ClientConfig::default());
         assert!(client.is_rate_limit_response(RATE_LIMITED_PAGE));
+    }
+
+    /// HTTP client stub that panics inside `send`, like http-client's isahc adapter
+    /// does when a server returns a status code outside http-types' enum.
+    #[derive(Debug)]
+    struct PanickingHttpClient;
+
+    #[async_trait::async_trait]
+    impl HttpClient for PanickingHttpClient {
+        async fn send(
+            &self,
+            _req: http_client::Request,
+        ) -> std::result::Result<http_client::Response, http_types::Error> {
+            panic!("Could not convert into a valid `StatusCode`: Invalid status code");
+        }
+    }
+
+    #[tokio::test]
+    async fn guard_client_turns_send_panics_into_errors() {
+        let client = guard_client(Box::new(PanickingHttpClient));
+        let request = Request::new(Method::Get, "https://www.last.fm/".parse::<Url>().unwrap());
+        let err = client
+            .send(request)
+            .await
+            .expect_err("panic must become an error");
+        assert!(
+            err.to_string().contains("HTTP client panicked"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
