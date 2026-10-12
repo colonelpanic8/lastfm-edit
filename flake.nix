@@ -334,7 +334,7 @@
                   # For TUI development
                   libiconv
                 ]
-                ++ lib.optionals stdenv.isLinux [
+                ++ lib.optionals stdenv.hostPlatform.isLinux [
                   # Dioxus desktop (webview) dependencies + dev tooling
                   gtk3
                   webkitgtk_4_1
@@ -345,7 +345,7 @@
                   xdotool
                   dioxus-cli
                 ]
-                ++ lib.optionals stdenv.isDarwin [
+                ++ lib.optionals stdenv.hostPlatform.isDarwin [
                   # macOS specific dependencies
                   darwin.apple_sdk.frameworks.Security
                   darwin.apple_sdk.frameworks.CoreFoundation
@@ -355,7 +355,7 @@
               # Environment variables
               PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
-              shellHook = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              shellHook = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
                 export LD_LIBRARY_PATH="${pkgs.libappindicator-gtk3}/lib:${pkgs.gtk3}/lib:$LD_LIBRARY_PATH"
                 export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
               '';
@@ -436,7 +436,7 @@
               openssl
               curl
             ]
-            ++ lib.optionals stdenv.isDarwin [
+            ++ lib.optionals stdenv.hostPlatform.isDarwin [
               darwin.apple_sdk.frameworks.Security
               darwin.apple_sdk.frameworks.CoreFoundation
               darwin.apple_sdk.frameworks.SystemConfiguration
@@ -469,7 +469,7 @@
               openssl
               curl
             ]
-            ++ lib.optionals stdenv.isDarwin [
+            ++ lib.optionals stdenv.hostPlatform.isDarwin [
               darwin.apple_sdk.frameworks.Security
               darwin.apple_sdk.frameworks.CoreFoundation
               darwin.apple_sdk.frameworks.SystemConfiguration
@@ -502,7 +502,7 @@
               openssl
               curl
             ]
-            ++ lib.optionals stdenv.isDarwin [
+            ++ lib.optionals stdenv.hostPlatform.isDarwin [
               darwin.apple_sdk.frameworks.Security
               darwin.apple_sdk.frameworks.CoreFoundation
               darwin.apple_sdk.frameworks.SystemConfiguration
@@ -531,7 +531,7 @@
               makeWrapper
               pkg-config
             ]
-            ++ lib.optionals stdenv.isLinux [
+            ++ lib.optionals stdenv.hostPlatform.isLinux [
               copyDesktopItems
               wrapGAppsHook3
             ];
@@ -541,7 +541,7 @@
               openssl
               curl
             ]
-            ++ lib.optionals stdenv.isLinux [
+            ++ lib.optionals stdenv.hostPlatform.isLinux [
               gtk3
               webkitgtk_4_1
               glib
@@ -550,13 +550,13 @@
               libappindicator-gtk3
               xdotool
             ]
-            ++ lib.optionals stdenv.isDarwin [
+            ++ lib.optionals stdenv.hostPlatform.isDarwin [
               darwin.apple_sdk.frameworks.Security
               darwin.apple_sdk.frameworks.CoreFoundation
               darwin.apple_sdk.frameworks.SystemConfiguration
             ];
 
-          desktopItems = pkgs.lib.optionals pkgs.stdenv.isLinux [
+          desktopItems = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             (pkgs.makeDesktopItem {
               name = "scrobble-scrubber";
               desktopName = "Scrobble Scrubber";
@@ -572,7 +572,7 @@
 
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
-          postInstall = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+          postInstall = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
             app="$out/Applications/Scrobble Scrubber.app"
             mkdir -p "$app/Contents/MacOS"
             ln -s "$out/bin/scrobble-scrubber-app" "$app/Contents/MacOS/scrobble-scrubber-app"
