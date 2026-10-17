@@ -647,3 +647,80 @@ async fn auth_error_does_not_abandon_intent() {
     assert_eq!(queue[0].state, IntentState::InProgress);
     assert_eq!(queue[0].failed_count(), 0);
 }
+
+#[tokio::test]
+async fn rejection_stops_remaining_instances() {
+    let store = Arc::new(MemoryStorage::new());
+    store
+        .append_scrobbles(&[record(100), record(200)])
+        .await
+        .unwrap();
+    let state = Arc::new(MemoryScrubberState::new());
+    let id = queue_ready_intent(state.as_ref()).await;
+    let signal = Arc::new(tokio::sync::Notify::new());
+    let notified = signal.clone();
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let count = calls.clone();
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_edit_scrobble_single()
+        .returning(move |edit, _| {
+            count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            notified.notify_one();
+            Ok(success(edit))
+        });
+    let exec = executor(
+        store,
+        state.clone(),
+        client,
+        ExecutorOptions {
+            inter_edit_delay: std::time::Duration::from_millis(50),
+            ..zero_delay()
+        },
+    );
+    let (result, ()) = tokio::join!(exec.run_once(), async {
+        signal.notified().await;
+        scrobble_scrubber::reject_intent(state.as_ref(), id, false)
+            .await
+            .unwrap();
+    });
+    result.unwrap();
+    assert_eq!(
+        calls.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "second edit submitted after rejection"
+    );
+    assert_eq!(
+        state.load_queue().await.unwrap()[0].state,
+        IntentState::Rejected { dismissed: false }
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn rejection_interrupts_rate_limit_wait_without_retrying() {
+    let store = Arc::new(MemoryStorage::new());
+    store.append_scrobbles(&[record(100)]).await.unwrap();
+    let state = Arc::new(MemoryScrubberState::new());
+    let id = queue_ready_intent(state.as_ref()).await;
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_edit_scrobble_single()
+        .times(1)
+        .returning(|_, _| Err(lastfm_edit::LastFmError::RateLimit { retry_after: 60 }));
+    let exec = executor(store, state.clone(), client, zero_delay());
+    let mut events = exec.subscribe();
+    let (result, ()) = tokio::join!(exec.run_once(), async {
+        while let Ok(event) = events.recv().await {
+            if matches!(event, ScrubberEvent::ExecutorPaused { .. }) {
+                scrobble_scrubber::reject_intent(state.as_ref(), id, false)
+                    .await
+                    .unwrap();
+                break;
+            }
+        }
+    });
+    result.unwrap();
+    let queue = state.load_queue().await.unwrap();
+    assert_eq!(queue[0].state, IntentState::Rejected { dismissed: false });
+    assert_eq!(queue[0].failed_count(), 0);
+}

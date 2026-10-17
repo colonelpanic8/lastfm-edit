@@ -18,6 +18,7 @@ const GITATTRIBUTES: &str = "*.jsonl merge=union\n";
 
 pub struct FsScrubberState {
     root: PathBuf,
+    queue_changed: tokio::sync::watch::Sender<()>,
 }
 
 impl FsScrubberState {
@@ -29,7 +30,10 @@ impl FsScrubberState {
         if !gitattributes.exists() {
             atomic_write(&gitattributes, GITATTRIBUTES.as_bytes())?;
         }
-        Ok(Self { root })
+        Ok(Self {
+            root,
+            queue_changed: tokio::sync::watch::channel(()).0,
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -119,7 +123,13 @@ impl ScrubberState for FsScrubberState {
     }
 
     async fn append_queue_events(&self, events: &[QueueEvent]) -> Result<()> {
-        self.append_jsonl("queue.jsonl", events)
+        self.append_jsonl("queue.jsonl", events)?;
+        self.queue_changed.send_replace(());
+        Ok(())
+    }
+
+    fn watch_queue(&self) -> tokio::sync::watch::Receiver<()> {
+        self.queue_changed.subscribe()
     }
 
     async fn load_queue(&self) -> Result<Vec<EditIntent>> {

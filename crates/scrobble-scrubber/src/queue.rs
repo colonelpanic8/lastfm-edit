@@ -248,10 +248,14 @@ pub fn fold_queue(events: impl IntoIterator<Item = QueueEvent>) -> Vec<EditInten
                         );
                     }
                     QueueEventKind::Completed => {
-                        intent.state = IntentState::Applied;
+                        if intent.state.is_executable() {
+                            intent.state = IntentState::Applied;
+                        }
                     }
                     QueueEventKind::Abandoned { reason } => {
-                        intent.state = IntentState::Abandoned { reason };
+                        if intent.state.is_executable() {
+                            intent.state = IntentState::Abandoned { reason };
+                        }
                     }
                     QueueEventKind::Created { .. } => unreachable!("handled above"),
                 }
@@ -375,6 +379,30 @@ pub fn fold_pending_rules(events: impl IntoIterator<Item = RuleEvent>) -> Vec<Pe
 mod tests {
     use super::*;
     use crate::rewrite::create_no_op_edit;
+
+    #[test]
+    fn late_executor_events_do_not_override_rejection() {
+        let id = Uuid::new_v4();
+        let queue = fold_queue([
+            created(id, 1, false),
+            event(
+                id,
+                2,
+                QueueEventKind::Rejected {
+                    dismiss_subject: false,
+                },
+            ),
+            event(id, 3, QueueEventKind::Completed),
+            event(
+                id,
+                4,
+                QueueEventKind::Abandoned {
+                    reason: "late".into(),
+                },
+            ),
+        ]);
+        assert_eq!(queue[0].state, IntentState::Rejected { dismissed: false });
+    }
 
     fn subject() -> Subject {
         Subject {

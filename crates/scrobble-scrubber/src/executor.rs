@@ -180,24 +180,27 @@ impl<C: LastFmEditClient> Executor<C> {
             }
             report.intents_processed += 1;
             match self
-                .execute_intent(
-                    intent,
-                    max_edits,
-                    &mut report,
-                    &mut attempts_used,
-                    &mut rate_limit,
+                .while_executable(
+                    intent.id,
+                    self.execute_intent(
+                        intent,
+                        max_edits,
+                        &mut report,
+                        &mut attempts_used,
+                        &mut rate_limit,
+                    ),
                 )
                 .await
             {
-                Ok(PassControl::Continue) => {}
+                Ok(None | Some(PassControl::Continue)) => {}
                 // Sustained rate limiting: stop the pass; unfinished intents stay
                 // InProgress and a later pass resumes them.
-                Ok(PassControl::Defer) => {
+                Ok(Some(PassControl::Defer)) => {
                     report.ended = ExecEnded::Deferred;
                     break;
                 }
                 // The budget ran out mid-intent; no more work can happen this pass.
-                Ok(PassControl::BudgetExhausted) => {
+                Ok(Some(PassControl::BudgetExhausted)) => {
                     report.ended = ExecEnded::BudgetExhausted;
                     break;
                 }
@@ -211,6 +214,37 @@ impl<C: LastFmEditClient> Executor<C> {
         }
         // Falling out of the loop without a break leaves the default: Completed.
         Ok(report)
+    }
+
+    async fn intent_is_executable(&self, id: Uuid) -> Result<bool> {
+        Ok(self
+            .state
+            .load_queue()
+            .await?
+            .iter()
+            .any(|intent| intent.id == id && intent.state.is_executable()))
+    }
+
+    async fn while_executable<T>(
+        &self,
+        id: Uuid,
+        operation: impl std::future::Future<Output = Result<T>>,
+    ) -> Result<Option<T>> {
+        let mut changes = self.state.watch_queue();
+        tokio::pin!(operation);
+        loop {
+            self.check_cancelled()?;
+            if !self.intent_is_executable(id).await? {
+                return Ok(None);
+            }
+            tokio::select! {
+                biased;
+                _ = changes.changed() => {},
+                result = &mut operation => return result.map(Some),
+                // Also observe cancellation and changes made by another state handle.
+                _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {},
+            }
+        }
     }
 
     /// Live instances of an intent's subject, oldest first.
@@ -267,6 +301,9 @@ impl<C: LastFmEditClient> Executor<C> {
 
         for instance in &live {
             self.check_cancelled()?;
+            if !self.intent_is_executable(intent.id).await? {
+                return Ok(PassControl::Continue);
+            }
             if budget_exhausted(max_edits, *attempts_used) {
                 // Stays InProgress for a later run; the pass itself is over (nothing
                 // after this intent could be attempted either).
@@ -310,6 +347,7 @@ impl<C: LastFmEditClient> Executor<C> {
                         edit_id,
                     });
                 }
+                InstanceOutcome::Revoked => return Ok(PassControl::Continue),
                 InstanceOutcome::Gone => {
                     // No longer live (edited/deleted since expansion); the completion
                     // check below re-queries liveness, so simply move on.
@@ -448,6 +486,9 @@ impl<C: LastFmEditClient> Executor<C> {
                 Err(err) => return Err(execution_error(err)),
             };
 
+            if !self.intent_is_executable(intent.id).await? {
+                return Ok(InstanceOutcome::Revoked);
+            }
             let exact = overlay_proposal(prepared, &intent.proposed);
 
             match self.editor.apply_edit(exact).await {
@@ -596,6 +637,7 @@ fn budget_exhausted(max_edits: Option<u32>, attempts_used: u32) -> bool {
 }
 
 enum InstanceOutcome {
+    Revoked,
     Applied {
         edit_id: String,
     },

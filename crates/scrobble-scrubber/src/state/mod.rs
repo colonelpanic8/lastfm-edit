@@ -90,6 +90,8 @@ pub trait ScrubberState: Send + Sync {
 
     // ---- edit-intent queue ----------------------------------------------------------
     async fn append_queue_events(&self, events: &[QueueEvent]) -> Result<()>;
+    /// Notifications are wakeups; callers must reload the queue to check authorization.
+    fn watch_queue(&self) -> tokio::sync::watch::Receiver<()>;
     /// The queue folded into per-intent state, in first-created order.
     async fn load_queue(&self) -> Result<Vec<EditIntent>>;
 

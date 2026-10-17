@@ -19,9 +19,18 @@ struct Inner {
     coverage: HashMap<String, ProviderCoverage>,
 }
 
-#[derive(Default)]
 pub struct MemoryScrubberState {
     inner: Mutex<Inner>,
+    queue_changed: tokio::sync::watch::Sender<()>,
+}
+
+impl Default for MemoryScrubberState {
+    fn default() -> Self {
+        Self {
+            inner: Mutex::new(Inner::default()),
+            queue_changed: tokio::sync::watch::channel(()).0,
+        }
+    }
 }
 
 impl MemoryScrubberState {
@@ -47,7 +56,12 @@ impl ScrubberState for MemoryScrubberState {
             .unwrap()
             .queue_events
             .extend_from_slice(events);
+        self.queue_changed.send_replace(());
         Ok(())
+    }
+
+    fn watch_queue(&self) -> tokio::sync::watch::Receiver<()> {
+        self.queue_changed.subscribe()
     }
 
     async fn load_queue(&self) -> Result<Vec<EditIntent>> {
