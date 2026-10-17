@@ -1,5 +1,16 @@
 # Changelog
 
+## Scrobble Scrubber 0.1.5 (2026-10-17)
+
+- The library's all-time view and artist drill-downs read counts straight from covering
+  indexes instead of decoding every stored record: on a 191k-scrobble store the default
+  library view drops from about 295 ms to 45 ms and an artist view from 115 ms to 6 ms.
+- Rebuilding the SQLite index loads every month in one transaction and creates indexes
+  afterwards, cutting a full rebuild from 10–51 s to about 2 s. The index schema version
+  increases, so the first launch after updating rebuilds the index once.
+- Rule matching no longer formats a diagnostic for every rule that fails to match,
+  roughly halving the CPU time of a full-history replan.
+
 ## lastfm-edit 7.0.2 (2026-10-16)
 
 - Remove passwords, cookies, tokens, and response bodies from login diagnostics.

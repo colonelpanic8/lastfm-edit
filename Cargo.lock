@@ -5291,7 +5291,7 @@ dependencies = [
 
 [[package]]
 name = "scrobble-scrubber"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5318,7 +5318,7 @@ dependencies = [
 
 [[package]]
 name = "scrobble-scrubber-app"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "dioxus",
@@ -5342,7 +5342,7 @@ dependencies = [
 
 [[package]]
 name = "scrobble-store"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "chrono",
