@@ -10,6 +10,8 @@ use crate::id::ScrobbleId;
 use crate::record::ScrobbleRecord;
 use crate::storage::{AlbumCount, ArtistCount, ScrobbleGroup, TrackCount};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
+use std::io::Read;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -109,6 +111,12 @@ impl Index {
                 .map_err(sqlite_err)?;
             }
         }
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS ingested_prefixes (
+            path TEXT PRIMARY KEY, digest TEXT NOT NULL
+        );",
+        )
+        .map_err(sqlite_err)?;
         Ok(Self {
             conn,
             db_path: db_path.to_path_buf(),
@@ -147,30 +155,40 @@ impl Index {
     }
 
     fn needs_rebuild(&self, partition_files: &[PathBuf]) -> Result<bool> {
-        // Recorded files that vanished or shrank mean history was rewritten (compaction,
-        // git operations); incremental ingest can't recover from that.
         let mut statement = self
             .conn
-            .prepare("SELECT path, byte_offset FROM ingested_files")
+            .prepare(
+                "SELECT f.path, f.byte_offset, f.size, f.mtime_ns, p.digest
+             FROM ingested_files f LEFT JOIN ingested_prefixes p ON p.path = f.path",
+            )
             .map_err(sqlite_err)?;
-        let recorded: Vec<(String, u64)> = statement
+        let recorded = statement
             .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u64))
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, u64>(1)?,
+                    row.get::<_, u64>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                ))
             })
-            .map_err(sqlite_err)?
-            .collect::<std::result::Result<_, _>>()
             .map_err(sqlite_err)?;
-
-        let current: std::collections::HashMap<String, u64> = partition_files
-            .iter()
-            .map(|path| stamp(path).map(|stamp| (path_key(path), stamp.size)))
-            .collect::<Result<_>>()?;
-
-        for (path, offset) in recorded {
-            match current.get(&path) {
-                None => return Ok(true),
-                Some(size) if *size < offset => return Ok(true),
-                Some(_) => {}
+        for row in recorded {
+            let (path, offset, size, mtime, digest) = row.map_err(sqlite_err)?;
+            let Some(current_path) = partition_files.iter().find(|p| path_key(p) == path) else {
+                return Ok(true);
+            };
+            let current = stamp(current_path)?;
+            if current.size < offset || digest.is_none() {
+                return Ok(true);
+            }
+            if current.size != size || current.mtime_ns.to_string() != mtime {
+                let mut prefix = std::fs::File::open(current_path)?.take(offset);
+                let mut hasher = Sha256::new();
+                std::io::copy(&mut prefix, &mut hasher)?;
+                if Some(format!("{:x}", hasher.finalize())) != digest {
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
@@ -180,6 +198,8 @@ impl Index {
     pub(crate) fn rebuild(&mut self, partition_files: &[PathBuf]) -> Result<()> {
         let tx = self.conn.transaction().map_err(sqlite_err)?;
         tx.execute("DELETE FROM scrobbles", [])
+            .map_err(sqlite_err)?;
+        tx.execute("DELETE FROM ingested_prefixes", [])
             .map_err(sqlite_err)?;
         tx.execute("DELETE FROM ingested_files", [])
             .map_err(sqlite_err)?;
@@ -192,11 +212,9 @@ impl Index {
     }
 
     fn ingest_from(&mut self, path: &Path, offset: u64, stamp: &FileStamp) -> Result<()> {
-        use std::io::{BufRead, BufReader, Seek, SeekFrom};
-
-        let mut file = std::fs::File::open(path)?;
-        file.seek(SeekFrom::Start(offset))?;
-        let reader = BufReader::new(file);
+        let bytes = std::fs::read(path)?;
+        let tail = &bytes[offset as usize..];
+        crate::durable::parse_jsonl::<ScrobbleRecord>(tail)?;
 
         let tx = self.conn.transaction().map_err(sqlite_err)?;
         let mut ingested_bytes = offset;
@@ -216,41 +234,25 @@ impl Index {
                      WHERE excluded.fetched_at >= scrobbles.fetched_at",
                 )
                 .map_err(sqlite_err)?;
-            let lines: Vec<String> = reader.lines().collect::<std::io::Result<_>>()?;
-            for (i, line) in lines.iter().enumerate() {
-                let line_bytes = line.len() as u64 + 1; // newline
-                match serde_json::from_str::<ScrobbleRecord>(line) {
-                    Ok(rec) => {
-                        upsert
-                            .execute(params![
-                                rec.id.as_str(),
-                                rec.uts as i64,
-                                rec.artist,
-                                rec.track,
-                                rec.album,
-                                rec.fetched_at as i64,
-                                rec.deleted as i64,
-                                line,
-                            ])
-                            .map_err(sqlite_err)?;
-                        ingested_bytes += line_bytes;
-                    }
-                    Err(err) if i + 1 == lines.len() => {
-                        // A torn final line stays un-ingested (offset not advanced past it),
-                        // so a later completed write picks it up.
-                        log::warn!(
-                            "index: leaving torn final line of {} for a later pass: {err}",
-                            path.display()
-                        );
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "index: skipping unparseable line in {}: {err}",
-                            path.display()
-                        );
-                        ingested_bytes += line_bytes;
-                    }
+            for line in tail.split_inclusive(|b| *b == b'\n') {
+                if !line.iter().all(u8::is_ascii_whitespace) {
+                    let Ok(rec) = serde_json::from_slice::<ScrobbleRecord>(line) else {
+                        break;
+                    };
+                    upsert
+                        .execute(params![
+                            rec.id.as_str(),
+                            rec.uts as i64,
+                            rec.artist,
+                            rec.track,
+                            rec.album,
+                            rec.fetched_at as i64,
+                            rec.deleted as i64,
+                            std::str::from_utf8(line).expect("valid JSON"),
+                        ])
+                        .map_err(sqlite_err)?;
                 }
+                ingested_bytes += line.len() as u64;
             }
             drop(upsert);
         }
@@ -267,6 +269,13 @@ impl Index {
                 stamp.size as i64,
                 stamp.mtime_ns.to_string(),
             ],
+        )
+        .map_err(sqlite_err)?;
+        let digest = format!("{:x}", Sha256::digest(&bytes[..ingested_bytes as usize]));
+        tx.execute(
+            "INSERT INTO ingested_prefixes (path, digest) VALUES (?1, ?2)
+                    ON CONFLICT(path) DO UPDATE SET digest = excluded.digest",
+            params![path_key(path), digest],
         )
         .map_err(sqlite_err)?;
         tx.commit().map_err(sqlite_err)?;
