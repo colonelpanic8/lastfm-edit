@@ -7,8 +7,8 @@
 use lastfm_edit::LastFmEditClientImpl;
 use scrobble_scrubber::{
     approve_intent, load_comprehensive_default_rules, reinstate_intent, reject_intent, Executor,
-    ExecutorOptions, FsScrubberState, Planner, RewriteRulesScrubActionProvider, ScrubFeed,
-    ScrubberActor, ScrubberCommand, ScrubberEvent, ScrubberEventBus, ScrubberHandle, ScrubberState,
+    ExecutorOptions, FsScrubberState, Planner, RewriteRulesScrubActionProvider, RunGeneration,
+    ScrubberActor, ScrubberEvent, ScrubberEventBus, ScrubberHandle, ScrubberState,
 };
 use scrobble_store::{ApiSource, FsStorage, Storage, SyncEngine, SyncEventReceiver};
 use serde::{Deserialize, Serialize};
@@ -470,12 +470,14 @@ async fn backend_main(
         ));
     }
 
-    let continuous = Rc::new(Cell::new(false));
+    let (continuous, runs) = tokio::sync::watch::channel(None::<RunGeneration>);
+    let sync_lock = Rc::new(tokio::sync::Mutex::new(()));
     let interval_secs = Rc::new(Cell::new(300u64));
     tokio::task::spawn_local(continuous_loop(
-        continuous.clone(),
+        runs,
         interval_secs.clone(),
         sync.clone(),
+        sync_lock.clone(),
         handle.clone(),
     ));
 
@@ -484,7 +486,9 @@ async fn backend_main(
             BackendCommand::SyncNow => {
                 if let Some(engine) = &sync {
                     let engine = engine.clone();
+                    let sync_lock = sync_lock.clone();
                     tokio::task::spawn_local(async move {
+                        let _guard = sync_lock.lock().await;
                         if let Err(error) = engine.extend_to_present().await {
                             tracing::warn!(%error, "sync failed");
                         }
@@ -496,12 +500,13 @@ async fn backend_main(
                 interval_secs: secs,
             } => {
                 tracing::info!(enabled, interval_secs = secs, "continuous mode");
-                continuous.set(enabled);
                 interval_secs.set(secs.max(10));
-                if !enabled {
-                    // Toggling off must also interrupt an in-flight execute, not just
-                    // future iterations.
-                    handle.cancel_execution();
+                if enabled {
+                    if continuous.borrow().is_none() {
+                        continuous.send_replace(Some(RunGeneration::new()));
+                    }
+                } else if let Some(generation) = continuous.send_replace(None) {
+                    generation.cancel();
                 }
             }
             BackendCommand::StopExecution => {
@@ -614,75 +619,58 @@ async fn enable_default_rules(state: &FsScrubberState) -> scrobble_scrubber::Res
     Ok(count)
 }
 
-/// While enabled: sync (when available) → plan incremental → execute, then wait the
-/// interval. 1s ticks so toggling off takes effect quickly.
-///
-/// Emits `CycleStarted`/`CycleCompleted`/`Sleeping` so continuous mode is visible in
-/// the UI. Caveat: "completed" here means the cycle's work was *enqueued* — the actor
-/// serializes the actual plan/execute; the pass events show real progress.
+/// One acknowledged sync → plan → execute cycle at a time, scoped to the enabled run.
 async fn continuous_loop(
-    enabled: Rc<Cell<bool>>,
+    mut runs: tokio::sync::watch::Receiver<Option<RunGeneration>>,
     interval_secs: Rc<Cell<u64>>,
     sync: Option<Rc<SyncEngine>>,
+    sync_lock: Rc<tokio::sync::Mutex<()>>,
     handle: ScrubberHandle,
 ) {
-    let mut next_run = 0u64;
-    let mut was_enabled = false;
     let mut cycle = 0u64;
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        if !enabled.get() {
-            if was_enabled {
-                // Disabled mid-cycle: interrupt any execute still in flight too.
-                handle.cancel_execution();
-                was_enabled = false;
+        let generation = runs.borrow_and_update().clone();
+        let Some(generation) = generation.filter(|run| !run.is_cancelled()) else {
+            if runs.changed().await.is_err() {
+                break;
             }
-            next_run = 0; // run immediately on re-enable
             continue;
-        }
-        was_enabled = true;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        if now < next_run {
-            continue;
-        }
-        next_run = now + interval_secs.get();
-        tracing::debug!(cycle, "continuous: starting cycle");
+        };
         handle
             .event_bus()
             .emit(ScrubberEvent::CycleStarted { n: cycle });
-
         if let Some(engine) = &sync {
-            if let Err(error) = engine.extend_to_present().await {
-                tracing::warn!(%error, "continuous: sync failed");
+            let result = generation
+                .run(async {
+                    let _guard = sync_lock.lock().await;
+                    Ok(engine.extend_to_present().await?)
+                })
+                .await;
+            match result {
+                Err(scrobble_scrubber::ScrubberError::Cancelled) => continue,
+                Err(error) => tracing::warn!(%error, "continuous: sync failed"),
+                Ok(_) => {}
             }
         }
-        // The actor serializes these; enqueueing is enough.
-        if handle
-            .send(ScrubberCommand::PlanFeed(ScrubFeed::Incremental {
-                window: None,
-            }))
-            .await
-            .is_err()
-        {
-            break; // actor gone
+        match handle.run_cycle(&generation).await {
+            Ok(()) => handle
+                .event_bus()
+                .emit(ScrubberEvent::CycleCompleted { n: cycle }),
+            Err(scrobble_scrubber::ScrubberError::Cancelled) if generation.is_cancelled() => {
+                continue
+            }
+            Err(scrobble_scrubber::ScrubberError::Cancelled) => break,
+            Err(error) => tracing::warn!(%error, "continuous: cycle failed"),
         }
-        if handle
-            .send(ScrubberCommand::ExecuteOnce { max_edits: None })
-            .await
-            .is_err()
-        {
-            break;
-        }
-        handle
-            .event_bus()
-            .emit(ScrubberEvent::CycleCompleted { n: cycle });
-        handle.event_bus().emit(ScrubberEvent::Sleeping {
-            seconds: interval_secs.get(),
-        });
         cycle += 1;
+        let seconds = interval_secs.get();
+        handle.event_bus().emit(ScrubberEvent::Sleeping { seconds });
+        let _ = generation
+            .run(async {
+                tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
+                Ok(())
+            })
+            .await;
     }
 }
 

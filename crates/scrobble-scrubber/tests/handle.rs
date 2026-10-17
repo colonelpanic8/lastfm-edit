@@ -485,3 +485,150 @@ async fn reinstate_command_emits_event() {
 async fn planner_fresh(store: Arc<MemoryStorage>, state: Arc<MemoryScrubberState>) -> Planner {
     planner(store, state).await
 }
+
+#[tokio::test]
+async fn disabled_queued_cycle_is_skipped_but_manual_execution_still_runs() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let store = Arc::new(MemoryStorage::new());
+            let state = Arc::new(MemoryScrubberState::new());
+            let dirty = record(100, "You And I - Remastered 2011");
+            store
+                .append_scrobbles(std::slice::from_ref(&dirty))
+                .await
+                .unwrap();
+            let planner = planner(store.clone(), state.clone()).await;
+            planner.plan_records(&[dirty]).await.unwrap();
+            let bus = planner.event_bus();
+            let mut client = MockLastFmEditClient::new();
+            client
+                .expect_edit_scrobble_single()
+                .times(1)
+                .returning(|edit, _| Ok(success_response(edit)));
+            let executor = Executor::from_parts(
+                store.clone(),
+                state.clone(),
+                MirroredEditor::new(store.clone(), client),
+                MockLastFmEditClient::new(),
+            )
+            .with_options(ExecutorOptions {
+                inter_edit_delay: std::time::Duration::ZERO,
+                ..Default::default()
+            })
+            .with_event_bus(bus);
+            let (handle, actor) = ScrubberActor::new(planner, executor, state.clone());
+            let mut events = handle.subscribe();
+            let generation = scrobble_scrubber::RunGeneration::new();
+            let cycle = handle.run_cycle(&generation);
+            tokio::pin!(cycle);
+            tokio::select! {
+                biased;
+                result = &mut cycle => panic!("cycle acknowledged before actor ran: {result:?}"),
+                _ = tokio::task::yield_now() => {}
+            }
+            generation.cancel();
+            handle
+                .send(ScrubberCommand::ExecuteOnce { max_edits: None })
+                .await
+                .unwrap();
+            handle.send(ScrubberCommand::Stop).await.unwrap();
+            actor.run().await;
+            assert!(matches!(
+                cycle.await,
+                Err(scrobble_scrubber::ScrubberError::Cancelled)
+            ));
+            assert_eq!(
+                state.load_queue().await.unwrap()[0].state,
+                IntentState::Applied
+            );
+            let mut plans = 0;
+            while let Ok(event) = events.try_recv() {
+                if matches!(event, ScrubberEvent::PlanStarted { .. }) {
+                    plans += 1;
+                }
+            }
+            assert_eq!(plans, 0, "disabled queued generation never began planning");
+        })
+        .await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn cycle_acknowledges_execution_completion_and_cancels_rate_limit_waits() {
+    for cancel_during_wait in [false, true] {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let store = Arc::new(MemoryStorage::new());
+                let state = Arc::new(MemoryScrubberState::new());
+                store
+                    .append_scrobbles(&[record(100, "You And I - Remastered 2011")])
+                    .await
+                    .unwrap();
+                store
+                    .save_coverage(&scrobble_store::CoverageMap::from_segments(vec![
+                        scrobble_store::Segment::new(0, 200, 1),
+                    ]))
+                    .await
+                    .unwrap();
+                let planner = planner(store.clone(), state.clone()).await;
+                let bus = planner.event_bus();
+                let mut client = MockLastFmEditClient::new();
+                client
+                    .expect_edit_scrobble_single()
+                    .times(1)
+                    .returning(move |edit, _| {
+                        if cancel_during_wait {
+                            Err(lastfm_edit::LastFmError::RateLimit { retry_after: 3600 })
+                        } else {
+                            Ok(success_response(edit))
+                        }
+                    });
+                let executor = Executor::from_parts(
+                    store.clone(),
+                    state.clone(),
+                    MirroredEditor::new(store.clone(), client),
+                    MockLastFmEditClient::new(),
+                )
+                .with_options(ExecutorOptions {
+                    inter_edit_delay: std::time::Duration::from_secs(30),
+                    ..Default::default()
+                })
+                .with_event_bus(bus);
+                let (handle, actor) = ScrubberActor::new(planner, executor, state.clone());
+                let generation = scrobble_scrubber::RunGeneration::new();
+                let mut events = handle.subscribe();
+                let actor = tokio::task::spawn_local(actor.run());
+                let cycle = handle.run_cycle(&generation);
+                let watch = async {
+                    if cancel_during_wait {
+                        while let Ok(event) = events.recv().await {
+                            if matches!(event, ScrubberEvent::ExecutorPaused { .. }) {
+                                generation.cancel();
+                                break;
+                            }
+                        }
+                    }
+                };
+                let (result, ()) = tokio::join!(cycle, watch);
+                if cancel_during_wait {
+                    assert!(matches!(
+                        result,
+                        Err(scrobble_scrubber::ScrubberError::Cancelled)
+                    ));
+                    assert_eq!(
+                        state.load_queue().await.unwrap()[0].state,
+                        IntentState::InProgress
+                    );
+                    assert!(store.load_edit_log().await.unwrap()[0].state.is_pending());
+                } else {
+                    result.unwrap();
+                    assert_eq!(
+                        state.load_queue().await.unwrap()[0].state,
+                        IntentState::Applied
+                    );
+                }
+                handle.send(ScrubberCommand::Stop).await.unwrap();
+                actor.await.unwrap();
+            })
+            .await;
+    }
+}

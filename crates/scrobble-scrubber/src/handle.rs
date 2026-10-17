@@ -16,11 +16,12 @@ use crate::executor::Executor;
 use crate::feed::ScrubFeed;
 use crate::planner::Planner;
 use crate::state::ScrubberState;
+use crate::RunGeneration;
 use lastfm_edit::LastFmEditClient;
 use scrobble_store::{ScrobbleRecord, Storage, SyncEvent, SyncEventReceiver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 /// Messages the scrubber actor understands.
@@ -42,6 +43,11 @@ pub enum ScrubberCommand {
     ApproveRule(Uuid),
     /// Decline a provider-proposed rewrite rule.
     RejectRule(Uuid),
+    /// Plan and execute one scoped cycle, acknowledging actual completion.
+    ContinuousCycle {
+        generation: RunGeneration,
+        completed: oneshot::Sender<Result<()>>,
+    },
     /// Shut the actor down after the current command.
     Stop,
 }
@@ -68,6 +74,20 @@ impl ScrubberHandle {
         self.commands
             .try_send(command)
             .map_err(|_| ScrubberError::Cancelled)
+    }
+
+    pub async fn run_cycle(&self, generation: &RunGeneration) -> Result<()> {
+        generation
+            .run(async {
+                let (completed, done) = oneshot::channel();
+                self.send(ScrubberCommand::ContinuousCycle {
+                    generation: generation.clone(),
+                    completed,
+                })
+                .await?;
+                done.await.map_err(|_| ScrubberError::Cancelled)?
+            })
+            .await
     }
 
     pub fn subscribe(&self) -> ScrubberEventReceiver {
@@ -145,6 +165,22 @@ impl<C: LastFmEditClient> ScrubberActor<C> {
         });
     }
 
+    async fn continuous_cycle(&self, generation: &RunGeneration) -> Result<()> {
+        generation
+            .run(self.planner.plan(&ScrubFeed::Incremental { window: None }))
+            .await?;
+        let result = generation.run(self.executor.run_once()).await;
+        if matches!(result, Err(ScrubberError::Cancelled)) {
+            self.events.emit(ScrubberEvent::ExecCompleted {
+                report: crate::ExecReport {
+                    ended: crate::ExecEnded::Cancelled,
+                    ..Default::default()
+                },
+            });
+        }
+        result.map(|_| ())
+    }
+
     async fn dispatch(&mut self, command: ScrubberCommand) -> Result<()> {
         match command {
             ScrubberCommand::Consider(records) => {
@@ -176,6 +212,13 @@ impl<C: LastFmEditClient> ScrubberActor<C> {
             }
             ScrubberCommand::RejectRule(id) => {
                 crate::ops::reject_pending_rule(self.state.as_ref(), id).await?;
+            }
+            ScrubberCommand::ContinuousCycle {
+                generation,
+                completed,
+            } => {
+                let result = self.continuous_cycle(&generation).await;
+                let _ = completed.send(result);
             }
             ScrubberCommand::Stop => {}
         }

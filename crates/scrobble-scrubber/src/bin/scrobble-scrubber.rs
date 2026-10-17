@@ -6,8 +6,8 @@ use clap::{Parser, Subcommand};
 use scrobble_scrubber::{
     approve_intent, approve_pending_rule, load_comprehensive_default_rules, reject_intent,
     reject_pending_rule, ExecEnded, Executor, ExecutorOptions, FsScrubberState, IntentState,
-    Planner, Policy, RewriteRulesScrubActionProvider, ScrubFeed, ScrubberEvent, ScrubberEventBus,
-    ScrubberState,
+    Planner, Policy, RewriteRulesScrubActionProvider, RunGeneration, ScrubFeed, ScrubberActor,
+    ScrubberCommand, ScrubberEvent, ScrubberEventBus, ScrubberState,
 };
 use scrobble_store::{ApiSource, FsStorage, ScrobbleId, Storage, SyncEngine};
 use serde::Deserialize;
@@ -540,7 +540,6 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         max_rate_limit_pauses_per_pass: ctx.config.executor.max_rate_limit_pauses_per_pass,
     })
     .with_event_bus(bus.clone());
-    let exec_cancel = executor.cancel_handle();
 
     let policy = Policy {
         dry_run: ctx.config.scrubber.dry_run,
@@ -549,75 +548,57 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     };
     let planner = build_planner(ctx, policy, bus.clone()).await?;
 
-    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let generation = RunGeneration::new();
     {
-        let stop = stop.clone();
-        let exec_cancel = exec_cancel.clone();
+        let generation = generation.clone();
         tokio::spawn(async move {
             let _ = tokio::signal::ctrl_c().await;
-            stop.store(true, std::sync::atomic::Ordering::Relaxed);
-            exec_cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            generation.cancel();
             eprintln!("\nstopping…");
         });
     }
-
+    let (handle, actor) = ScrubberActor::new(planner, executor, ctx.state.clone());
+    let actor_task = tokio::task::spawn_local(actor.run());
     let printer = tokio::task::spawn_local(render_events(bus.subscribe()));
-
-    // Executor task: drains whatever the planner queues, forever.
-    let executor = std::rc::Rc::new(executor);
-    let exec_task = {
-        let executor = executor.clone();
-        let stop = stop.clone();
-        tokio::task::spawn_local(async move {
-            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
-                match executor.run_once().await {
-                    Ok(_) => {}
-                    Err(scrobble_scrubber::ScrubberError::Cancelled) => break,
-                    Err(err) => log::error!("executor: {err}"),
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-            }
-        })
-    };
-
-    // Sync + plan cycle. If the executor task ever ends while we're still supposed
-    // to be running, the daemon would keep syncing and planning while silently never
-    // applying anything — fail loudly instead so supervision can see it.
-    let mut cycle: u64 = 0;
-    let mut executor_died = false;
-    while !stop.load(std::sync::atomic::Ordering::Relaxed) {
-        if exec_task.is_finished() {
-            executor_died = !stop.load(std::sync::atomic::Ordering::Relaxed);
-            break;
-        }
+    let mut cycle = 0;
+    let mut actor_failed = false;
+    while !generation.is_cancelled() {
         cycle += 1;
         bus.emit(ScrubberEvent::CycleStarted { n: cycle });
-        if let Err(err) = engine.extend_to_present().await {
-            log::error!("sync: {err}");
-        }
-        if let Err(err) = planner.plan(&ScrubFeed::Incremental { window: None }).await {
-            log::error!("plan: {err}");
-        }
-        bus.emit(ScrubberEvent::CycleCompleted { n: cycle });
-        bus.emit(ScrubberEvent::Sleeping { seconds: interval });
-        let mut waited = 0;
-        while waited < interval
-            && !stop.load(std::sync::atomic::Ordering::Relaxed)
-            && !exec_task.is_finished()
+        if let Err(error) = generation
+            .run(async { Ok(engine.extend_to_present().await?) })
+            .await
         {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            waited += 1;
+            if generation.is_cancelled() {
+                break;
+            }
+            log::error!("sync: {error}");
         }
+        match handle.run_cycle(&generation).await {
+            Ok(()) => bus.emit(ScrubberEvent::CycleCompleted { n: cycle }),
+            Err(_) if generation.is_cancelled() => break,
+            Err(error) => {
+                log::error!("cycle: {error}");
+                if actor_task.is_finished() {
+                    actor_failed = true;
+                    break;
+                }
+            }
+        }
+        bus.emit(ScrubberEvent::Sleeping { seconds: interval });
+        let _ = generation
+            .run(async {
+                tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
+                Ok(())
+            })
+            .await;
     }
-
-    let exec_result = exec_task.await;
+    let _ = handle.send(ScrubberCommand::Stop).await;
+    let actor_result = actor_task.await;
     printer.abort();
-    eprintln!();
-    if executor_died {
-        return Err(match exec_result {
-            Err(join_err) => format!("executor task died: {join_err}").into(),
-            Ok(()) => "executor task exited unexpectedly".to_string().into(),
-        });
+    actor_result?;
+    if actor_failed {
+        return Err("scrubber actor exited unexpectedly".into());
     }
     println!("stopped after {cycle} cycle(s)");
     Ok(())
