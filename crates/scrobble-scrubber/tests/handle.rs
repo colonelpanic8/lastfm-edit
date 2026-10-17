@@ -191,7 +191,7 @@ async fn actor_survives_command_errors() {
         .run_until(async {
             let store = Arc::new(MemoryStorage::new());
             let state = Arc::new(MemoryScrubberState::new());
-            let planner = planner(store.clone(), state.clone()).await;
+            let planner = Planner::new(store.clone(), state.clone());
             let bus = planner.event_bus();
             let executor = Executor::from_parts(
                 store.clone() as Arc<dyn Storage>,
@@ -209,33 +209,29 @@ async fn actor_survives_command_errors() {
             let mut events = handle.subscribe();
             let actor_task = tokio::task::spawn_local(actor.run());
 
-            // Approving a nonexistent intent errors — the actor reports and keeps going.
             handle
-                .send(ScrubberCommand::Approve(uuid::Uuid::new_v4()))
+                .send(ScrubberCommand::Consider(vec![record(100, "Song")]))
                 .await
                 .unwrap();
             handle
-                .send(ScrubberCommand::Consider(vec![record(
-                    100,
-                    "You And I - Remastered 2011",
-                )]))
+                .send(ScrubberCommand::ExecuteOnce { max_edits: None })
                 .await
                 .unwrap();
             handle.send(ScrubberCommand::Stop).await.unwrap();
             actor_task.await.unwrap();
 
             let mut saw_error = false;
+            let mut saw_completed = false;
             while let Ok(event) = events.try_recv() {
+                if matches!(event, ScrubberEvent::ExecCompleted { .. }) {
+                    saw_completed = true;
+                }
                 if matches!(event, ScrubberEvent::Error { .. }) {
                     saw_error = true;
                 }
             }
             assert!(saw_error, "error was reported on the bus");
-            assert_eq!(
-                state.load_queue().await.unwrap().len(),
-                1,
-                "commands after the failing one still ran"
-            );
+            assert!(saw_completed, "execution still ran after planning failed");
         })
         .await;
 }
@@ -315,7 +311,7 @@ async fn sync_bridge_turns_metadata_updates_into_intents_and_forwards_events() {
 }
 
 #[tokio::test]
-async fn approve_and_reject_commands_emit_events() {
+async fn approval_method_emits_event() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
@@ -382,7 +378,7 @@ async fn approve_and_reject_commands_emit_events() {
                 ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
             let mut events2 = handle.subscribe();
             let actor_task = tokio::task::spawn_local(actor.run());
-            handle.send(ScrubberCommand::Approve(id)).await.unwrap();
+            handle.approve(id).await.unwrap();
             handle.send(ScrubberCommand::Stop).await.unwrap();
             actor_task.await.unwrap();
 
@@ -404,7 +400,7 @@ async fn approve_and_reject_commands_emit_events() {
 }
 
 #[tokio::test]
-async fn reinstate_command_emits_event() {
+async fn reinstate_method_emits_event() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
@@ -455,11 +451,8 @@ async fn reinstate_command_emits_event() {
 
             // Reject with dismissal, then reinstate; the intent reopens and the
             // subject is no longer dismissed.
-            handle
-                .send(ScrubberCommand::Reject { id, dismiss: true })
-                .await
-                .unwrap();
-            handle.send(ScrubberCommand::Reinstate(id)).await.unwrap();
+            handle.reject(id, true).await.unwrap();
+            handle.reinstate(id).await.unwrap();
             handle.send(ScrubberCommand::Stop).await.unwrap();
             actor_task.await.unwrap();
 
@@ -631,4 +624,45 @@ async fn cycle_acknowledges_execution_completion_and_cancels_rate_limit_waits() 
             })
             .await;
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn handle_rejection_interrupts_an_active_execution() {
+    tokio::task::LocalSet::new().run_until(async {
+        let store = Arc::new(MemoryStorage::new());
+        let state = Arc::new(MemoryScrubberState::new());
+        let dirty = record(100, "You And I - Remastered 2011");
+        store.append_scrobbles(std::slice::from_ref(&dirty)).await.unwrap();
+        let planner = planner(store.clone(), state.clone()).await;
+        planner.plan_records(&[dirty]).await.unwrap();
+        let id = state.load_queue().await.unwrap()[0].id;
+        let bus = planner.event_bus();
+        let mut client = MockLastFmEditClient::new();
+        client.expect_edit_scrobble_single().times(1).returning(|_, _| {
+            Err(lastfm_edit::LastFmError::RateLimit { retry_after: 3600 })
+        });
+        let executor = Executor::from_parts(
+            store.clone(), state.clone(), MirroredEditor::new(store.clone(), client),
+            MockLastFmEditClient::new(),
+        ).with_event_bus(bus);
+        let (handle, actor) = ScrubberActor::new(planner, executor, state.clone());
+        let mut events = handle.subscribe();
+        let actor = tokio::task::spawn_local(actor.run());
+        handle.send(ScrubberCommand::ExecuteOnce { max_edits: None }).await.unwrap();
+        while !matches!(events.recv().await.unwrap(), ScrubberEvent::ExecutorPaused { .. }) {}
+        handle.reject(id, true).await.unwrap();
+        let rejected = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if matches!(events.recv().await.unwrap(), ScrubberEvent::IntentRejected { id: rejected, .. } if rejected == id) {
+                    break;
+                }
+            }
+        }).await;
+        // Stop the paused task even when the assertion fails.
+        actor.abort();
+        let _ = actor.await;
+        assert!(rejected.is_ok(), "rejection was blocked behind execution");
+        assert!(matches!(state.load_queue().await.unwrap()[0].state, IntentState::Rejected { dismissed: true }));
+        assert!(store.load_edit_log().await.unwrap()[0].state.is_pending());
+    }).await;
 }

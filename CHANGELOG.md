@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Breaking scrubber API: replace queued `ScrubberCommand::{Approve, Reject, Reinstate,
+  ApproveRule, RejectRule}` with immediate async `ScrubberHandle::{approve, reject,
+  reinstate, approve_rule, reject_rule}` methods. Decisions now return their result
+  directly and rejection interrupts active execution. The next scrubber release
+  requires a minor version bump.
+
 ## Scrobble Scrubber 0.1.5 (2026-10-17)
 
 - The library's all-time view and artist drill-downs read counts straight from covering

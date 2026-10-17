@@ -8,7 +8,8 @@
 //! anywhere) or *pulled* (`PlanFeed` the store-driven feeds); both run the same pipeline.
 //!
 //! The durable queue remains the seam between planning and execution, so commands are
-//! fire-and-forget: a crash after `Consider` was processed loses nothing.
+//! fire-and-forget: a crash after `Consider` was processed loses nothing. Human decisions
+//! use immediate handle methods so rejection can interrupt an active execution pass.
 
 use crate::error::{Result, ScrubberError};
 use crate::events::{ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver};
@@ -31,18 +32,8 @@ pub enum ScrubberCommand {
     Consider(Vec<ScrobbleRecord>),
     /// Run a store-driven planning pass.
     PlanFeed(ScrubFeed),
-    /// Release an awaiting-approval intent for execution.
-    Approve(Uuid),
-    /// Decline an open intent, optionally dismissing its subject for good.
-    Reject { id: Uuid, dismiss: bool },
-    /// Un-reject a rejected intent, restoring it to its open state.
-    Reinstate(Uuid),
     /// Drain ready intents through last.fm, optionally with an attempt budget.
     ExecuteOnce { max_edits: Option<u32> },
-    /// Approve a provider-proposed rewrite rule (merges into the active set).
-    ApproveRule(Uuid),
-    /// Decline a provider-proposed rewrite rule.
-    RejectRule(Uuid),
     /// Plan and execute one scoped cycle, acknowledging actual completion.
     ContinuousCycle {
         generation: RunGeneration,
@@ -58,6 +49,7 @@ pub struct ScrubberHandle {
     commands: mpsc::Sender<ScrubberCommand>,
     events: ScrubberEventBus,
     cancel: Arc<AtomicBool>,
+    state: Arc<dyn ScrubberState>,
 }
 
 impl ScrubberHandle {
@@ -90,6 +82,37 @@ impl ScrubberHandle {
             .await
     }
 
+    /// Approve an intent without waiting for the actor's current work.
+    pub async fn approve(&self, id: Uuid) -> Result<()> {
+        crate::ops::approve_intent(self.state.as_ref(), id).await?;
+        self.events.emit(ScrubberEvent::IntentApproved { id });
+        Ok(())
+    }
+
+    /// Revoke an intent immediately, including during execution or a rate-limit wait.
+    pub async fn reject(&self, id: Uuid, dismiss: bool) -> Result<()> {
+        crate::ops::reject_intent(self.state.as_ref(), id, dismiss).await?;
+        self.events.emit(ScrubberEvent::IntentRejected {
+            id,
+            dismissed: dismiss,
+        });
+        Ok(())
+    }
+
+    pub async fn reinstate(&self, id: Uuid) -> Result<()> {
+        crate::ops::reinstate_intent(self.state.as_ref(), id).await?;
+        self.events.emit(ScrubberEvent::IntentReinstated { id });
+        Ok(())
+    }
+
+    pub async fn approve_rule(&self, id: Uuid) -> Result<()> {
+        crate::ops::approve_pending_rule(self.state.as_ref(), id).await
+    }
+
+    pub async fn reject_rule(&self, id: Uuid) -> Result<()> {
+        crate::ops::reject_pending_rule(self.state.as_ref(), id).await
+    }
+
     pub fn subscribe(&self) -> ScrubberEventReceiver {
         self.events.subscribe()
     }
@@ -111,7 +134,6 @@ impl ScrubberHandle {
 pub struct ScrubberActor<C: LastFmEditClient> {
     planner: Planner,
     executor: Executor<C>,
-    state: Arc<dyn ScrubberState>,
     commands: mpsc::Receiver<ScrubberCommand>,
     events: ScrubberEventBus,
 }
@@ -132,11 +154,11 @@ impl<C: LastFmEditClient> ScrubberActor<C> {
                 commands: tx,
                 events: events.clone(),
                 cancel: executor.cancel_handle(),
+                state,
             },
             Self {
                 planner,
                 executor,
-                state,
                 commands: rx,
                 events,
             },
@@ -189,29 +211,8 @@ impl<C: LastFmEditClient> ScrubberActor<C> {
             ScrubberCommand::PlanFeed(feed) => {
                 self.planner.plan(&feed).await?;
             }
-            ScrubberCommand::Approve(id) => {
-                crate::ops::approve_intent(self.state.as_ref(), id).await?;
-                self.events.emit(ScrubberEvent::IntentApproved { id });
-            }
-            ScrubberCommand::Reject { id, dismiss } => {
-                crate::ops::reject_intent(self.state.as_ref(), id, dismiss).await?;
-                self.events.emit(ScrubberEvent::IntentRejected {
-                    id,
-                    dismissed: dismiss,
-                });
-            }
-            ScrubberCommand::Reinstate(id) => {
-                crate::ops::reinstate_intent(self.state.as_ref(), id).await?;
-                self.events.emit(ScrubberEvent::IntentReinstated { id });
-            }
             ScrubberCommand::ExecuteOnce { max_edits } => {
                 self.executor.run_once_with_budget(max_edits).await?;
-            }
-            ScrubberCommand::ApproveRule(id) => {
-                crate::ops::approve_pending_rule(self.state.as_ref(), id).await?;
-            }
-            ScrubberCommand::RejectRule(id) => {
-                crate::ops::reject_pending_rule(self.state.as_ref(), id).await?;
             }
             ScrubberCommand::ContinuousCycle {
                 generation,

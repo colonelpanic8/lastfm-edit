@@ -6,9 +6,9 @@
 
 use lastfm_edit::LastFmEditClientImpl;
 use scrobble_scrubber::{
-    approve_intent, load_comprehensive_default_rules, reinstate_intent, reject_intent, Executor,
-    ExecutorOptions, FsScrubberState, Planner, RewriteRulesScrubActionProvider, RunGeneration,
-    ScrubberActor, ScrubberEvent, ScrubberEventBus, ScrubberHandle, ScrubberState,
+    load_comprehensive_default_rules, Executor, ExecutorOptions, FsScrubberState, Planner,
+    RewriteRulesScrubActionProvider, RunGeneration, ScrubberActor, ScrubberEvent, ScrubberEventBus,
+    ScrubberHandle, ScrubberState,
 };
 use scrobble_store::{ApiSource, FsStorage, Storage, SyncEngine, SyncEventReceiver};
 use serde::{Deserialize, Serialize};
@@ -513,22 +513,12 @@ async fn backend_main(
                 tracing::info!("stop execution requested");
                 handle.cancel_execution();
             }
-            // Queue mutations run as their own tasks against the shared state, off the
-            // actor's serial command channel, so they resolve during an execute pass's
-            // await points instead of queueing behind it. Appends are atomic and the fold
-            // is order-tolerant, so this is safe alongside the executor's own appends.
             BackendCommand::Approve { id, completed } => {
-                let state = state.clone();
                 let handle = handle.clone();
                 tokio::task::spawn_local(async move {
-                    let result = approve_intent(state.as_ref(), id)
-                        .await
-                        .map_err(|error| error.to_string());
-                    match &result {
-                        Ok(()) => handle
-                            .event_bus()
-                            .emit(ScrubberEvent::IntentApproved { id }),
-                        Err(error) => tracing::warn!(%error, %id, "approve failed"),
+                    let result = handle.approve(id).await.map_err(|error| error.to_string());
+                    if let Err(error) = &result {
+                        tracing::warn!(%error, %id, "approve failed");
                     }
                     let _ = completed.send(result);
                 });
@@ -538,34 +528,27 @@ async fn backend_main(
                 dismiss,
                 completed,
             } => {
-                let state = state.clone();
                 let handle = handle.clone();
                 tokio::task::spawn_local(async move {
-                    let result = reject_intent(state.as_ref(), id, dismiss)
+                    let result = handle
+                        .reject(id, dismiss)
                         .await
                         .map_err(|error| error.to_string());
-                    match &result {
-                        Ok(()) => handle.event_bus().emit(ScrubberEvent::IntentRejected {
-                            id,
-                            dismissed: dismiss,
-                        }),
-                        Err(error) => tracing::warn!(%error, %id, "reject failed"),
+                    if let Err(error) = &result {
+                        tracing::warn!(%error, %id, "reject failed");
                     }
                     let _ = completed.send(result);
                 });
             }
             BackendCommand::Reinstate { id, completed } => {
-                let state = state.clone();
                 let handle = handle.clone();
                 tokio::task::spawn_local(async move {
-                    let result = reinstate_intent(state.as_ref(), id)
+                    let result = handle
+                        .reinstate(id)
                         .await
                         .map_err(|error| error.to_string());
-                    match &result {
-                        Ok(()) => handle
-                            .event_bus()
-                            .emit(ScrubberEvent::IntentReinstated { id }),
-                        Err(error) => tracing::warn!(%error, %id, "reinstate failed"),
+                    if let Err(error) = &result {
+                        tracing::warn!(%error, %id, "reinstate failed");
                     }
                     let _ = completed.send(result);
                 });
