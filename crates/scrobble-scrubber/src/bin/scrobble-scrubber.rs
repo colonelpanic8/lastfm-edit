@@ -565,7 +565,7 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         api_key,
     );
     let source = Arc::new(ApiSource::new(api_client));
-    let engine = SyncEngine::new(ctx.store.clone() as Arc<dyn Storage>, source);
+    let engine = SyncEngine::new(ctx.store.clone() as Arc<dyn Storage>, source.clone());
     let mut sync_events = engine.subscribe();
 
     let bus = ScrubberEventBus::new();
@@ -575,6 +575,7 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         ctx.state.clone() as Arc<dyn ScrubberState>,
         edit_client,
     )
+    .with_recovery_source(source)
     .with_options(ExecutorOptions {
         inter_edit_delay: std::time::Duration::from_secs(ctx.config.executor.inter_edit_delay_secs),
         max_edits: None,
@@ -606,7 +607,7 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     let printer = tokio::task::spawn_local(render_events(bus.subscribe()));
 
     // Executor task: drains whatever the planner queues, forever.
-    let executor = Arc::new(executor);
+    let executor = std::rc::Rc::new(executor);
     let exec_task = {
         let executor = executor.clone();
         let stop = stop.clone();

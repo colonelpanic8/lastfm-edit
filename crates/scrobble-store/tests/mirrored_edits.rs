@@ -352,3 +352,65 @@ async fn rate_limit_error_propagates_without_consuming_an_attempt() {
         }
     );
 }
+
+#[tokio::test]
+async fn album_artist_only_recovery_uses_authoritative_variations() {
+    for ambiguous in [false, true] {
+        let store = seeded_store().await;
+        let mut edit = variation("The Diplomats");
+        edit.album_artist_name = "Various Artists".into();
+        store
+            .append_edit_events(&[scrobble_store::EditLogEvent {
+                edit_id: "aa-only".into(),
+                at: 1,
+                kind: scrobble_store::EditEventKind::Queued {
+                    op: scrobble_store::EditOp::Edit(Box::new(edit)),
+                    target_ids: vec![seeded_record().id],
+                },
+            }])
+            .await
+            .unwrap();
+        let mut client = MockLastFmEditClient::new();
+        client.expect_edit_scrobble_single().times(0);
+        client
+            .expect_get_scrobble_edit_variations()
+            .times(1)
+            .returning(move |_, _| {
+                let mut variations = vec![variation("Various Artists")];
+                if ambiguous {
+                    variations.push(variation("The Diplomats"));
+                }
+                Ok(variations)
+            });
+        let upstream = StubSource {
+            tracks: vec![Track {
+                name: "Oh Boy".into(),
+                artist: "Cam'ron".into(),
+                album: Some("Come Home With Me".into()),
+                album_artist: Some("untrusted API value".into()),
+                timestamp: Some(UTS),
+                playcount: 1,
+            }],
+        };
+        let editor = MirroredEditor::new(store.clone(), client);
+        let result = editor.resume_edit("aa-only", &upstream).await;
+        if ambiguous {
+            assert!(matches!(result, Err(StoreError::RecoveryRequired(_))));
+            assert!(store.load_edit_log().await.unwrap()[0].state.is_pending());
+        } else {
+            assert!(matches!(
+                result.unwrap(),
+                Some(EditOutcome::AlreadyApplied { .. })
+            ));
+            assert_eq!(
+                store
+                    .get_scrobble(&seeded_record().id)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .album_artist,
+                Provenanced::Verified("Various Artists".into())
+            );
+        }
+    }
+}

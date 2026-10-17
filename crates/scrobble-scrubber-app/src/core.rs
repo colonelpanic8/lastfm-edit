@@ -759,7 +759,7 @@ async fn build(
     .with_batch_hint(config.scrubber.batch_size)
     .with_event_bus(bus.clone());
 
-    let executor = Executor::new(
+    let mut executor = Executor::new(
         store.clone() as Arc<dyn Storage>,
         state.clone() as Arc<dyn ScrubberState>,
         client,
@@ -771,9 +771,6 @@ async fn build(
         max_rate_limit_pauses_per_pass: config.executor.max_rate_limit_pauses_per_pass,
     })
     .with_event_bus(bus);
-
-    let (handle, actor) =
-        ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
 
     // Sync engine only when an API key is available.
     let configured_api_key = std::env::var("LASTFM_EDIT_API_KEY")
@@ -788,15 +785,17 @@ async fn build(
         Some(api_key) if !api_key.is_empty() => {
             let api_client =
                 lastfm_edit::LastFmApiClientImpl::new(http_client()?, username.clone(), api_key);
-            let engine = SyncEngine::new(
-                store.clone() as Arc<dyn Storage>,
-                Arc::new(ApiSource::new(api_client)),
-            );
+            let source = Arc::new(ApiSource::new(api_client));
+            executor = executor.with_recovery_source(source.clone());
+            let engine = SyncEngine::new(store.clone() as Arc<dyn Storage>, source);
             let events = engine.subscribe();
             (Some(Rc::new(engine)), Some(events))
         }
         _ => (None, None),
     };
+
+    let (handle, actor) =
+        ScrubberActor::new(planner, executor, state.clone() as Arc<dyn ScrubberState>);
 
     Ok(BackendParts {
         core: AppCore {

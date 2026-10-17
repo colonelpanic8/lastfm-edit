@@ -4,7 +4,8 @@
 //! failure exhaustion → abandonment, and vanished instances.
 
 use lastfm_edit::{
-    EditResponse, ExactScrobbleEdit, MockLastFmEditClient, ScrobbleEdit, SingleEditResponse,
+    EditResponse, ExactScrobbleEdit, LastFmBaseClient, MockLastFmEditClient, ScrobbleEdit,
+    SingleEditResponse,
 };
 use scrobble_scrubber::queue::{QueueEvent, QueueEventKind};
 use scrobble_scrubber::{
@@ -100,15 +101,20 @@ fn failure(edit: &ExactScrobbleEdit) -> EditResponse {
 }
 
 fn executor(
-    store: Arc<MemoryStorage>,
-    state: Arc<MemoryScrubberState>,
+    store: Arc<dyn Storage>,
+    state: Arc<dyn ScrubberState>,
     client: MockLastFmEditClient,
     options: ExecutorOptions,
 ) -> Executor<MockLastFmEditClient> {
     // The watch client only provides rate-limit state; the mock's default watcher reads
     // Ready forever, which is what these tests want.
     let editor = MirroredEditor::new(store.clone(), client);
-    Executor::from_parts(store, state, editor, MockLastFmEditClient::new()).with_options(options)
+    Executor::from_parts(store, state, editor, MockLastFmEditClient::new())
+        .with_options(options)
+        .with_recovery_source(Arc::new(RecoverySource {
+            track: DIRTY,
+            fail: false,
+        }))
 }
 
 fn zero_delay() -> ExecutorOptions {
@@ -275,6 +281,11 @@ async fn rate_limit_pauses_retries_and_consumes_no_attempt() {
     let report = exec.run_once().await.unwrap();
 
     assert_eq!(report.instances_applied, 1);
+    assert_eq!(
+        store.load_edit_log().await.unwrap().len(),
+        1,
+        "retries reuse the operation"
+    );
     assert_eq!(report.instances_failed, 0, "rate limits are not failures");
     let intent = &state.load_queue().await.unwrap()[0];
     assert_eq!(intent.state, IntentState::Applied);
@@ -723,4 +734,153 @@ async fn rejection_interrupts_rate_limit_wait_without_retrying() {
     let queue = state.load_queue().await.unwrap();
     assert_eq!(queue[0].state, IntentState::Rejected { dismissed: false });
     assert_eq!(queue[0].failed_count(), 0);
+}
+
+struct RecoverySource {
+    track: &'static str,
+    fail: bool,
+}
+
+#[async_trait::async_trait(?Send)]
+impl scrobble_store::ScrobbleSource for RecoverySource {
+    fn record_source(&self) -> RecordSource {
+        RecordSource::Scrape
+    }
+    fn rate_limit(&self) -> lastfm_edit::RateLimitStateWatcher {
+        MockLastFmEditClient::new().watch_rate_limit_state()
+    }
+    async fn fetch_window(
+        &self,
+        from: Option<u64>,
+        _to: Option<u64>,
+        page: u32,
+    ) -> scrobble_store::Result<scrobble_store::SourcePage> {
+        if self.fail {
+            return Err(scrobble_store::StoreError::Corrupt(
+                "injected read failure".into(),
+            ));
+        }
+        Ok(scrobble_store::SourcePage {
+            tracks: if page == 1 {
+                vec![]
+            } else {
+                vec![lastfm_edit::Track {
+                    name: self.track.into(),
+                    artist: ARTIST.into(),
+                    album: Some(ALBUM.into()),
+                    album_artist: Some(AA.into()),
+                    timestamp: from,
+                    playcount: 1,
+                }]
+            },
+            has_next: page == 1,
+        })
+    }
+}
+
+#[tokio::test]
+async fn restart_reconciles_every_success_crash_window_without_another_post() {
+    use scrobble_scrubber::FsScrubberState;
+    use scrobble_store::{EditEventKind, EditLogEvent, EditOp, FsStorage};
+    for crash_point in 0..3 {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(FsStorage::open(dir.path()).unwrap());
+        let state = Arc::new(FsScrubberState::open(dir.path().join("scrubber")).unwrap());
+        store.append_scrobbles(&[record(100)]).await.unwrap();
+        let intent_id = queue_ready_intent(state.as_ref()).await;
+        let operation_id = format!("scrubber:{intent_id}:{}", record(100).id);
+        let editor = MirroredEditor::new(store.clone(), MockLastFmEditClient::new());
+        let mut edit = editor.prepare_edit(&record(100).id).await.unwrap();
+        edit.track_name = CLEAN.into();
+        store
+            .append_edit_events(&[EditLogEvent {
+                edit_id: operation_id.clone(),
+                at: 2,
+                kind: EditEventKind::Queued {
+                    op: EditOp::Edit(Box::new(edit)),
+                    target_ids: vec![record(100).id],
+                },
+            }])
+            .await
+            .unwrap();
+        let new_id = ScrobbleId::new(100, ARTIST, CLEAN);
+        if crash_point >= 1 {
+            let mut clean = record(100);
+            clean.track = CLEAN.into();
+            clean.id = new_id.clone();
+            clean.fetched_at = 3;
+            store
+                .append_scrobbles(&[clean, record(100).into_tombstone(3)])
+                .await
+                .unwrap();
+        }
+        if crash_point >= 2 {
+            store
+                .append_edit_events(&[EditLogEvent {
+                    edit_id: operation_id.clone(),
+                    at: 4,
+                    kind: EditEventKind::Applied {
+                        result_ids: vec![new_id.clone()],
+                    },
+                }])
+                .await
+                .unwrap();
+        }
+        drop(editor);
+        drop(store);
+        drop(state);
+        let reopened = Arc::new(FsStorage::open(dir.path()).unwrap());
+        let state = Arc::new(FsScrubberState::open(dir.path().join("scrubber")).unwrap());
+        let mut client = MockLastFmEditClient::new();
+        client.expect_edit_scrobble_single().times(0);
+        let exec = executor(reopened.clone(), state.clone(), client, zero_delay())
+            .with_recovery_source(Arc::new(RecoverySource {
+                track: CLEAN,
+                fail: crash_point == 2,
+            }));
+        let report = exec.run_once().await.unwrap();
+        assert_eq!(report.instances_applied, 1, "crash point {crash_point}");
+        let intent = &state.load_queue().await.unwrap()[0];
+        assert_eq!(intent.state, IntentState::Applied);
+        assert_eq!(intent.done_count(), 1);
+        assert_eq!(reopened.load_edit_log().await.unwrap().len(), 1);
+        assert_eq!(
+            reopened.scrobbles_in_range(0..200).await.unwrap()[0].id,
+            new_id
+        );
+    }
+}
+
+#[tokio::test]
+async fn unknown_remote_outcome_and_rejection_never_replay_pending_operation() {
+    let store = Arc::new(MemoryStorage::new());
+    store.append_scrobbles(&[record(100)]).await.unwrap();
+    let state = Arc::new(MemoryScrubberState::new());
+    let intent_id = queue_ready_intent(state.as_ref()).await;
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_edit_scrobble_single()
+        .times(1)
+        .returning(|_, _| Err(lastfm_edit::LastFmError::Auth("session expired".into())));
+    let exec = executor(store.clone(), state.clone(), client, zero_delay());
+    assert!(exec.run_once().await.is_err());
+    assert_eq!(store.load_edit_log().await.unwrap().len(), 1);
+    let mut client = MockLastFmEditClient::new();
+    client.expect_edit_scrobble_single().times(0);
+    let exec = executor(store.clone(), state.clone(), client, zero_delay()).with_recovery_source(
+        Arc::new(RecoverySource {
+            track: DIRTY,
+            fail: true,
+        }),
+    );
+    assert!(exec.run_once().await.is_err());
+    assert_eq!(state.load_queue().await.unwrap()[0].failed_count(), 0);
+    scrobble_scrubber::reject_intent(state.as_ref(), intent_id, false)
+        .await
+        .unwrap();
+    assert_eq!(exec.run_once().await.unwrap().instances_applied, 0);
+    assert_eq!(
+        state.load_queue().await.unwrap()[0].state,
+        IntentState::Rejected { dismissed: false }
+    );
 }

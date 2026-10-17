@@ -21,7 +21,9 @@ use crate::events::{
 use crate::queue::{EditIntent, InstanceStatus, IntentState, QueueEvent, QueueEventKind};
 use crate::state::ScrubberState;
 use lastfm_edit::{ExactScrobbleEdit, LastFmEditClient, RateLimitState};
-use scrobble_store::{EditOutcome, MirroredEditor, ScrobbleId, Storage, StoreError};
+use scrobble_store::{
+    EditOutcome, MirroredEditor, ScrapeSource, ScrobbleId, ScrobbleSource, Storage, StoreError,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -56,23 +58,26 @@ pub struct Executor<C: LastFmEditClient> {
     store: Arc<dyn Storage>,
     state: Arc<dyn ScrubberState>,
     editor: MirroredEditor<C>,
+    recovery_source: Option<Arc<dyn ScrobbleSource>>,
     client: C,
     events: ScrubberEventBus,
     options: ExecutorOptions,
     cancelled: Arc<AtomicBool>,
 }
 
-impl<C: LastFmEditClient + Clone> Executor<C> {
+impl<C: LastFmEditClient + Clone + 'static> Executor<C> {
     pub fn new(store: Arc<dyn Storage>, state: Arc<dyn ScrubberState>, client: C) -> Self {
         let editor = MirroredEditor::new(store.clone(), client.clone());
-        Self::from_parts(store, state, editor, client)
+        let source = Arc::new(ScrapeSource::new(client.clone()));
+        Self::from_parts(store, state, editor, client).with_recovery_source(source)
     }
 }
 
 impl<C: LastFmEditClient> Executor<C> {
     /// Assemble from separately-constructed parts (useful when the client isn't `Clone`,
     /// e.g. mocks in tests). `client` is used only for rate-limit state watching; in
-    /// production it should share the editor client's broadcaster.
+    /// production it should share the editor client's broadcaster. Configure a recovery
+    /// source with `with_recovery_source` before resuming existing operations.
     pub fn from_parts(
         store: Arc<dyn Storage>,
         state: Arc<dyn ScrubberState>,
@@ -81,6 +86,7 @@ impl<C: LastFmEditClient> Executor<C> {
     ) -> Self {
         Self {
             editor,
+            recovery_source: None,
             store,
             state,
             client,
@@ -88,6 +94,11 @@ impl<C: LastFmEditClient> Executor<C> {
             options: ExecutorOptions::default(),
             cancelled: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn with_recovery_source(mut self, source: Arc<dyn ScrobbleSource>) -> Self {
+        self.recovery_source = Some(source);
+        self
     }
 
     pub fn with_options(mut self, options: ExecutorOptions) -> Self {
@@ -114,7 +125,7 @@ impl<C: LastFmEditClient> Executor<C> {
         self.cancelled.clone()
     }
 
-    /// Access the underlying mirrored editor (e.g. for startup `resume_pending`).
+    /// Access the underlying mirrored editor for record preparation and inspection.
     pub fn editor(&self) -> &MirroredEditor<C> {
         &self.editor
     }
@@ -269,7 +280,22 @@ impl<C: LastFmEditClient> Executor<C> {
         rate_limit: &mut PassRateLimit,
     ) -> Result<PassControl> {
         // Re-expand against the live store — NOT the planning-time snapshot.
-        let live = self.live_instances(&intent).await?;
+        let mut live = self.live_instances(&intent).await?;
+        for id in intent.instances.keys() {
+            if !live.contains(id) {
+                live.push(id.clone());
+            }
+        }
+        let prefix = format!("scrubber:{}:", intent.id);
+        for entry in self.store.load_edit_log().await? {
+            if entry.edit_id.starts_with(&prefix) {
+                for id in entry.target_ids {
+                    if !live.contains(&id) {
+                        live.push(id);
+                    }
+                }
+            }
+        }
         if live.is_empty() {
             self.append(intent.id, QueueEventKind::Completed).await?;
             self.events.emit(ScrubberEvent::IntentCompleted {
@@ -347,7 +373,6 @@ impl<C: LastFmEditClient> Executor<C> {
                         edit_id,
                     });
                 }
-                InstanceOutcome::Revoked => return Ok(PassControl::Continue),
                 InstanceOutcome::Gone => {
                     // No longer live (edited/deleted since expansion); the completion
                     // check below re-queries liveness, so simply move on.
@@ -471,27 +496,43 @@ impl<C: LastFmEditClient> Executor<C> {
                 return Ok(InstanceOutcome::Deferred);
             }
 
-            let prepared = match self.editor.prepare_edit(instance).await {
-                Ok(prepared) => prepared,
-                Err(StoreError::LastFm(lastfm_edit::LastFmError::RateLimit { retry_after })) => {
-                    if !rate_limit.budget_pause(self.options.max_rate_limit_pauses_per_pass) {
-                        self.emit_deferred(Some(Self::now() + retry_after));
-                        return Ok(InstanceOutcome::Deferred);
+            let operation_id = format!("scrubber:{}:{instance}", intent.id);
+            let outcome = async {
+                let log = self.store.load_edit_log().await?;
+                let existing = log.iter().find(|e| e.edit_id == operation_id).or_else(|| {
+                    log.iter().find(|e| {
+                        !e.edit_id.starts_with("scrubber:")
+                            && e.state.is_pending()
+                            && e.target_ids.contains(instance)
+                            && matches!(&e.op, scrobble_store::EditOp::Edit(edit)
+                            if overlay_proposal((**edit).clone(), &intent.proposed) == **edit)
+                    })
+                });
+                if let Some(entry) = existing {
+                    let source = self.recovery_source.as_deref().ok_or_else(|| {
+                        StoreError::RecoveryRequired("executor has no recovery source".into())
+                    })?;
+                    if let Some(outcome) = self.editor.resume_edit(&entry.edit_id, source).await? {
+                        return Ok(outcome);
                     }
-                    self.pause_for_rate_limit(rate_limit.next_pause_secs(retry_after))
-                        .await?;
-                    continue;
                 }
-                Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
-                Err(err) => return Err(execution_error(err)),
-            };
-
-            if !self.intent_is_executable(intent.id).await? {
-                return Ok(InstanceOutcome::Revoked);
+                let prepared = self.editor.prepare_edit(instance).await?;
+                if !self
+                    .state
+                    .load_queue()
+                    .await
+                    .map_err(|e| StoreError::Corrupt(e.to_string()))?
+                    .iter()
+                    .any(|i| i.id == intent.id && i.state.is_executable())
+                {
+                    return Err(StoreError::Cancelled);
+                }
+                let exact = overlay_proposal(prepared, &intent.proposed);
+                self.editor.apply_edit_with_id(&operation_id, exact).await
             }
-            let exact = overlay_proposal(prepared, &intent.proposed);
+            .await;
 
-            match self.editor.apply_edit(exact).await {
+            match outcome {
                 Ok(EditOutcome::Applied { edit_id, .. })
                 | Ok(EditOutcome::AlreadyApplied { edit_id, .. }) => {
                     return Ok(InstanceOutcome::Applied { edit_id });
@@ -637,7 +678,6 @@ fn budget_exhausted(max_edits: Option<u32>, attempts_used: u32) -> bool {
 }
 
 enum InstanceOutcome {
-    Revoked,
     Applied {
         edit_id: String,
     },

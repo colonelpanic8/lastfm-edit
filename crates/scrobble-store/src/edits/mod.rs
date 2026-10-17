@@ -153,6 +153,27 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
 
     /// Apply one exact edit to Last.fm and mirror it locally. `edit_all` must be `false`.
     pub async fn apply_edit(&self, edit: ExactScrobbleEdit) -> Result<EditOutcome> {
+        let edit_id = log_types::new_edit_id(&EditOp::Edit(Box::new(edit.clone())), Self::now());
+        self.apply_edit_with_id(&edit_id, edit).await
+    }
+
+    /// Queue a caller-owned operation id before sending. Existing ids must be resumed.
+    pub async fn apply_edit_with_id(
+        &self,
+        edit_id: &str,
+        edit: ExactScrobbleEdit,
+    ) -> Result<EditOutcome> {
+        if self
+            .store
+            .load_edit_log()
+            .await?
+            .iter()
+            .any(|entry| entry.edit_id == edit_id)
+        {
+            return Err(StoreError::RecoveryRequired(format!(
+                "resume existing operation {edit_id}"
+            )));
+        }
         if edit.edit_all {
             return Err(StoreError::NeedsRebase(
                 "edit_all edits cannot be mirrored; expand them into exact per-scrobble edits"
@@ -176,7 +197,9 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
         }
 
         let op = EditOp::Edit(Box::new(edit.clone()));
-        let entry = self.queue(op.clone(), vec![target_id.clone()]).await?;
+        let entry = self
+            .queue_with_id(edit_id.to_owned(), op.clone(), vec![target_id.clone()])
+            .await?;
         self.attempt(entry, op).await
     }
 
@@ -206,37 +229,84 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
         let log = self.store.load_edit_log().await?;
         let mut outcomes = Vec::new();
         for entry in log.into_iter().filter(|e| e.state.is_pending()) {
-            let op = entry.op.clone();
-            let outcome = match self.check_already_applied(&op, source).await? {
-                Some(result_ids) => {
-                    self.mirror_locally(&op, &entry.target_ids).await?;
-                    self.append_event(
-                        &entry.edit_id,
-                        EditEventKind::Applied {
-                            result_ids: result_ids.clone(),
-                        },
-                    )
-                    .await?;
-                    self.events.emit(SyncEvent::EditApplied {
-                        edit_id: entry.edit_id.clone(),
-                    });
-                    EditOutcome::AlreadyApplied {
-                        result_ids,
-                        edit_id: entry.edit_id.clone(),
-                    }
-                }
-                None => self.attempt(entry.clone(), op).await?,
-            };
+            let outcome = self.resume_entry(entry.clone(), source).await?;
             outcomes.push((entry.edit_id, outcome));
         }
         Ok(outcomes)
     }
 
+    /// Reconcile one authorized operation, including a success whose queue progress was lost.
+    pub async fn resume_edit(
+        &self,
+        edit_id: &str,
+        source: &dyn ScrobbleSource,
+    ) -> Result<Option<EditOutcome>> {
+        let entry = self
+            .store
+            .load_edit_log()
+            .await?
+            .into_iter()
+            .find(|e| e.edit_id == edit_id);
+        match entry {
+            Some(entry) => self.resume_entry(entry, source).await.map(Some),
+            None => Ok(None),
+        }
+    }
+
+    async fn resume_entry(
+        &self,
+        entry: EditLogEntry,
+        source: &dyn ScrobbleSource,
+    ) -> Result<EditOutcome> {
+        match &entry.state {
+            EditState::Applied { result_ids } => {
+                return Ok(EditOutcome::AlreadyApplied {
+                    result_ids: result_ids.clone(),
+                    edit_id: entry.edit_id,
+                })
+            }
+            EditState::Abandoned { reason } => {
+                return Err(StoreError::RecoveryRequired(reason.clone()))
+            }
+            EditState::Pending { .. } => {}
+        }
+        let op = entry.op.clone();
+        match self.check_already_applied(&op, source).await? {
+            Some(result_ids) => {
+                self.mirror_locally(&op, &entry.target_ids).await?;
+                self.append_event(
+                    &entry.edit_id,
+                    EditEventKind::Applied {
+                        result_ids: result_ids.clone(),
+                    },
+                )
+                .await?;
+                self.events.emit(SyncEvent::EditApplied {
+                    edit_id: entry.edit_id.clone(),
+                });
+                Ok(EditOutcome::AlreadyApplied {
+                    result_ids,
+                    edit_id: entry.edit_id,
+                })
+            }
+            None => self.attempt(entry, op).await,
+        }
+    }
+
     // ---- internals ---------------------------------------------------------------------
 
     async fn queue(&self, op: EditOp, target_ids: Vec<ScrobbleId>) -> Result<EditLogEntry> {
+        let edit_id = log_types::new_edit_id(&op, Self::now());
+        self.queue_with_id(edit_id, op, target_ids).await
+    }
+
+    async fn queue_with_id(
+        &self,
+        edit_id: String,
+        op: EditOp,
+        target_ids: Vec<ScrobbleId>,
+    ) -> Result<EditLogEntry> {
         let at = Self::now();
-        let edit_id = log_types::new_edit_id(&op, at);
         let event = EditLogEvent {
             edit_id: edit_id.clone(),
             at,
@@ -393,34 +463,63 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
             EditOp::Edit(edit) => edit.timestamp,
             EditOp::Delete { uts, .. } => *uts,
         };
-        let page = source.fetch_window(Some(uts), Some(uts + 1), 1).await?;
-        let at_second: Vec<_> = page
-            .tracks
-            .iter()
-            .filter(|t| t.timestamp == Some(uts))
-            .collect();
+        let mut at_second = Vec::new();
+        let mut page_number = 1;
+        loop {
+            let page = source
+                .fetch_window(Some(uts), Some(uts.saturating_add(1)), page_number)
+                .await?;
+            at_second.extend(page.tracks.into_iter().filter(|t| t.timestamp == Some(uts)));
+            if !page.has_next {
+                break;
+            }
+            page_number = page_number
+                .checked_add(1)
+                .ok_or_else(|| StoreError::RecoveryRequired("pagination overflow".into()))?;
+        }
         match op {
             EditOp::Edit(edit) => {
-                // "Applied" means the post-edit values (including album) are what's
-                // upstream; comparing album as well keeps album-only edits honest.
-                let new_present = at_second.iter().any(|t| {
-                    t.name == edit.track_name
-                        && t.artist == edit.artist_name
-                        && t.album.as_deref() == Some(edit.album_name.as_str())
-                });
-                let old_present = at_second.iter().any(|t| {
-                    t.name == edit.track_name_original
-                        && t.artist == edit.artist_name_original
-                        && t.album.as_deref() == Some(edit.album_name_original.as_str())
-                });
-                if new_present && !old_present {
-                    Ok(Some(vec![ScrobbleId::new(
+                let aa_changed = edit.album_artist_name != edit.album_artist_name_original;
+                let mut new_present = false;
+                let mut old_present = false;
+                for track in &at_second {
+                    let matches_new = track.name == edit.track_name
+                        && track.artist == edit.artist_name
+                        && track.album.as_deref().unwrap_or_default() == edit.album_name;
+                    let matches_old = track.name == edit.track_name_original
+                        && track.artist == edit.artist_name_original
+                        && track.album.as_deref().unwrap_or_default() == edit.album_name_original;
+                    if !matches_new && !matches_old {
+                        continue;
+                    }
+                    let album_artist = if aa_changed {
+                        Some(
+                            self.recovery_album_artist(track, source.record_source())
+                                .await?,
+                        )
+                    } else {
+                        None
+                    };
+                    new_present |= matches_new
+                        && album_artist
+                            .as_ref()
+                            .is_none_or(|aa| aa == &edit.album_artist_name);
+                    old_present |= matches_old
+                        && album_artist
+                            .as_ref()
+                            .is_none_or(|aa| aa == &edit.album_artist_name_original);
+                }
+                match (new_present, old_present) {
+                    (true, false) => Ok(Some(vec![ScrobbleId::new(
                         edit.timestamp,
                         &edit.artist_name,
                         &edit.track_name,
-                    )]))
-                } else {
-                    Ok(None)
+                    )])),
+                    (false, true) => Ok(None),
+                    _ => Err(StoreError::RecoveryRequired(format!(
+                        "cannot distinguish original and edited scrobble at {}",
+                        edit.timestamp
+                    ))),
                 }
             }
             EditOp::Delete { artist, track, .. } => {
@@ -434,5 +533,31 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
                 }
             }
         }
+    }
+    async fn recovery_album_artist(
+        &self,
+        track: &lastfm_edit::Track,
+        source: RecordSource,
+    ) -> Result<String> {
+        if source == RecordSource::Scrape {
+            if let Some(artist) = &track.album_artist {
+                return Ok(artist.clone());
+            }
+        }
+        let variations = self
+            .client
+            .get_scrobble_edit_variations(&track.name, &track.artist)
+            .await?;
+        let artists: std::collections::HashSet<_> = variations
+            .into_iter()
+            .filter(|v| v.album_name_original == track.album.as_deref().unwrap_or_default())
+            .map(|v| v.album_artist_name_original)
+            .collect();
+        if artists.len() == 1 {
+            return Ok(artists.into_iter().next().expect("one artist"));
+        }
+        Err(StoreError::RecoveryRequired(
+            "album artist is ambiguous in upstream edit forms".into(),
+        ))
     }
 }

@@ -29,6 +29,10 @@ pub enum StoreError {
     #[error("edit needs rebase: {0}")]
     NeedsRebase(String),
 
+    /// The remote outcome cannot be proved; leave the operation pending for reconciliation.
+    #[error("edit recovery required: {0}")]
+    RecoveryRequired(String),
+
     /// The operation was cancelled before completion.
     #[error("cancelled")]
     Cancelled,
