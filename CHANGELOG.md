@@ -1,5 +1,43 @@
 # Changelog
 
+## lastfm-edit 7.0.2 (2026-10-16)
+
+- Remove passwords, cookies, tokens, and response bodies from login diagnostics.
+- Reject authenticated requests and redirects outside the configured session origin,
+  including HTTPS downgrades.
+- Preserve authentication, cancellation, transport, and rate-limit errors through exact
+  edits and deletes so callers can choose the appropriate recovery policy.
+- Retain cancellation requested before a receiver subscribes, and keep dropped senders
+  from spuriously cancelling waits.
+
+## Scrobble Scrubber 0.1.4 (2026-10-16)
+
+- Incremental sync no longer loses scrobbles. Last.fm stamps a scrobble with the track's
+  start time but records it only after the track finishes, so syncs that ran mid-track
+  marked that time covered before the scrobble existed. With five-minute polling about
+  half of all scrobbles were never stored. Each sync now reconciles the trailing 24 hours
+  (`SyncOptions::late_arrival_secs`) against upstream, adding late arrivals and removing
+  records that are gone.
+- Recently mirrored edits converge to what last.fm actually stored. Last.fm keeps its own
+  casing for existing tracks, so an edit to "Not A Second Time" is stored as "Not a Second
+  Time", and the store kept the requested spelling as a phantom duplicate.
+- Re-fetching an unchanged scrobble no longer appends a duplicate line, and an API
+  re-fetch keeps a known album artist instead of downgrading it to unknown.
+- Incremental planning durably tracks analyzed record revisions, finding late arrivals
+  and metadata-only updates even after restart or lost discovery notifications.
+- Planning claims only synced intervals. Explicit whole-store passes force a rescan,
+  and each pass uses one current rule snapshot for both analysis and coverage hashing.
+- Rejecting an intent interrupts waits and prevents remaining edits; late executor events
+  preserve the rejected state. Authentication failures leave work available for recovery.
+- Stable per-instance operation IDs reconcile interrupted upstream edits before retrying,
+  including paginated windows and album-artist-only edits. Ambiguous outcomes remain
+  pending instead of being blindly submitted again.
+- JSONL appends repair incomplete crash tails under writer serialization and report
+  corruption in complete lines. Atomic snapshots sync their parent directories.
+- The SQLite index detects same-size and growing rewrites of already-indexed bytes.
+- Continuous runs await actual cycle completion and invalidate queued work when disabled,
+  while manual commands remain independent. The app and CLI share the same cycle path.
+
 ## Scrobble Scrubber 0.1.3 (2026-08-12)
 
 - The daemon validates the saved last.fm session at startup and re-logs-in automatically

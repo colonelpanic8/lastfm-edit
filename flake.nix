@@ -419,7 +419,7 @@
 
         packages.lastfm-edit = pkgs.rustPlatform.buildRustPackage {
           pname = "lastfm-edit";
-          version = "7.0.1";
+          version = "7.0.2";
 
           src = rustSource;
 
@@ -450,7 +450,7 @@
 
         packages.scrobble-store = pkgs.rustPlatform.buildRustPackage {
           pname = "scrobble-store";
-          version = "0.1.3";
+          version = "0.1.4";
 
           src = rustSource;
 
@@ -483,7 +483,7 @@
 
         packages.scrobble-scrubber = pkgs.rustPlatform.buildRustPackage {
           pname = "scrobble-scrubber";
-          version = "0.1.3";
+          version = "0.1.4";
 
           src = rustSource;
 
