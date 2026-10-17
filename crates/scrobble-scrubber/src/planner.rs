@@ -143,7 +143,8 @@ impl Planner {
             coverage_claim: None,
         };
         let mut report = PlanReport::default();
-        self.plan_batch(&batch, &mut context, &mut report).await?;
+        self.plan_batch(&batch, &mut context, &mut report, false)
+            .await?;
         Ok(report)
     }
 
@@ -169,7 +170,13 @@ impl Planner {
 
         let mut report = PlanReport::default();
         for batch in batches {
-            self.plan_batch(&batch, &mut context, &mut report).await?;
+            self.plan_batch(
+                &batch,
+                &mut context,
+                &mut report,
+                matches!(feed, ScrubFeed::Incremental { .. }),
+            )
+            .await?;
         }
         Ok(report)
     }
@@ -261,6 +268,7 @@ impl Planner {
         batch: &FeedBatch,
         context: &mut PlanContext,
         report: &mut PlanReport,
+        skip_covered: bool,
     ) -> Result<()> {
         let PlanContext {
             coverages,
@@ -298,7 +306,7 @@ impl Planner {
 
             // Skip providers that already planned this whole range.
             if let Some(claim) = &batch.coverage_claim {
-                if coverage.coverage.covers(claim.clone()) {
+                if skip_covered && coverage.coverage.covers(claim.clone()) {
                     continue;
                 }
             }

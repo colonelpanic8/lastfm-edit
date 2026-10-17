@@ -217,7 +217,7 @@ async fn dedupes_instances_queues_one_ready_intent_and_is_idempotent() {
     assert_eq!(queue[0].state, IntentState::Ready);
     assert_eq!(queue[0].proposed.track_name.as_deref(), Some("You And I"));
 
-    // Second plan: coverage skips analysis entirely, no duplicate intents.
+    // A rescan still avoids duplicate intents for occupied subjects.
     let planner2 = Planner::new(store, state.clone())
         .with_provider(RewriteRulesScrubActionProvider::from_rules(rules));
     let report2 = planner2
@@ -417,7 +417,7 @@ async fn provider_failure_withholds_only_that_providers_claim() {
         .with_provider(good.clone())
         .with_provider(bad.clone());
     planner
-        .plan(&ScrubFeed::StoreRange { range: None })
+        .plan(&ScrubFeed::Incremental { window: None })
         .await
         .unwrap();
     assert_eq!(good.call_count(), 1);
@@ -437,7 +437,7 @@ async fn rules_hash_change_resets_only_the_rules_provider_coverage() {
         .with_provider(provider.clone())
         .with_provider(other.clone());
     planner
-        .plan(&ScrubFeed::StoreRange { range: None })
+        .plan(&ScrubFeed::Incremental { window: None })
         .await
         .unwrap();
     assert_eq!(provider.call_count(), 1);
@@ -448,7 +448,7 @@ async fn rules_hash_change_resets_only_the_rules_provider_coverage() {
         .with_provider(provider.clone())
         .with_provider(other.clone());
     planner
-        .plan(&ScrubFeed::StoreRange { range: None })
+        .plan(&ScrubFeed::Incremental { window: None })
         .await
         .unwrap();
     assert_eq!(provider.call_count(), 1);
@@ -465,7 +465,7 @@ async fn rules_hash_change_resets_only_the_rules_provider_coverage() {
         .with_provider(provider.clone())
         .with_provider(other.clone());
     planner
-        .plan(&ScrubFeed::StoreRange { range: None })
+        .plan(&ScrubFeed::Incremental { window: None })
         .await
         .unwrap();
     assert_eq!(other.call_count(), 1, "non-rules provider stays covered");
@@ -476,5 +476,74 @@ async fn rules_hash_change_resets_only_the_rules_provider_coverage() {
         Some(scrobble_scrubber::rules_hash(
             &state.load_rules().await.unwrap()
         ))
+    );
+}
+
+#[tokio::test]
+async fn plan_store_does_not_claim_future_scrobbles() {
+    let (store, state) = seeded(&[record(100, "Queen", "Clean")]).await;
+    let mut coverage = CoverageMap::new();
+    coverage.insert(Segment::new(0, 1000, 1));
+    store.save_coverage(&coverage).await.unwrap();
+    state.save_rules(&[remaster_rule()]).await.unwrap();
+    let planner = Planner::new(store.clone(), state.clone()).with_provider(
+        RewriteRulesScrubActionProvider::from_rules(vec![remaster_rule()]),
+    );
+    planner
+        .plan(&ScrubFeed::StoreRange { range: None })
+        .await
+        .unwrap();
+    store
+        .append_scrobbles(&[record(1500, "Queen", "Song - Remastered 2011")])
+        .await
+        .unwrap();
+    coverage.insert(Segment::new(1000, 2000, 2));
+    store.save_coverage(&coverage).await.unwrap();
+    planner
+        .plan(&ScrubFeed::Incremental { window: None })
+        .await
+        .unwrap();
+    assert_eq!(
+        state.load_queue().await.unwrap().len(),
+        1,
+        "store pass preclaimed all future time"
+    );
+}
+
+#[tokio::test]
+async fn whole_store_rescans_but_only_claims_synced_intervals() {
+    let (store, state) = seeded(&[
+        record(100, "A", "clean"),
+        record(200, "A", "hole"),
+        record(300, "A", "clean"),
+    ])
+    .await;
+    store
+        .save_coverage(&CoverageMap::from_segments(vec![
+            Segment::new(50, 150, 1),
+            Segment::new(250, 350, 1),
+        ]))
+        .await
+        .unwrap();
+    let provider = ScriptedProvider::new("test", "never");
+    let planner = Planner::new(store, state.clone()).with_provider(provider.clone());
+    planner
+        .plan(&ScrubFeed::StoreRange { range: None })
+        .await
+        .unwrap();
+    assert!(provider.analyzed_names().contains(&"hole".into()));
+    let coverage = state.load_provider_coverage("test").await.unwrap().coverage;
+    assert!(coverage.covers(50..150));
+    assert!(coverage.covers(250..350));
+    assert!(!coverage.covers(150..250));
+    assert!(!coverage.covers(350..351));
+    let calls = provider.call_count();
+    planner
+        .plan(&ScrubFeed::StoreRange { range: None })
+        .await
+        .unwrap();
+    assert!(
+        provider.call_count() > calls,
+        "explicit store pass rescans covered data"
     );
 }

@@ -12,7 +12,7 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "feed", rename_all = "snake_case")]
 pub enum ScrubFeed {
-    /// Everything in the store, or a time slice of it.
+    /// Rescan everything in the store, or a time slice, regardless of planning coverage.
     StoreRange { range: Option<Range<u64>> },
     /// Work not yet planned: (sync coverage ∩ optional window) − planning coverage.
     Incremental { window: Option<Range<u64>> },
@@ -73,8 +73,24 @@ impl ScrubFeed {
         match self {
             ScrubFeed::StoreRange { range } => {
                 let range = range.clone().unwrap_or(0..u64::MAX);
+                let synced = store.load_coverage().await?;
                 let records = store.scrobbles_in_range(range.clone()).await?;
-                Ok(chunk_with_claims(records, range, batch_hint))
+                let mut records = records.into_iter().peekable();
+                let mut batches = Vec::new();
+                for segment in synced.segments() {
+                    let claim = range.start.max(segment.start)..range.end.min(segment.end);
+                    if claim.start >= claim.end {
+                        continue;
+                    }
+                    let unsynced =
+                        std::iter::from_fn(|| records.next_if(|r| r.uts < claim.start)).collect();
+                    batches.extend(chunk_spot(unsynced, batch_hint));
+                    let covered =
+                        std::iter::from_fn(|| records.next_if(|r| r.uts < claim.end)).collect();
+                    batches.extend(chunk_with_claims(covered, claim, batch_hint));
+                }
+                batches.extend(chunk_spot(records.collect(), batch_hint));
+                Ok(batches)
             }
             ScrubFeed::Incremental { .. } => {
                 let work = incremental_work
