@@ -1441,7 +1441,17 @@ impl LastFmEditClientImpl {
             return Err(LastFmError::Http("Too many redirects".to_string()));
         }
 
-        let mut request = Request::new(Method::Get, url.parse::<Url>().unwrap());
+        let request_url = Url::parse(url).map_err(|err| LastFmError::Http(err.to_string()))?;
+        let base_url = Url::parse(&self.session.lock().unwrap().base_url)
+            .map_err(|err| LastFmError::Http(err.to_string()))?;
+        if !matches!(request_url.scheme(), "http" | "https")
+            || request_url.origin() != base_url.origin()
+        {
+            return Err(LastFmError::Http(
+                "Authenticated requests must use the session origin".into(),
+            ));
+        }
+        let mut request = Request::new(Method::Get, request_url.clone());
 
         {
             let session = self.session.lock().unwrap();
@@ -1502,25 +1512,12 @@ impl LastFmEditClientImpl {
                         }
                     }
 
-                    let full_redirect_url = if redirect_url_str.starts_with('/') {
-                        let base_url = self.session.lock().unwrap().base_url.clone();
-                        format!("{base_url}{redirect_url_str}")
-                    } else if redirect_url_str.starts_with("http") {
-                        redirect_url_str.to_string()
-                    } else {
-                        let base_url = url
-                            .rsplit('/')
-                            .skip(1)
-                            .collect::<Vec<_>>()
-                            .into_iter()
-                            .rev()
-                            .collect::<Vec<_>>()
-                            .join("/");
-                        format!("{base_url}/{redirect_url_str}")
-                    };
+                    let full_redirect_url = request_url
+                        .join(redirect_url_str)
+                        .map_err(|err| LastFmError::Http(err.to_string()))?;
 
                     return Box::pin(
-                        self.get_with_redirects(&full_redirect_url, redirect_count + 1),
+                        self.get_with_redirects(full_redirect_url.as_str(), redirect_count + 1),
                     )
                     .await;
                 }
