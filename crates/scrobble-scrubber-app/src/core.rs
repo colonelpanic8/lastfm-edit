@@ -169,7 +169,7 @@ impl Default for ScrubberSection {
 
 #[cfg(not(target_os = "android"))]
 fn pass_entry() -> String {
-    std::env::var("LASTFM_EDIT_PASS_ENTRY").unwrap_or_else(|_| "last.fm".to_string())
+    std::env::var("LASTFM_EDIT_PASS_ENTRY").unwrap_or_else(|_| "last.fm/IvanMalison".to_string())
 }
 
 #[cfg(any(not(target_os = "android"), test))]
