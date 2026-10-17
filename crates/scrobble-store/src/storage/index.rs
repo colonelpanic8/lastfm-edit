@@ -16,7 +16,19 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
+
+const CREATE_SECONDARY_INDEXES: &str = "
+    CREATE INDEX IF NOT EXISTS idx_scrobbles_uts ON scrobbles(uts);
+    CREATE INDEX IF NOT EXISTS idx_scrobbles_artist ON scrobbles(artist, uts);
+    CREATE INDEX IF NOT EXISTS idx_scrobbles_artist_album ON scrobbles(deleted, artist, album, uts);
+    CREATE INDEX IF NOT EXISTS idx_scrobbles_artist_track ON scrobbles(deleted, artist, track, uts);";
+
+const DROP_SECONDARY_INDEXES: &str = "
+    DROP INDEX IF EXISTS idx_scrobbles_uts;
+    DROP INDEX IF EXISTS idx_scrobbles_artist;
+    DROP INDEX IF EXISTS idx_scrobbles_artist_album;
+    DROP INDEX IF EXISTS idx_scrobbles_artist_track;";
 
 pub(crate) struct Index {
     conn: Connection,
@@ -99,11 +111,11 @@ impl Index {
                          fetched_at INTEGER NOT NULL,
                          deleted INTEGER NOT NULL,
                          json TEXT NOT NULL
-                     );
-                     CREATE INDEX IF NOT EXISTS idx_scrobbles_uts ON scrobbles(uts);
-                     CREATE INDEX IF NOT EXISTS idx_scrobbles_artist ON scrobbles(artist, uts);",
+                     );",
                 )
                 .map_err(sqlite_err)?;
+                conn.execute_batch(CREATE_SECONDARY_INDEXES)
+                    .map_err(sqlite_err)?;
                 conn.execute(
                     "INSERT INTO meta (key, value) VALUES ('schema_version', ?1)",
                     params![SCHEMA_VERSION],
@@ -130,6 +142,18 @@ impl Index {
     /// the recorded offset, file deleted) triggers a full rebuild — cheap enough, and
     /// guaranteed correct.
     pub(crate) fn catch_up(&mut self, partition_files: &[PathBuf]) -> Result<()> {
+        let empty: bool = self
+            .conn
+            .query_row(
+                "SELECT NOT EXISTS (SELECT 1 FROM ingested_files)",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(sqlite_err)?;
+        if empty && !partition_files.is_empty() {
+            self.rebuild(partition_files)?;
+            return Ok(());
+        }
         if self.needs_rebuild(partition_files)? {
             log::info!("index: partition files changed non-incrementally; rebuilding");
             self.rebuild(partition_files)?;
@@ -196,90 +220,28 @@ impl Index {
 
     /// Drop all derived rows and re-ingest everything.
     pub(crate) fn rebuild(&mut self, partition_files: &[PathBuf]) -> Result<()> {
+        // One transaction, with the secondary indexes built by a single sort at the end.
+        // Per-file commits with live indexes write ~20x the index's size through the WAL.
         let tx = self.conn.transaction().map_err(sqlite_err)?;
-        tx.execute("DELETE FROM scrobbles", [])
+        tx.execute_batch(DROP_SECONDARY_INDEXES)
             .map_err(sqlite_err)?;
-        tx.execute("DELETE FROM ingested_prefixes", [])
-            .map_err(sqlite_err)?;
-        tx.execute("DELETE FROM ingested_files", [])
-            .map_err(sqlite_err)?;
-        tx.commit().map_err(sqlite_err)?;
+        tx.execute_batch(
+            "DELETE FROM scrobbles; DELETE FROM ingested_prefixes; DELETE FROM ingested_files;",
+        )
+        .map_err(sqlite_err)?;
         for path in partition_files {
             let stamp = stamp(path)?;
-            self.ingest_from(path, 0, &stamp)?;
+            ingest_into(&tx, path, 0, &stamp)?;
         }
-        Ok(())
+        tx.execute_batch(CREATE_SECONDARY_INDEXES)
+            .map_err(sqlite_err)?;
+        tx.commit().map_err(sqlite_err)
     }
 
     fn ingest_from(&mut self, path: &Path, offset: u64, stamp: &FileStamp) -> Result<()> {
-        let bytes = std::fs::read(path)?;
-        let tail = &bytes[offset as usize..];
-        crate::durable::parse_jsonl::<ScrobbleRecord>(tail)?;
-
         let tx = self.conn.transaction().map_err(sqlite_err)?;
-        let mut ingested_bytes = offset;
-        {
-            let mut upsert = tx
-                .prepare(
-                    "INSERT INTO scrobbles (id, uts, artist, track, album, fetched_at, deleted, json)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-                     ON CONFLICT(id) DO UPDATE SET
-                         uts = excluded.uts,
-                         artist = excluded.artist,
-                         track = excluded.track,
-                         album = excluded.album,
-                         fetched_at = excluded.fetched_at,
-                         deleted = excluded.deleted,
-                         json = excluded.json
-                     WHERE excluded.fetched_at >= scrobbles.fetched_at",
-                )
-                .map_err(sqlite_err)?;
-            for line in tail.split_inclusive(|b| *b == b'\n') {
-                if !line.iter().all(u8::is_ascii_whitespace) {
-                    let Ok(rec) = serde_json::from_slice::<ScrobbleRecord>(line) else {
-                        break;
-                    };
-                    upsert
-                        .execute(params![
-                            rec.id.as_str(),
-                            rec.uts as i64,
-                            rec.artist,
-                            rec.track,
-                            rec.album,
-                            rec.fetched_at as i64,
-                            rec.deleted as i64,
-                            std::str::from_utf8(line).expect("valid JSON"),
-                        ])
-                        .map_err(sqlite_err)?;
-                }
-                ingested_bytes += line.len() as u64;
-            }
-            drop(upsert);
-        }
-        tx.execute(
-            "INSERT INTO ingested_files (path, byte_offset, size, mtime_ns)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(path) DO UPDATE SET
-                 byte_offset = excluded.byte_offset,
-                 size = excluded.size,
-                 mtime_ns = excluded.mtime_ns",
-            params![
-                path_key(path),
-                ingested_bytes as i64,
-                stamp.size as i64,
-                stamp.mtime_ns.to_string(),
-            ],
-        )
-        .map_err(sqlite_err)?;
-        let digest = format!("{:x}", Sha256::digest(&bytes[..ingested_bytes as usize]));
-        tx.execute(
-            "INSERT INTO ingested_prefixes (path, digest) VALUES (?1, ?2)
-                    ON CONFLICT(path) DO UPDATE SET digest = excluded.digest",
-            params![path_key(path), digest],
-        )
-        .map_err(sqlite_err)?;
-        tx.commit().map_err(sqlite_err)?;
-        Ok(())
+        ingest_into(&tx, path, offset, stamp)?;
+        tx.commit().map_err(sqlite_err)
     }
 
     /// Delete the database file entirely; the next open recreates and rebuilds.
@@ -302,17 +264,16 @@ impl Index {
         limit: usize,
         range: &Option<Range<u64>>,
     ) -> Result<Vec<ArtistCount>> {
-        let (lo, hi) = range_bounds(range);
-        let mut statement = self
-            .conn
-            .prepare(
-                "SELECT artist, COUNT(*) AS n FROM scrobbles
-                 WHERE deleted = 0 AND uts >= ?1 AND uts < ?2
-                 GROUP BY artist ORDER BY n DESC, artist ASC LIMIT ?3",
-            )
-            .map_err(sqlite_err)?;
+        let filter = Filter::new(None, range);
+        let sql = format!(
+            "SELECT artist, COUNT(*) AS n FROM scrobbles WHERE {}
+             GROUP BY artist ORDER BY n DESC, artist ASC LIMIT :limit",
+            filter.sql()
+        );
+        let limit = limit as i64;
+        let mut statement = self.conn.prepare_cached(&sql).map_err(sqlite_err)?;
         let rows = statement
-            .query_map(params![lo, hi, limit as i64], |row| {
+            .query_map(filter.params(Some(&limit)).as_slice(), |row| {
                 Ok(ArtistCount {
                     artist: row.get(0)?,
                     count: row.get::<_, i64>(1)? as u64,
@@ -329,18 +290,16 @@ impl Index {
         limit: usize,
         range: &Option<Range<u64>>,
     ) -> Result<Vec<TrackCount>> {
-        let (lo, hi) = range_bounds(range);
-        let mut statement = self
-            .conn
-            .prepare(
-                "SELECT artist, track, COUNT(*) AS n FROM scrobbles
-                 WHERE deleted = 0 AND uts >= ?1 AND uts < ?2
-                   AND (?3 IS NULL OR artist = ?3)
-                 GROUP BY artist, track ORDER BY n DESC, artist ASC, track ASC LIMIT ?4",
-            )
-            .map_err(sqlite_err)?;
+        let filter = Filter::new(artist, range);
+        let sql = format!(
+            "SELECT artist, track, COUNT(*) AS n FROM scrobbles WHERE {}
+             GROUP BY artist, track ORDER BY n DESC, artist ASC, track ASC LIMIT :limit",
+            filter.sql()
+        );
+        let limit = limit as i64;
+        let mut statement = self.conn.prepare_cached(&sql).map_err(sqlite_err)?;
         let rows = statement
-            .query_map(params![lo, hi, artist, limit as i64], |row| {
+            .query_map(filter.params(Some(&limit)).as_slice(), |row| {
                 Ok(TrackCount {
                     artist: row.get(0)?,
                     track: row.get(1)?,
@@ -358,19 +317,17 @@ impl Index {
         limit: usize,
         range: &Option<Range<u64>>,
     ) -> Result<Vec<AlbumCount>> {
-        let (lo, hi) = range_bounds(range);
-        let mut statement = self
-            .conn
-            .prepare(
-                "SELECT artist, album, COUNT(*) AS n FROM scrobbles
-                 WHERE deleted = 0 AND uts >= ?1 AND uts < ?2
-                   AND album IS NOT NULL AND album != ''
-                   AND (?3 IS NULL OR artist = ?3)
-                 GROUP BY artist, album ORDER BY n DESC, artist ASC, album ASC LIMIT ?4",
-            )
-            .map_err(sqlite_err)?;
+        let filter = Filter::new(artist, range);
+        let sql = format!(
+            "SELECT artist, album, COUNT(*) AS n FROM scrobbles
+             WHERE {} AND album IS NOT NULL AND album != ''
+             GROUP BY artist, album ORDER BY n DESC, artist ASC, album ASC LIMIT :limit",
+            filter.sql()
+        );
+        let limit = limit as i64;
+        let mut statement = self.conn.prepare_cached(&sql).map_err(sqlite_err)?;
         let rows = statement
-            .query_map(params![lo, hi, artist, limit as i64], |row| {
+            .query_map(filter.params(Some(&limit)).as_slice(), |row| {
                 Ok(AlbumCount {
                     artist: row.get(0)?,
                     album: row.get(1)?,
@@ -383,14 +340,14 @@ impl Index {
     }
 
     pub(crate) fn scrobble_count(&self, range: &Option<Range<u64>>) -> Result<u64> {
-        let (lo, hi) = range_bounds(range);
+        let filter = Filter::new(None, range);
+        let sql = format!("SELECT COUNT(*) FROM scrobbles WHERE {}", filter.sql());
         self.conn
-            .query_row(
-                "SELECT COUNT(*) FROM scrobbles
-                 WHERE deleted = 0 AND uts >= ?1 AND uts < ?2",
-                params![lo, hi],
-                |row| row.get::<_, i64>(0).map(|n| n as u64),
-            )
+            .prepare_cached(&sql)
+            .map_err(sqlite_err)?
+            .query_row(filter.params(None).as_slice(), |row| {
+                row.get::<_, i64>(0).map(|n| n as u64)
+            })
             .map_err(sqlite_err)
     }
 
@@ -404,7 +361,7 @@ impl Index {
             .conn
             .prepare(
                 "SELECT json FROM scrobbles
-                 WHERE deleted = 0 AND artist = ?1 AND uts >= ?2 AND uts < ?3
+                 WHERE +deleted = 0 AND artist = ?1 AND uts >= ?2 AND uts < ?3
                  ORDER BY uts ASC, id ASC",
             )
             .map_err(sqlite_err)?;
@@ -433,7 +390,7 @@ impl Index {
             .conn
             .prepare(
                 "SELECT json FROM scrobbles
-                 WHERE deleted = 0
+                 WHERE +deleted = 0
                    AND (?1 IS NULL OR uts < ?1 OR (uts = ?1 AND id < ?2))
                  ORDER BY uts DESC, id DESC
                  LIMIT ?3",
@@ -477,7 +434,7 @@ impl Index {
         };
         let sql = format!(
             "SELECT json FROM scrobbles
-             WHERE deleted = 0{filter_sql}
+             WHERE +deleted = 0{filter_sql}
                AND (? IS NULL OR uts < ? OR (uts = ? AND id < ?))
              ORDER BY uts DESC, id DESC
              LIMIT ?"
@@ -538,7 +495,7 @@ impl Index {
         let sql = format!(
             "SELECT artist, track, album, COUNT(*), MIN(uts), MAX(uts)
              FROM scrobbles
-             WHERE deleted = 0{filter_sql}
+             WHERE +deleted = 0{filter_sql}
              GROUP BY artist, track, album
              ORDER BY MAX(uts) DESC, artist COLLATE NOCASE ASC,
                       track COLLATE NOCASE ASC, album COLLATE NOCASE ASC
@@ -578,6 +535,128 @@ fn escape_like(value: &str) -> String {
         .replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_")
+}
+
+fn ingest_into(conn: &Connection, path: &Path, offset: u64, stamp: &FileStamp) -> Result<()> {
+    let bytes = std::fs::read(path)?;
+    let tail = &bytes[offset as usize..];
+    crate::durable::parse_jsonl::<ScrobbleRecord>(tail)?;
+
+    let mut ingested_bytes = offset;
+    {
+        let mut upsert = conn
+            .prepare(
+                "INSERT INTO scrobbles (id, uts, artist, track, album, fetched_at, deleted, json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 ON CONFLICT(id) DO UPDATE SET
+                     uts = excluded.uts,
+                     artist = excluded.artist,
+                     track = excluded.track,
+                     album = excluded.album,
+                     fetched_at = excluded.fetched_at,
+                     deleted = excluded.deleted,
+                     json = excluded.json
+                 WHERE excluded.fetched_at >= scrobbles.fetched_at",
+            )
+            .map_err(sqlite_err)?;
+        for line in tail.split_inclusive(|b| *b == b'\n') {
+            if !line.iter().all(u8::is_ascii_whitespace) {
+                let Ok(rec) = serde_json::from_slice::<ScrobbleRecord>(line) else {
+                    break;
+                };
+                upsert
+                    .execute(params![
+                        rec.id.as_str(),
+                        rec.uts as i64,
+                        rec.artist,
+                        rec.track,
+                        rec.album,
+                        rec.fetched_at as i64,
+                        rec.deleted as i64,
+                        std::str::from_utf8(line).expect("valid JSON"),
+                    ])
+                    .map_err(sqlite_err)?;
+            }
+            ingested_bytes += line.len() as u64;
+        }
+        drop(upsert);
+    }
+    conn.execute(
+        "INSERT INTO ingested_files (path, byte_offset, size, mtime_ns)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(path) DO UPDATE SET
+             byte_offset = excluded.byte_offset,
+             size = excluded.size,
+             mtime_ns = excluded.mtime_ns",
+        params![
+            path_key(path),
+            ingested_bytes as i64,
+            stamp.size as i64,
+            stamp.mtime_ns.to_string(),
+        ],
+    )
+    .map_err(sqlite_err)?;
+    let digest = format!("{:x}", Sha256::digest(&bytes[..ingested_bytes as usize]));
+    conn.execute(
+        "INSERT INTO ingested_prefixes (path, digest) VALUES (?1, ?2)
+                ON CONFLICT(path) DO UPDATE SET digest = excluded.digest",
+        params![path_key(path), digest],
+    )
+    .map_err(sqlite_err)?;
+    Ok(())
+}
+
+/// `WHERE` predicate for the aggregate queries. Absent filters are left out of the SQL
+/// entirely: an always-true `uts` range would steer SQLite onto the `uts` index and a row
+/// lookup per scrobble, where the unfiltered query can stream groups straight off the
+/// `(deleted, artist, …)` covering indexes.
+struct Filter<'a> {
+    artist: Option<&'a str>,
+    bounds: Option<(i64, i64)>,
+}
+
+impl<'a> Filter<'a> {
+    fn new(artist: Option<&'a str>, range: &Option<Range<u64>>) -> Self {
+        Self {
+            artist,
+            bounds: range.as_ref().map(|r| (r.start as i64, r.end as i64)),
+        }
+    }
+
+    /// The full `WHERE` predicate. A bounded range walks the `uts` index, so `deleted` is
+    /// written `+deleted` to keep SQLite off the `deleted`-led indexes.
+    fn sql(&self) -> String {
+        let mut sql = String::from(if self.bounds.is_some() {
+            "+deleted = 0"
+        } else {
+            "deleted = 0"
+        });
+        if self.artist.is_some() {
+            sql.push_str(" AND artist = :artist");
+        }
+        if self.bounds.is_some() {
+            sql.push_str(" AND uts >= :lo AND uts < :hi");
+        }
+        sql
+    }
+
+    fn params<'p>(
+        &'p self,
+        limit: Option<&'p i64>,
+    ) -> Vec<(&'static str, &'p dyn rusqlite::ToSql)> {
+        let mut params: Vec<(&str, &dyn rusqlite::ToSql)> = Vec::new();
+        if let Some(limit) = limit {
+            params.push((":limit", limit));
+        }
+        if let Some(artist) = &self.artist {
+            params.push((":artist", artist));
+        }
+        if let Some((lo, hi)) = &self.bounds {
+            params.push((":lo", lo));
+            params.push((":hi", hi));
+        }
+        params
+    }
 }
 
 fn range_bounds(range: &Option<Range<u64>>) -> (i64, i64) {
