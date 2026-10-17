@@ -445,17 +445,7 @@ impl<C: LastFmEditClient> Executor<C> {
                     continue;
                 }
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
-                // Auth failures are session-wide, not instance-specific: abort the pass
-                // instead of burning this instance's attempts (and eventually abandoning
-                // the intent) on edits that cannot succeed until someone re-logs-in.
-                Err(err @ StoreError::LastFm(lastfm_edit::LastFmError::Auth(_))) => {
-                    return Err(err.into())
-                }
-                Err(err) => {
-                    return Ok(InstanceOutcome::Failed {
-                        error: format!("prepare failed: {err}"),
-                    })
-                }
+                Err(err) => return Err(execution_error(err)),
             };
 
             let exact = overlay_proposal(prepared, &intent.proposed);
@@ -485,15 +475,7 @@ impl<C: LastFmEditClient> Executor<C> {
                     });
                 }
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
-                // Session-wide failure: abort the pass rather than burn attempts.
-                Err(err @ StoreError::LastFm(lastfm_edit::LastFmError::Auth(_))) => {
-                    return Err(err.into())
-                }
-                Err(err) => {
-                    return Ok(InstanceOutcome::Failed {
-                        error: err.to_string(),
-                    })
-                }
+                Err(err) => return Err(execution_error(err)),
             }
         }
     }
@@ -594,6 +576,18 @@ impl<C: LastFmEditClient> Executor<C> {
                 kind,
             }])
             .await
+    }
+}
+
+fn execution_error(error: StoreError) -> ScrubberError {
+    match error {
+        StoreError::Cancelled => ScrubberError::Cancelled,
+        StoreError::LastFm(lastfm_edit::LastFmError::Io(ref err))
+            if err.kind() == std::io::ErrorKind::Interrupted =>
+        {
+            ScrubberError::Cancelled
+        }
+        error => error.into(),
     }
 }
 

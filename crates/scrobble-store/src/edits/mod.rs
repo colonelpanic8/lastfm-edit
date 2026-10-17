@@ -274,8 +274,8 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
 
     /// One upstream attempt for a queued entry, mirroring locally on success.
     ///
-    /// Rate-limit errors propagate WITHOUT consuming an attempt: the entry stays pending
-    /// and the caller (or `resume_pending`) retries once the client is no longer parked.
+    /// Only explicit upstream rejections consume attempts. Other errors leave the entry
+    /// pending so recovery can resolve a potentially ambiguous remote outcome.
     async fn attempt(&self, entry: EditLogEntry, op: EditOp) -> Result<EditOutcome> {
         let upstream_result = match &op {
             EditOp::Edit(edit) => self
@@ -332,26 +332,7 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
                 });
                 Ok(EditOutcome::Failed { error })
             }
-            Err(err @ lastfm_edit::LastFmError::RateLimit { .. }) => {
-                // Not a failed attempt — the request never really ran. Stay pending.
-                Err(StoreError::LastFm(err))
-            }
-            Err(err) => {
-                let error = err.to_string();
-                self.append_event(
-                    &entry.edit_id,
-                    EditEventKind::AttemptFailed {
-                        error: error.clone(),
-                    },
-                )
-                .await?;
-                self.events.emit(SyncEvent::EditFailed {
-                    edit_id: entry.edit_id.clone(),
-                    error: error.clone(),
-                    will_retry: true,
-                });
-                Ok(EditOutcome::Failed { error })
-            }
+            Err(err) => Err(StoreError::LastFm(err)),
         }
     }
 

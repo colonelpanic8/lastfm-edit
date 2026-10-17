@@ -187,16 +187,14 @@ async fn return_error_mode_propagates_rate_limit_from_edit_scrobble_single() {
 }
 
 #[test_log::test(tokio::test)]
-async fn block_and_retry_mode_folds_rate_limit_into_edit_response() {
-    // Contrast with ReturnError: the blocking path reports a failed EditResponse
-    // instead of an Err once retries are exhausted.
+async fn block_and_retry_mode_preserves_exhausted_edit_rate_limit() {
     let (client, _requests) = rate_limited_client(ClientConfig::for_testing());
 
     let response = client
         .edit_scrobble_single(&sample_exact_edit(), 3)
         .await
-        .expect("blocking mode should not surface rate-limit errors");
-    assert!(!response.success());
+        .unwrap_err();
+    assert!(matches!(response, LastFmError::RateLimit { .. }));
 }
 
 #[test_log::test(tokio::test)]
@@ -214,16 +212,14 @@ async fn return_error_mode_propagates_rate_limit_from_delete_scrobble() {
 }
 
 #[test_log::test(tokio::test)]
-async fn block_and_retry_mode_folds_rate_limit_into_delete_result() {
-    // Contrast with ReturnError: the blocking path returns Ok(false) once retries
-    // are exhausted.
+async fn block_and_retry_mode_preserves_exhausted_delete_rate_limit() {
     let (client, _requests) = rate_limited_client(ClientConfig::for_testing());
 
     let deleted = client
         .delete_scrobble("Artist", "Track", 1_640_995_200)
         .await
-        .expect("blocking mode should not surface rate-limit errors");
-    assert!(!deleted);
+        .unwrap_err();
+    assert!(matches!(deleted, LastFmError::RateLimit { .. }));
 }
 
 #[test_log::test(tokio::test)]
@@ -341,4 +337,33 @@ async fn non_blocking_clone_shares_broadcaster_and_session() {
         non_blocking.rate_limit_state(),
         RateLimitState::RateLimited { .. }
     ));
+}
+
+#[tokio::test]
+async fn mutation_auth_errors_remain_typed_in_every_retry_mode() {
+    for config in [
+        ClientConfig::for_testing(),
+        ClientConfig::with_retries_disabled(),
+        ClientConfig::for_testing().with_rate_limit_behavior(RateLimitBehavior::ReturnError),
+    ] {
+        for (status, body) in [
+            (401, "unauthorized"),
+            (200, "<input name=\"username_or_email\">"),
+        ] {
+            let (transport, _) = ScriptedClient::with_response(status, body);
+            let client = LastFmEditClientImpl::from_session_with_client_config(
+                Box::new(transport),
+                create_test_session(),
+                config.clone(),
+            );
+            assert!(matches!(
+                client.edit_scrobble_single(&sample_exact_edit(), 3).await,
+                Err(LastFmError::Auth(_))
+            ));
+            assert!(matches!(
+                client.delete_scrobble("Artist", "Track", 100).await,
+                Err(LastFmError::Auth(_))
+            ));
+        }
+    }
 }

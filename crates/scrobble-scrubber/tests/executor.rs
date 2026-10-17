@@ -616,3 +616,34 @@ async fn vanished_subject_completes_without_touching_lastfm() {
         IntentState::Applied
     );
 }
+
+#[tokio::test]
+async fn auth_error_does_not_abandon_intent() {
+    let store = Arc::new(MemoryStorage::new());
+    store.append_scrobbles(&[record(100)]).await.unwrap();
+    let state = Arc::new(MemoryScrubberState::new());
+    queue_ready_intent(state.as_ref()).await;
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_edit_scrobble_single()
+        .returning(|_, _| Err(lastfm_edit::LastFmError::Auth("expired session".into())));
+    let exec = executor(
+        store,
+        state.clone(),
+        client,
+        ExecutorOptions {
+            max_attempts_per_instance: 1,
+            ..zero_delay()
+        },
+    );
+    let result = exec.run_once().await;
+    assert!(matches!(
+        result,
+        Err(scrobble_scrubber::ScrubberError::Store(
+            scrobble_store::StoreError::LastFm(lastfm_edit::LastFmError::Auth(_))
+        ))
+    ));
+    let queue = state.load_queue().await.unwrap();
+    assert_eq!(queue[0].state, IntentState::InProgress);
+    assert_eq!(queue[0].failed_count(), 0);
+}

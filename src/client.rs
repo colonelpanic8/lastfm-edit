@@ -350,9 +350,7 @@ impl LastFmEditClientImpl {
         track_name: &str,
         timestamp: u64,
     ) -> Result<bool> {
-        // Non-blocking mode: single attempt, no internal sleeping/retrying. Rate limits are
-        // PROPAGATED as `Err(LastFmError::RateLimit { .. })` (instead of being folded into
-        // `Ok(false)` by the retry path) so queue-building callers can reschedule the delete.
+        // Non-blocking callers own retry scheduling.
         if self.config.rate_limit_behavior == RateLimitBehavior::ReturnError {
             return self
                 .delete_scrobble_impl(artist_name, track_name, timestamp)
@@ -405,7 +403,7 @@ impl LastFmEditClientImpl {
         .await
         {
             Ok(retry_result) => Ok(retry_result.result),
-            Err(_) => Ok(false),
+            Err(error) => Err(error),
         }
     }
 
@@ -436,6 +434,7 @@ impl LastFmEditClientImpl {
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
         let document = Html::parse_document(&content);
+        self.check_auth_response(response.status(), &content)?;
         let fresh_csrf_token = self.extract_csrf_token(&document)?;
 
         log::debug!("Submitting delete request with fresh token");
@@ -499,6 +498,20 @@ impl LastFmEditClientImpl {
         // A rate-limit interstitial (served site-wide, e.g. HTTP 406 after edit bursts) must
         // surface as a RateLimit error, not be misread as the delete failing.
         self.check_post_response_for_rate_limit(&delete_url, response.status(), &response_text)?;
+        self.check_auth_response(response.status(), &response_text)?;
+        if response.status().is_redirection()
+            && response
+                .header("location")
+                .is_some_and(|values| values.iter().any(|value| value.as_str().contains("/login")))
+        {
+            return Err(LastFmError::Auth("Session expired or invalid".into()));
+        }
+        if response.status().is_server_error() {
+            return Err(LastFmError::Http(format!(
+                "Mutation returned {}",
+                response.status()
+            )));
+        }
 
         let success = response.status().is_success();
 
@@ -716,44 +729,17 @@ impl LastFmEditClientImpl {
         exact_edit: &ExactScrobbleEdit,
         max_retries: u32,
     ) -> Result<EditResponse> {
-        // Non-blocking mode: single attempt, no internal sleeping/retrying. Rate limits are
-        // PROPAGATED as `Err(LastFmError::RateLimit { .. })` so queue-building callers can
-        // reschedule the edit themselves; other errors keep the usual "folded into a failed
-        // EditResponse" behavior.
-        if self.config.rate_limit_behavior == RateLimitBehavior::ReturnError {
-            return match self.edit_scrobble_impl(exact_edit).await {
-                Ok(success) => Ok(EditResponse::single(
-                    success,
-                    None,
-                    None,
-                    exact_edit.clone(),
-                )),
-                Err(rate_limit @ LastFmError::RateLimit { .. }) => Err(rate_limit),
-                Err(error) => Ok(EditResponse::single(
-                    false,
-                    Some(error.to_string()),
-                    None,
-                    exact_edit.clone(),
-                )),
-            };
-        }
-
-        // Skip retry if disabled in config or max_retries is 0
-        if !self.config.retry.enabled || max_retries == 0 {
-            return match self.edit_scrobble_impl(exact_edit).await {
-                Ok(success) => Ok(EditResponse::single(
-                    success,
-                    None,
-                    None,
-                    exact_edit.clone(),
-                )),
-                Err(error) => Ok(EditResponse::single(
-                    false,
-                    Some(error.to_string()),
-                    None,
-                    exact_edit.clone(),
-                )),
-            };
+        if self.config.rate_limit_behavior == RateLimitBehavior::ReturnError
+            || !self.config.retry.enabled
+            || max_retries == 0
+        {
+            let success = self.edit_scrobble_impl(exact_edit).await?;
+            return Ok(EditResponse::single(
+                success,
+                None,
+                None,
+                exact_edit.clone(),
+            ));
         }
 
         let mut config = self.config.retry.clone();
@@ -804,18 +790,7 @@ impl LastFmEditClientImpl {
                 None,
                 exact_edit.clone(),
             )),
-            Err(LastFmError::RateLimit { .. }) => Ok(EditResponse::single(
-                false,
-                Some(format!("Rate limit exceeded after {max_retries} retries")),
-                None,
-                exact_edit.clone(),
-            )),
-            Err(other_error) => Ok(EditResponse::single(
-                false,
-                Some(other_error.to_string()),
-                None,
-                exact_edit.clone(),
-            )),
+            Err(error) => Err(error),
         }
     }
 
@@ -922,6 +897,20 @@ impl LastFmEditClientImpl {
         // A rate-limit interstitial (served site-wide, e.g. HTTP 406 after edit bursts) must
         // surface as a RateLimit error, not be misread by edit analysis as "rejected".
         self.check_post_response_for_rate_limit(&edit_url, response.status(), &response_text)?;
+        self.check_auth_response(response.status(), &response_text)?;
+        if response.status().is_redirection()
+            && response
+                .header("location")
+                .is_some_and(|values| values.iter().any(|value| value.as_str().contains("/login")))
+        {
+            return Err(LastFmError::Auth("Session expired or invalid".into()));
+        }
+        if response.status().is_server_error() {
+            return Err(LastFmError::Http(format!(
+                "Mutation returned {}",
+                response.status()
+            )));
+        }
 
         let analysis = edit_analysis::analyze_edit_response(&response_text, response.status());
 
@@ -935,6 +924,7 @@ impl LastFmEditClientImpl {
             .await
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
+        self.check_auth_response(form_response.status(), &form_html)?;
         log::debug!("Edit form response status: {}", form_response.status());
         Ok(form_html)
     }
@@ -1501,15 +1491,8 @@ impl LastFmEditClientImpl {
             if let Some(location) = response.header("location") {
                 if let Some(redirect_url) = location.get(0) {
                     let redirect_url_str = redirect_url.as_str();
-                    if url.contains("page=") {
-                        log::debug!("Following redirect from {url} to {redirect_url_str}");
-
-                        if redirect_url_str.contains("/login") {
-                            log::debug!("Redirect to login page - authentication failed for paginated request");
-                            return Err(LastFmError::Auth(
-                                "Session expired or invalid for paginated request".to_string(),
-                            ));
-                        }
+                    if redirect_url_str.contains("/login") {
+                        return Err(LastFmError::Auth("Session expired or invalid".into()));
                     }
 
                     let full_redirect_url = request_url
@@ -1594,6 +1577,17 @@ impl LastFmEditClientImpl {
         }
 
         Ok(response)
+    }
+
+    fn check_auth_response(&self, status: http_types::StatusCode, body: &str) -> Result<()> {
+        if matches!(u16::from(status), 401 | 403)
+            || page_indicates_logged_out(body)
+            || body.contains("name=\"username_or_email\"")
+            || body.contains("name='username_or_email'")
+        {
+            return Err(LastFmError::Auth("Session expired or invalid".into()));
+        }
+        Ok(())
     }
 
     /// Decide whether a response is a rate-limit interstitial given its status and body.

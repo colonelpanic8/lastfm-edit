@@ -334,9 +334,8 @@ pub trait LastFmEditClient: LastFmBaseClient {
     ///
     /// # Returns
     ///
-    /// Returns an `EditResponse` with a single result indicating success or failure.
-    /// If max retries are exceeded due to rate limiting, returns a failed response
-    /// rather than an error.
+    /// Returns an `EditResponse` for an accepted or rejected edit. Authentication,
+    /// transport, cancellation, and exhausted rate-limit errors remain typed errors.
     ///
     /// # Example
     ///
