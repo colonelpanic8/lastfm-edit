@@ -19,7 +19,9 @@ use super::{
     AlbumCount, AppendStats, ArtistCount, EditLease, ScrobbleGroup, Storage, SyncState, TrackCount,
 };
 use crate::coverage::{CoverageMap, Segment};
-use crate::durable::{append_jsonl, atomic_write, create_dir_all, read_jsonl};
+use crate::durable::{
+    append_jsonl, atomic_write, create_dir_all, parse_jsonl, read_jsonl, rewrite_locked,
+};
 use crate::error::Result;
 use crate::id::ScrobbleId;
 use crate::record::ScrobbleRecord;
@@ -149,15 +151,7 @@ impl FsStorage {
             }
         }
 
-        let mut folded: BTreeMap<ScrobbleId, ScrobbleRecord> = BTreeMap::new();
-        for rec in read_jsonl::<ScrobbleRecord>(path)? {
-            match folded.get(&rec.id) {
-                Some(existing) if !rec.supersedes(existing) => {}
-                _ => {
-                    folded.insert(rec.id.clone(), rec);
-                }
-            }
-        }
+        let folded = fold_partition(read_jsonl::<ScrobbleRecord>(path)?);
         cache.insert(
             path.to_path_buf(),
             PartitionCache {
@@ -358,33 +352,27 @@ impl Storage for FsStorage {
         let mut cache = self.cache.lock().unwrap();
         let mut dropped = 0;
         for path in self.partition_files()? {
-            let content = std::fs::read_to_string(&path)?;
-            let total_lines = content.lines().filter(|l| !l.trim().is_empty()).count() as u64;
-            let folded = self.load_partition(&mut cache, &path)?;
-            let kept = folded.len() as u64;
-            if kept == total_lines {
-                continue;
-            }
-            // Keep tombstones: they are load-bearing when another machine's un-merged
-            // files still carry the live record.
-            let mut records: Vec<&ScrobbleRecord> = folded.values().collect();
-            records.sort_by(|a, b| a.uts.cmp(&b.uts).then_with(|| a.id.cmp(&b.id)));
-            let mut lines = String::new();
-            for rec in records {
-                lines.push_str(&serde_json::to_string(rec)?);
-                lines.push('\n');
-            }
-            atomic_write(&path, lines.as_bytes())?;
-            let meta = std::fs::metadata(&path)?;
-            cache.insert(
-                path,
-                PartitionCache {
-                    size: meta.len(),
-                    mtime: meta.modified()?,
-                    folded,
-                },
-            );
-            dropped += total_lines - kept;
+            rewrite_locked(&path, |bytes| {
+                let records = parse_jsonl::<ScrobbleRecord>(bytes)?;
+                let total = records.len() as u64;
+                let folded = fold_partition(records);
+                let kept = folded.len() as u64;
+                if kept == total {
+                    return Ok(None);
+                }
+                // Tombstones are needed when merging another machine's live records.
+                let mut records: Vec<_> = folded.into_values().collect();
+                records.sort_by(|a, b| a.uts.cmp(&b.uts).then_with(|| a.id.cmp(&b.id)));
+                let mut lines = Vec::new();
+                for record in records {
+                    serde_json::to_writer(&mut lines, &record).map_err(std::io::Error::other)?;
+                    lines.push(b'\n');
+                }
+                dropped += total - kept;
+                Ok(Some(lines))
+            })?;
+            // A different writer may append as soon as rewrite_locked releases its lock.
+            cache.remove(&path);
         }
         Ok(dropped)
     }
@@ -469,6 +457,19 @@ impl Storage for FsStorage {
     }
 }
 
+fn fold_partition(records: Vec<ScrobbleRecord>) -> BTreeMap<ScrobbleId, ScrobbleRecord> {
+    let mut folded: BTreeMap<ScrobbleId, ScrobbleRecord> = BTreeMap::new();
+    for record in records {
+        match folded.get(&record.id) {
+            Some(existing) if !record.supersedes(existing) => {}
+            _ => {
+                folded.insert(record.id.clone(), record);
+            }
+        }
+    }
+    folded
+}
+
 // StoreError: map poisoned-lock panics through unwrap() intentionally — a poisoned lock
 // means a bug already tore invariants, and continuing would risk corrupting the store.
 
@@ -527,6 +528,57 @@ mod tests {
         let store2 = FsStorage::open(dir.path()).unwrap();
         let all2 = store2.scrobbles_in_range(0..u64::MAX).await.unwrap();
         assert_eq!(all, all2);
+    }
+
+    #[test]
+    fn compaction_preserves_concurrent_appends_from_another_handle() {
+        let dir = tempfile::tempdir().unwrap();
+        let barrier = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let store = FsStorage::open(dir.path()).unwrap();
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
+                for index in 0..100 {
+                    let original = rec(JAN + index, "A", "x", 1);
+                    let mut updated = original.clone();
+                    updated.album = Some("Updated".into());
+                    updated.fetched_at = 2;
+                    updated.deleted = index % 2 == 1;
+                    barrier.wait();
+                    runtime
+                        .block_on(store.append_scrobbles(&[original, updated]))
+                        .unwrap();
+                    barrier.wait();
+                }
+            });
+            let store = FsStorage::open(dir.path()).unwrap();
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap();
+            for _ in 0..100 {
+                barrier.wait();
+                runtime.block_on(store.compact()).unwrap();
+                barrier.wait();
+            }
+        });
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let store = FsStorage::open(dir.path()).unwrap();
+            for index in 0..100 {
+                let record = store
+                    .get_scrobble(&ScrobbleId::new(JAN + index, "A", "x"))
+                    .await
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("compaction lost record {index}"));
+                assert_eq!(record.album.as_deref(), Some("Updated"));
+                assert_eq!(record.deleted, index % 2 == 1);
+            }
+            assert_eq!(store.scrobble_count(None).await.unwrap(), 50);
+        });
     }
 
     #[tokio::test]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compaction holds a partition lock from reading through replacement, preserving
+  scrobbles and tombstones appended concurrently by another process.
+
 - Only one scrubber executor can own a store at a time. A second app or CLI run
   reports `Busy` without retrying an edit still owned by the first run.
 

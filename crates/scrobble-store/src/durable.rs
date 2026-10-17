@@ -131,8 +131,25 @@ pub fn append_jsonl(path: &Path, lines: &[u8]) -> io::Result<()> {
 
 /// Replace a snapshot with a synced sibling, then sync its directory entry.
 pub fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
     let _lock = lock(path, true)?;
+    atomic_write_locked(path, contents)
+}
+
+/// Transform a file while excluding appends throughout the read, fold, and replacement.
+/// Return `None` from `rewrite` to leave its bytes unchanged.
+pub fn rewrite_locked(
+    path: &Path,
+    rewrite: impl FnOnce(&[u8]) -> io::Result<Option<Vec<u8>>>,
+) -> io::Result<()> {
+    let _lock = lock(path, true)?;
+    if let Some(contents) = rewrite(&std::fs::read(path)?)? {
+        atomic_write_locked(path, &contents)?;
+    }
+    Ok(())
+}
+
+fn atomic_write_locked(path: &Path, contents: &[u8]) -> io::Result<()> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     let (tmp, mut file) = loop {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let tmp = path.with_extension(format!("{}.{}.tmp", std::process::id(), id));
