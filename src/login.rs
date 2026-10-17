@@ -54,7 +54,6 @@ impl LoginManager {
 
         // Step 3: Extract cookies from login response
         extract_cookies_from_response(&response, &mut cookies);
-        log::debug!("🍪 Cookies after login response: {cookies:?}");
 
         // Step 4: Validate login response
         self.validate_login_response(response, username, cookies, csrf_token)
@@ -70,15 +69,10 @@ impl LoginManager {
         let mut response = self.get(login_url).await?;
 
         log::debug!("📋 Login page response status: {}", response.status());
-        log::debug!(
-            "📋 Login page response headers: {:?}",
-            response.iter().collect::<Vec<_>>()
-        );
 
         // Extract cookies from the login page response
         let mut cookies = Vec::new();
         extract_cookies_from_response(&response, &mut cookies);
-        log::debug!("🍪 Initial cookies from login page: {cookies:?}");
 
         // Read and parse the HTML response
         let html = response
@@ -87,14 +81,9 @@ impl LoginManager {
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
         log::debug!("📄 Login page HTML length: {} chars", html.len());
-        if html.len() < 500 {
-            log::debug!("📄 Login page HTML content (short): {html}");
-        }
 
         // Extract CSRF token and next field from form
         let (csrf_token, next_field) = self.extract_login_form_data(&html)?;
-        log::debug!("🔑 Extracted CSRF token: {csrf_token}",);
-        log::debug!("➡️  Next field: {next_field:?}");
 
         Ok((csrf_token, next_field, cookies))
     }
@@ -117,7 +106,6 @@ impl LoginManager {
 
         if let Some(ref next_value) = next_field {
             form_data.insert("next", next_value);
-            log::debug!("➡️  Including next field in form: {next_value}");
         }
 
         log::debug!(
@@ -125,7 +113,6 @@ impl LoginManager {
             form_data.keys().collect::<Vec<_>>()
         );
         log::debug!("📝 Form username: {username}");
-        log::debug!("📝 Form password length: {} chars", password.len());
 
         // Create and configure the POST request
         let mut request = self.create_login_request(login_url, cookies)?;
@@ -139,7 +126,6 @@ impl LoginManager {
 
         log::debug!("📤 Sending POST request to: {login_url}");
         log::debug!("📤 Form body length: {} chars", form_string.len());
-        log::debug!("📤 Form body (masked): {form_string}");
         log::debug!("📤 Request headers: Referer={}, Origin={}, Content-Type=application/x-www-form-urlencoded", 
             login_url, self.base_url);
 
@@ -153,10 +139,6 @@ impl LoginManager {
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
         log::debug!("📥 Login response status: {}", response.status());
-        log::debug!(
-            "📥 Login response headers: {:?}",
-            response.iter().collect::<Vec<_>>()
-        );
 
         Ok(response)
     }
@@ -232,9 +214,6 @@ impl LoginManager {
             "📄 Login response HTML length: {} chars",
             response_html.len()
         );
-        if response_html.len() < 500 {
-            log::debug!("📄 Login response HTML content (short): {response_html}");
-        }
 
         // A challenge/interstitial can also omit the normal login form, so only the
         // authenticated session cookie checked above is sufficient for success.
@@ -244,7 +223,7 @@ impl LoginManager {
         log::debug!("   - Response status: {}", response.status());
 
         let error_msg = self.parse_login_error(&response_html);
-        log::warn!("❌ Login failed: {error_msg}");
+        log::warn!("Login failed");
         Err(LastFmError::Auth(error_msg))
     }
 
@@ -259,16 +238,6 @@ impl LoginManager {
             .map_err(|e| LastFmError::Http(e.to_string()))?;
 
         log::debug!("📄 403 response HTML length: {} chars", response_html.len());
-        if response_html.len() < 2000 {
-            log::debug!("📄 403 response HTML content: {response_html}");
-        } else {
-            // Log first and last 500 chars for large responses
-            log::debug!("📄 403 response HTML start: {}", &response_html[..500]);
-            log::debug!(
-                "📄 403 response HTML end: {}",
-                &response_html[response_html.len() - 500..]
-            );
-        }
 
         let login_error = self.parse_login_error(&response_html);
         Err(LastFmError::Auth(login_error))
@@ -289,7 +258,6 @@ impl LoginManager {
         log::debug!("🔍 Session validation:");
         log::debug!("   - Has real session cookie: {has_real_session}");
         log::debug!("   - Response status: {}", response.status());
-        log::debug!("   - All cookies: {cookies:?}");
 
         if has_real_session && (response.status() == 302 || response.status() == 200) {
             log::info!("✅ Login successful - authenticated session established");
@@ -342,7 +310,6 @@ impl LoginManager {
             .map(|token| token.to_string())
             .ok_or(LastFmError::CsrfNotFound)?;
 
-        log::debug!("🔑 CSRF token extracted from HTML: {csrf_token}");
         Ok(csrf_token)
     }
 
