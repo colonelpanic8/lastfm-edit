@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Only one scrubber executor can own a store at a time. A second app or CLI run
+  reports `Busy` without retrying an edit still owned by the first run.
+
 - Breaking scrubber API: replace queued `ScrubberCommand::{Approve, Reject, Reinstate,
   ApproveRule, RejectRule}` with immediate async `ScrubberHandle::{approve, reject,
   reinstate, approve_rule, reject_rule}` methods. Decisions now return their result

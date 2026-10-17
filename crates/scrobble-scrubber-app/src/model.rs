@@ -352,6 +352,7 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
 pub fn ended_label(ended: &ExecEnded) -> &'static str {
     match ended {
         ExecEnded::Completed => "completed",
+        ExecEnded::Busy => "busy (another executor is running)",
         ExecEnded::Deferred => "deferred (rate limited)",
         ExecEnded::Cancelled => "cancelled",
         ExecEnded::BudgetExhausted => "budget exhausted",

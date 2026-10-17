@@ -884,3 +884,59 @@ async fn unknown_remote_outcome_and_rejection_never_replay_pending_operation() {
         IntentState::Rejected { dismissed: false }
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn independent_executors_cannot_recover_an_operation_still_owned_by_a_running_pass() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let dir = tempfile::tempdir().unwrap();
+            let store = Arc::new(scrobble_store::FsStorage::open(dir.path()).unwrap());
+            let state = Arc::new(
+                scrobble_scrubber::FsScrubberState::open(dir.path().join("scrubber")).unwrap(),
+            );
+            store.append_scrobbles(&[record(100)]).await.unwrap();
+            queue_ready_intent(state.as_ref()).await;
+            let mut client = MockLastFmEditClient::new();
+            client
+                .expect_edit_scrobble_single()
+                .times(1)
+                .returning(|_, _| Err(lastfm_edit::LastFmError::RateLimit { retry_after: 3600 }));
+            let first = executor(store, state, client, zero_delay());
+            let mut events = first.subscribe();
+            let first = tokio::task::spawn_local(async move { first.run_once().await });
+            while !matches!(
+                events.recv().await.unwrap(),
+                ScrubberEvent::ExecutorPaused { .. }
+            ) {}
+            let store = Arc::new(scrobble_store::FsStorage::open(dir.path()).unwrap());
+            let state = Arc::new(
+                scrobble_scrubber::FsScrubberState::open(dir.path().join("scrubber")).unwrap(),
+            );
+            let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let mut client = MockLastFmEditClient::new();
+            let sent = calls.clone();
+            client
+                .expect_edit_scrobble_single()
+                .returning(move |edit, _| {
+                    sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    Ok(success(edit))
+                });
+            let second = executor(store, state, client, zero_delay());
+            let result = second.run_once().await;
+            first.abort();
+            let _ = first.await;
+            assert_eq!(
+                result.unwrap().ended,
+                ExecEnded::Busy,
+                "second executor entered an owned pass"
+            );
+            assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+            let result = second.run_once().await.unwrap();
+            assert_eq!(
+                result.instances_applied, 1,
+                "cancelled owner must release execution"
+            );
+            assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
+        })
+        .await;
+}

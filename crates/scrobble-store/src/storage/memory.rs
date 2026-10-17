@@ -1,13 +1,15 @@
 //! In-memory storage backend for tests and ephemeral use.
 
-use super::{AlbumCount, AppendStats, ArtistCount, ScrobbleGroup, Storage, SyncState, TrackCount};
+use super::{
+    AlbumCount, AppendStats, ArtistCount, EditLease, ScrobbleGroup, Storage, SyncState, TrackCount,
+};
 use crate::coverage::CoverageMap;
 use crate::error::Result;
 use crate::id::ScrobbleId;
 use crate::record::ScrobbleRecord;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 struct Inner {
@@ -22,6 +24,7 @@ struct Inner {
 #[derive(Default)]
 pub struct MemoryStorage {
     inner: Mutex<Inner>,
+    edit_lease: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl MemoryStorage {
@@ -64,6 +67,15 @@ fn top_by_key<K: Ord + Clone, F: Fn(&ScrobbleRecord) -> K>(
 
 #[async_trait::async_trait]
 impl Storage for MemoryStorage {
+    fn try_lease_edits(&self) -> Result<Option<EditLease>> {
+        Ok(self
+            .edit_lease
+            .clone()
+            .try_lock_owned()
+            .ok()
+            .map(EditLease::new))
+    }
+
     async fn append_scrobbles(&self, records: &[ScrobbleRecord]) -> Result<AppendStats> {
         let mut inner = self.inner.lock().unwrap();
         let mut stats = AppendStats::default();

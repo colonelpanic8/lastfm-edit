@@ -15,7 +15,9 @@
 //! including duplicated or interleaved lines — folds back into the same state.
 
 use super::index::Index;
-use super::{AlbumCount, AppendStats, ArtistCount, ScrobbleGroup, Storage, SyncState, TrackCount};
+use super::{
+    AlbumCount, AppendStats, ArtistCount, EditLease, ScrobbleGroup, Storage, SyncState, TrackCount,
+};
 use crate::coverage::{CoverageMap, Segment};
 use crate::durable::{append_jsonl, atomic_write, create_dir_all, read_jsonl};
 use crate::error::Result;
@@ -193,6 +195,10 @@ fn ensure_file_contains(path: &Path, contents: &str) -> Result<()> {
 
 #[async_trait::async_trait]
 impl Storage for FsStorage {
+    fn try_lease_edits(&self) -> Result<Option<EditLease>> {
+        Ok(crate::durable::try_lease(&self.root.join("edits/execution.lock"))?.map(EditLease::new))
+    }
+
     async fn append_scrobbles(&self, records: &[ScrobbleRecord]) -> Result<AppendStats> {
         let mut by_partition: BTreeMap<PathBuf, Vec<&ScrobbleRecord>> = BTreeMap::new();
         for rec in records {

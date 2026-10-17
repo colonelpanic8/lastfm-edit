@@ -31,6 +31,8 @@ pub enum ExecEnded {
     /// The pass drained every executable intent it set out to.
     #[default]
     Completed,
+    /// Another executor owns this store; no work was attempted.
+    Busy,
     /// Sustained rate limiting: the pass stopped early, leaving work `InProgress`.
     Deferred,
     /// The cancel handle was flipped mid-pass.

@@ -79,6 +79,20 @@ pub struct ScrobbleGroup {
     pub latest_uts: u64,
 }
 
+/// Exclusive ownership of a store's edit/recovery pass. Drop to release ownership.
+pub struct EditLease {
+    _guard: Box<dyn Send + Sync>,
+}
+
+impl EditLease {
+    /// Wrap a backend lock guard whose drop releases ownership.
+    pub fn new(guard: impl Send + Sync + 'static) -> Self {
+        Self {
+            _guard: Box::new(guard),
+        }
+    }
+}
+
 /// The storage backend contract.
 ///
 /// Writes are last-write-wins by [`ScrobbleId`] with `fetched_at` as the tiebreaker;
@@ -113,6 +127,11 @@ pub trait Storage: Send + Sync {
 
     async fn load_sync_state(&self) -> Result<SyncState>;
     async fn save_sync_state(&self, state: &SyncState) -> Result<()>;
+
+    /// Try to own edit execution, including recovery, without waiting for another owner.
+    /// All handles sharing this store must contend for the same lease. Hold it for the
+    /// entire pass so another executor cannot mistake an in-flight edit for a crash.
+    fn try_lease_edits(&self) -> Result<Option<EditLease>>;
 
     // ---- edit log ----------------------------------------------------------------------
 

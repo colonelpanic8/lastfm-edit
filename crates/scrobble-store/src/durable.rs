@@ -1,7 +1,7 @@
 //! Durable JSONL framing and atomic snapshots shared by store and scrubber state.
 
 use serde::de::DeserializeOwned;
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -43,6 +43,23 @@ fn lock(path: &Path, exclusive: bool) -> io::Result<File> {
         lock.lock_shared()?;
     }
     Ok(lock)
+}
+
+/// Acquire a process-scoped lease without blocking. Dropping the file releases it.
+/// The lease path must be distinct from files locked by operations inside the lease.
+pub fn try_lease(path: &Path) -> io::Result<Option<File>> {
+    ensure_parent(path)?;
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(path)?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => Err(error),
+    }
 }
 
 /// Parse complete records. Only an invalid, unterminated final fragment is recoverable.

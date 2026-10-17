@@ -49,6 +49,9 @@ pub enum EditOutcome {
 }
 
 /// Applies exact single-scrobble edits/deletes to Last.fm and the local store together.
+///
+/// Retain a [`Storage::try_lease_edits`] lease across the entire execution/recovery pass
+/// when multiple callers share a store. Individual edits do not acquire it themselves.
 pub struct MirroredEditor<C> {
     store: Arc<dyn Storage>,
     client: C,

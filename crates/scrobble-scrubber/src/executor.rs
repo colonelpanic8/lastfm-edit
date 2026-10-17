@@ -168,6 +168,12 @@ impl<C: LastFmEditClient> Executor<C> {
     }
 
     async fn run_once_inner(&self, max_edits: Option<u32>) -> Result<ExecReport> {
+        let Some(_lease) = self.store.try_lease_edits()? else {
+            return Ok(ExecReport {
+                ended: ExecEnded::Busy,
+                ..Default::default()
+            });
+        };
         // A fresh pass starts un-cancelled; the flag only interrupts the pass it was
         // flipped during.
         self.cancelled.store(false, Ordering::Relaxed);

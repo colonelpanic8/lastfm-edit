@@ -851,6 +851,7 @@ async fn render_events(mut rx: scrobble_scrubber::ScrubberEventReceiver) {
                     ScrubberEvent::ExecCompleted { report } => {
                         let ended = match report.ended {
                             ExecEnded::Completed => "completed",
+                            ExecEnded::Busy => "busy (another executor is running)",
                             ExecEnded::Deferred => "deferred (rate limited)",
                             ExecEnded::Cancelled => "cancelled",
                             ExecEnded::BudgetExhausted => "budget exhausted",
