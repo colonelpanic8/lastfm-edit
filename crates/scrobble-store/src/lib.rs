@@ -8,6 +8,7 @@
 //! pauses), and mirrors edits to both Last.fm and the local store through a durable edit log.
 
 pub mod coverage;
+pub mod durable;
 pub mod edits;
 pub mod error;
 pub mod id;

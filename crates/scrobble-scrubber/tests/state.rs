@@ -192,4 +192,17 @@ async fn torn_queue_tail_is_tolerated() {
         .await
         .unwrap();
     assert_eq!(queue.len(), 1);
+    state
+        .append_queue_events(&[QueueEvent {
+            id: queue[0].id,
+            at: 2,
+            kind: QueueEventKind::Completed,
+        }])
+        .await
+        .unwrap();
+    let reopened = FsScrubberState::open(dir.path()).unwrap();
+    assert_eq!(
+        reopened.load_queue().await.unwrap()[0].state,
+        IntentState::Applied
+    );
 }

@@ -17,13 +17,13 @@
 use super::index::Index;
 use super::{AlbumCount, AppendStats, ArtistCount, ScrobbleGroup, Storage, SyncState, TrackCount};
 use crate::coverage::{CoverageMap, Segment};
+use crate::durable::{append_jsonl, atomic_write, create_dir_all, read_jsonl};
 use crate::error::Result;
 use crate::id::ScrobbleId;
 use crate::record::ScrobbleRecord;
 use chrono::{Datelike, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use std::io::Write;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -64,10 +64,10 @@ impl FsStorage {
     /// files, if absent) as needed. Safe to call on an existing store.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
-        std::fs::create_dir_all(root.join("scrobbles"))?;
-        std::fs::create_dir_all(root.join("state"))?;
-        std::fs::create_dir_all(root.join("edits"))?;
-        std::fs::create_dir_all(root.join("index"))?;
+        create_dir_all(&root.join("scrobbles"))?;
+        create_dir_all(&root.join("state"))?;
+        create_dir_all(&root.join("edits"))?;
+        create_dir_all(&root.join("index"))?;
         ensure_file_contains(&root.join(".gitattributes"), GITATTRIBUTES)?;
         ensure_file_contains(&root.join(".gitignore"), GITIGNORE)?;
         Ok(Self {
@@ -147,26 +147,12 @@ impl FsStorage {
             }
         }
 
-        let content = std::fs::read_to_string(path)?;
         let mut folded: BTreeMap<ScrobbleId, ScrobbleRecord> = BTreeMap::new();
-        for line in content.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-            match serde_json::from_str::<ScrobbleRecord>(line) {
-                Ok(rec) => {
-                    match folded.get(&rec.id) {
-                        Some(existing) if !rec.supersedes(existing) => {}
-                        _ => {
-                            folded.insert(rec.id.clone(), rec);
-                        }
-                    };
-                }
-                Err(err) => {
-                    // Torn tail from a crash mid-append, or a hand-mangled line: skip it.
-                    // The record it would have carried is re-fetched by the next sync
-                    // (coverage is only persisted after a successful append).
-                    log::warn!("skipping unparseable line in {}: {err}", path.display());
+        for rec in read_jsonl::<ScrobbleRecord>(path)? {
+            match folded.get(&rec.id) {
+                Some(existing) if !rec.supersedes(existing) => {}
+                _ => {
+                    folded.insert(rec.id.clone(), rec);
                 }
             }
         }
@@ -194,18 +180,6 @@ impl FsStorage {
         index.catch_up(&self.partition_files()?)?;
         f(index)
     }
-}
-
-/// Write a file atomically: temp sibling + rename.
-fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
-    let tmp = path.with_extension("tmp");
-    {
-        let mut file = std::fs::File::create(&tmp)?;
-        file.write_all(contents)?;
-        file.sync_all()?;
-    }
-    std::fs::rename(&tmp, path)?;
-    Ok(())
 }
 
 /// Create a file with `contents` if it doesn't exist; leave existing files alone (the user
@@ -256,24 +230,8 @@ impl Storage for FsStorage {
             if lines.is_empty() {
                 continue;
             }
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&path)?;
-            file.write_all(lines.as_bytes())?;
-            file.sync_all()?;
-            let meta = std::fs::metadata(&path)?;
-            cache.insert(
-                path,
-                PartitionCache {
-                    size: meta.len(),
-                    mtime: meta.modified()?,
-                    folded,
-                },
-            );
+            append_jsonl(&path, lines.as_bytes())?;
+            cache.remove(&path);
         }
         Ok(stats)
     }
@@ -342,7 +300,10 @@ impl Storage for FsStorage {
         };
         let mut contents = serde_json::to_string_pretty(&file)?;
         contents.push('\n');
-        atomic_write(&self.state_path("coverage.json"), contents.as_bytes())
+        Ok(atomic_write(
+            &self.state_path("coverage.json"),
+            contents.as_bytes(),
+        )?)
     }
 
     async fn load_sync_state(&self) -> Result<SyncState> {
@@ -362,7 +323,10 @@ impl Storage for FsStorage {
         };
         let mut contents = serde_json::to_string_pretty(&file)?;
         contents.push('\n');
-        atomic_write(&self.state_path("sync.json"), contents.as_bytes())
+        Ok(atomic_write(
+            &self.state_path("sync.json"),
+            contents.as_bytes(),
+        )?)
     }
 
     async fn append_edit_events(&self, events: &[crate::edits::EditLogEvent]) -> Result<()> {
@@ -375,32 +339,13 @@ impl Storage for FsStorage {
             lines.push('\n');
         }
         let path = self.root.join("edits").join("log.jsonl");
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
-        file.write_all(lines.as_bytes())?;
-        file.sync_all()?;
+        append_jsonl(&path, lines.as_bytes())?;
         Ok(())
     }
 
     async fn load_edit_log(&self) -> Result<Vec<crate::edits::EditLogEntry>> {
         let path = self.root.join("edits").join("log.jsonl");
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        let content = std::fs::read_to_string(&path)?;
-        let mut events = Vec::new();
-        for line in content.lines().filter(|l| !l.trim().is_empty()) {
-            match serde_json::from_str(line) {
-                Ok(event) => events.push(event),
-                Err(err) => {
-                    // Same torn-tail tolerance as scrobble partitions.
-                    log::warn!("skipping unparseable edit-log line: {err}");
-                }
-            }
-        }
-        Ok(crate::edits::fold_edit_log(events))
+        Ok(crate::edits::fold_edit_log(read_jsonl(&path)?))
     }
 
     async fn compact(&self) -> Result<u64> {
@@ -684,6 +629,19 @@ mod tests {
         let store2 = FsStorage::open(dir.path()).unwrap();
         let all = store2.scrobbles_in_range(0..u64::MAX).await.unwrap();
         assert_eq!(all.len(), 1);
+        store2
+            .append_scrobbles(&[rec(JAN + 60, "A", "new", 2)])
+            .await
+            .unwrap();
+        let reopened = FsStorage::open(dir.path()).unwrap();
+        assert_eq!(
+            reopened
+                .scrobbles_in_range(0..u64::MAX)
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[tokio::test]
