@@ -73,12 +73,14 @@ impl Storage for MemoryStorage {
                     inner.records.insert(rec.id.clone(), rec.clone());
                     stats.new += 1;
                 }
-                Some(existing) if existing == rec || !rec.supersedes(existing) => {
-                    stats.unchanged += 1;
-                }
-                Some(_) => {
-                    inner.records.insert(rec.id.clone(), rec.clone());
-                    stats.updated += 1;
+                Some(existing) => {
+                    let merged = rec.merged_over(existing);
+                    if !rec.supersedes(existing) || existing.same_data(&merged) {
+                        stats.unchanged += 1;
+                    } else {
+                        inner.records.insert(rec.id.clone(), merged);
+                        stats.updated += 1;
+                    }
                 }
             }
         }

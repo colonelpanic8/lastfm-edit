@@ -5,8 +5,17 @@
 //!
 //! A window `[from, to)` may be marked covered only when a single fetch pass, with `to`
 //! pinned before page 1, has *fetched past the window*: it either saw a scrobble older than
-//! `from` or ran out of pages. Pinning `to` makes pagination deterministic — scrobbles
-//! arriving during the pass land above the pin and cannot shift what the pass visits.
+//! `from` or ran out of pages. Pinning `to` makes pagination deterministic.
+//!
+//! ## Late arrivals
+//!
+//! Upstream stamps a scrobble with the track's *start* time but only records it once the
+//! track finishes (or much later, for clients that submit from an offline cache). A
+//! covered window can therefore still gain scrobbles after it was confirmed, so
+//! [`SyncEngine::extend_to_present`] reconciles the trailing
+//! [`SyncOptions::late_arrival_secs`] below the coverage frontier on every call, the same
+//! way [`SyncEngine::verify`] does. That also catches recent edits whose upstream result
+//! differs from what was mirrored locally.
 //!
 //! ## Resumability
 //!
@@ -34,6 +43,9 @@ pub struct SyncOptions {
     /// scrobbles that are still materializing upstream. The margin is picked up by the
     /// next sync.
     pub safety_margin_secs: u64,
+    /// How far below the coverage frontier each incremental sync reconciles, to pick up
+    /// scrobbles that upstream recorded after their timestamp was already covered.
+    pub late_arrival_secs: u64,
     /// Optional cap on pages fetched per engine call (across all windows). `None` = no cap.
     pub max_pages: Option<u32>,
 }
@@ -42,6 +54,7 @@ impl Default for SyncOptions {
     fn default() -> Self {
         Self {
             safety_margin_secs: 60,
+            late_arrival_secs: 24 * 60 * 60,
             max_pages: None,
         }
     }
@@ -138,7 +151,8 @@ impl SyncEngine {
         }
     }
 
-    /// Extend coverage from the current frontier to (roughly) now.
+    /// Extend coverage from the current frontier to (roughly) now, then reconcile the
+    /// trailing [`SyncOptions::late_arrival_secs`] below the frontier.
     ///
     /// With empty coverage this becomes the initial full backfill: the window reaches back
     /// to the known history start (or 0).
@@ -153,17 +167,27 @@ impl SyncEngine {
         let coverage = self.store.load_coverage().await?;
         let to_pin = self.to_pin();
         let mut stats = SyncStats::default();
-        let from = match coverage.last() {
-            Some(seg) if seg.end >= to_pin => return Ok(stats), // already current
-            Some(seg) => seg.end,
-            None => {
-                let sync_state = self.store.load_sync_state().await?;
-                sync_state.history_start_uts.unwrap_or(0)
+        let Some(last) = coverage.last().cloned() else {
+            let from = self
+                .store
+                .load_sync_state()
+                .await?
+                .history_start_uts
+                .unwrap_or(0);
+            if self.fetch_pass(from..to_pin, &mut stats).await? {
+                self.note_history_start_if_exhausted(from).await?;
             }
+            return Ok(stats);
         };
-        let completed = self.fetch_pass(from..to_pin, &mut stats).await?;
-        if completed {
-            self.note_history_start_if_exhausted(from).await?;
+        let frontier = last.end.min(to_pin);
+        if !self.fetch_pass(frontier..to_pin, &mut stats).await? || self.pages_exhausted(&stats) {
+            return Ok(stats);
+        }
+        let settling = frontier
+            .saturating_sub(self.options.late_arrival_secs)
+            .max(last.start)..frontier;
+        if !settling.is_empty() {
+            self.reconcile(settling, &mut stats).await?;
         }
         Ok(stats)
     }
@@ -256,15 +280,25 @@ impl SyncEngine {
 
     async fn verify_inner(&self, range: Range<u64>) -> Result<VerifyReport> {
         let range = range.start..range.end.min(self.to_pin());
-        let mut report = VerifyReport::default();
+        self.reconcile(range, &mut SyncStats::default()).await
+    }
 
-        // Fetch the entire window upstream first (no partial coverage claims here: a verify
-        // is all-or-nothing).
+    /// Make the store agree with upstream over `range`: append what changed, tombstone local
+    /// records no longer present upstream, and (re-)cover the range. All-or-nothing: the
+    /// whole window is fetched before anything is written.
+    async fn reconcile(&self, range: Range<u64>, stats: &mut SyncStats) -> Result<VerifyReport> {
+        let mut report = VerifyReport::default();
         let mut upstream: Vec<ScrobbleRecord> = Vec::new();
         let mut page = 1;
         loop {
             self.check_cancelled()?;
             let source_page = self.fetch_page_patiently(&range, page).await?;
+            stats.pages_fetched += 1;
+            self.events.emit(SyncEvent::PageFetched {
+                window: range.clone(),
+                page,
+                count: source_page.tracks.len(),
+            });
             let mut oldest: Option<u64> = None;
             for track in &source_page.tracks {
                 if let Some(rec) =
@@ -284,12 +318,29 @@ impl SyncEngine {
         }
         report.upstream_count = upstream.len() as u64;
 
-        // Reconcile.
         let local = self.store.scrobbles_in_range(range.clone()).await?;
+        let local_by_id: std::collections::HashMap<_, _> =
+            local.iter().map(|rec| (&rec.id, rec)).collect();
+        let changed_uts: Vec<u64> = upstream
+            .iter()
+            .filter(|rec| local_by_id.get(&rec.id).is_none_or(|l| !l.same_data(rec)))
+            .map(|rec| rec.uts)
+            .collect();
         let upstream_ids: std::collections::HashSet<_> =
             upstream.iter().map(|r| r.id.clone()).collect();
-        let stats = self.store.append_scrobbles(&upstream).await?;
-        report.written = stats.total_written();
+        let append = self.store.append_scrobbles(&upstream).await?;
+        report.written = append.total_written();
+        stats.scrobbles_new += append.new;
+        stats.scrobbles_updated += append.updated;
+        stats.scrobbles_unchanged += append.unchanged;
+        if append.total_written() > 0 {
+            self.events.emit(SyncEvent::ScrobblesDiscovered {
+                new: append.new,
+                updated: append.updated,
+                oldest: changed_uts.iter().min().copied(),
+                newest: changed_uts.iter().max().copied(),
+            });
+        }
         let now = self.now();
         let tombstones: Vec<ScrobbleRecord> = local
             .into_iter()
@@ -301,7 +352,6 @@ impl SyncEngine {
             self.store.append_scrobbles(&tombstones).await?;
         }
 
-        // The range is now agreed; mark it covered.
         let mut coverage = self.store.load_coverage().await?;
         let changes = coverage.insert(Segment::new(range.start, range.end, now));
         self.store.save_coverage(&coverage).await?;

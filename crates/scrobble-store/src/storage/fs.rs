@@ -234,17 +234,24 @@ impl Storage for FsStorage {
             let mut folded = self.load_partition(&mut cache, &path)?;
             let mut lines = String::new();
             for rec in batch {
-                match folded.get(&rec.id) {
-                    None => stats.new += 1,
-                    Some(existing) if existing == rec || !rec.supersedes(existing) => {
-                        stats.unchanged += 1;
-                        continue;
+                let rec = match folded.get(&rec.id) {
+                    None => {
+                        stats.new += 1;
+                        rec.clone()
                     }
-                    Some(_) => stats.updated += 1,
-                }
-                lines.push_str(&serde_json::to_string(rec)?);
+                    Some(existing) => {
+                        let merged = rec.merged_over(existing);
+                        if !rec.supersedes(existing) || existing.same_data(&merged) {
+                            stats.unchanged += 1;
+                            continue;
+                        }
+                        stats.updated += 1;
+                        merged
+                    }
+                };
+                lines.push_str(&serde_json::to_string(&rec)?);
                 lines.push('\n');
-                folded.insert(rec.id.clone(), rec.clone());
+                folded.insert(rec.id.clone(), rec);
             }
             if lines.is_empty() {
                 continue;
@@ -588,8 +595,33 @@ mod tests {
             .unwrap();
         assert_eq!(stats.unchanged, 1);
 
+        let mut refetched = a.clone();
+        refetched.fetched_at = 5;
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&refetched))
+            .await
+            .unwrap();
+        assert_eq!(stats.unchanged, 1);
+
+        let mut verified = a.clone();
+        verified.album_artist = Provenanced::Verified("AA".to_string());
+        verified.fetched_at = 6;
+        store
+            .append_scrobbles(std::slice::from_ref(&verified))
+            .await
+            .unwrap();
+        let mut blind_refetch = a.clone();
+        blind_refetch.fetched_at = 7;
+        let stats = store
+            .append_scrobbles(std::slice::from_ref(&blind_refetch))
+            .await
+            .unwrap();
+        assert_eq!(stats.unchanged, 1);
+        let got = store.get_scrobble(&a.id).await.unwrap().unwrap();
+        assert_eq!(got.album_artist, Provenanced::Verified("AA".to_string()));
+
         let mut newer = a.clone();
-        newer.fetched_at = 2;
+        newer.fetched_at = 8;
         newer.album = Some("Corrected".to_string());
         let stats = store
             .append_scrobbles(std::slice::from_ref(&newer))
@@ -597,14 +629,14 @@ mod tests {
             .unwrap();
         assert_eq!(stats.updated, 1);
 
-        // Two lines on disk, one logical record.
+        // Three lines on disk, one logical record.
         let path = dir.path().join("scrobbles/2024/2024-01.jsonl");
-        assert_eq!(std::fs::read_to_string(&path).unwrap().lines().count(), 2);
+        assert_eq!(std::fs::read_to_string(&path).unwrap().lines().count(), 3);
         let got = store.get_scrobble(&a.id).await.unwrap().unwrap();
         assert_eq!(got.album.as_deref(), Some("Corrected"));
 
         let dropped = store.compact().await.unwrap();
-        assert_eq!(dropped, 1);
+        assert_eq!(dropped, 2);
         assert_eq!(std::fs::read_to_string(&path).unwrap().lines().count(), 1);
         let got = store.get_scrobble(&a.id).await.unwrap().unwrap();
         assert_eq!(got.album.as_deref(), Some("Corrected"));

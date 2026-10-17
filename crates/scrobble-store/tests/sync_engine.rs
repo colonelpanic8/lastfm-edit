@@ -5,7 +5,8 @@
 use lastfm_edit::{RateLimitState, RateLimitStateWatcher, RateLimitType, Track};
 use scrobble_store::source::{ScrobbleSource, SourcePage};
 use scrobble_store::{
-    MemoryStorage, RecordSource, Result, Storage, SyncEngine, SyncEvent, SyncOptions,
+    MemoryStorage, RecordSource, Result, ScrobbleRecord, Storage, SyncEngine, SyncEvent,
+    SyncOptions,
 };
 use std::sync::{Arc, Mutex};
 use tokio::sync::watch;
@@ -64,7 +65,7 @@ impl ScrobbleSource for FakeSource {
 
     async fn fetch_window(
         &self,
-        _from: Option<u64>,
+        from: Option<u64>,
         to: Option<u64>,
         page: u32,
     ) -> Result<SourcePage> {
@@ -81,7 +82,11 @@ impl ScrobbleSource for FakeSource {
             .lock()
             .unwrap()
             .iter()
-            .filter(|t| t.timestamp.is_some_and(|ts| to.is_none_or(|pin| ts < pin)))
+            .filter(|t| {
+                t.timestamp.is_some_and(|ts| {
+                    from.is_none_or(|from| ts >= from) && to.is_none_or(|pin| ts < pin)
+                })
+            })
             .cloned()
             .collect();
         // Newest first, deterministic tiebreak, like the real feed.
@@ -112,7 +117,7 @@ fn engine(store: Arc<MemoryStorage>, source: Arc<FakeSource>) -> SyncEngine {
         source,
         SyncOptions {
             safety_margin_secs: MARGIN,
-            max_pages: None,
+            ..SyncOptions::default()
         },
     )
     .with_clock(|| NOW)
@@ -162,11 +167,89 @@ async fn initial_sync_covers_everything_and_is_idempotent() {
         .iter()
         .any(|e| matches!(e, SyncEvent::CoverageChanged(_))));
 
-    // Second run: already current, no fetches.
-    let before = *source.fetch_count.lock().unwrap();
+    // Second run only re-checks the late-arrival window: one page, nothing new.
     let stats = engine.extend_to_present().await.unwrap();
-    assert_eq!(stats.pages_fetched, 0);
-    assert_eq!(*source.fetch_count.lock().unwrap(), before);
+    assert_eq!(stats.pages_fetched, 1);
+    assert_eq!(stats.scrobbles_new, 0);
+    assert_eq!(
+        store.scrobbles_in_range(0..u64::MAX).await.unwrap().len(),
+        10
+    );
+}
+
+#[tokio::test]
+async fn scrobble_recorded_after_its_timestamp_was_covered_is_picked_up() {
+    let source = FakeSource::new(vec![track(PIN - 3600, "A", "old")], 50);
+    let store = Arc::new(MemoryStorage::new());
+    engine(store.clone(), source.clone())
+        .extend_to_present()
+        .await
+        .unwrap();
+    assert_eq!(store.load_coverage().await.unwrap().segments()[0].end, PIN);
+
+    // Upstream records a track that started before the pin only once it finishes.
+    source
+        .timeline
+        .lock()
+        .unwrap()
+        .push(track(PIN - 200, "A", "finished-late"));
+    let later = SyncEngine::new(store.clone(), source.clone()).with_clock(|| NOW + 300);
+    let mut rx = later.subscribe();
+    later.extend_to_present().await.unwrap();
+    assert!(drain(&mut rx).contains(&SyncEvent::ScrobblesDiscovered {
+        new: 1,
+        updated: 0,
+        oldest: Some(PIN - 200),
+        newest: Some(PIN - 200),
+    }));
+
+    let tracks: Vec<String> = store
+        .scrobbles_in_range(0..u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| r.track)
+        .collect();
+    assert_eq!(tracks, ["old", "finished-late"]);
+}
+
+#[tokio::test]
+async fn recent_mirrored_edit_converges_to_upstream_spelling() {
+    let source = FakeSource::new(vec![track(PIN - 3600, "A", "Song - Remastered")], 50);
+    let store = Arc::new(MemoryStorage::new());
+    engine(store.clone(), source.clone())
+        .extend_to_present()
+        .await
+        .unwrap();
+
+    // The mirror records the requested name; upstream canonicalizes its case.
+    let original = store.scrobbles_in_range(0..u64::MAX).await.unwrap()[0].clone();
+    let mirrored = ScrobbleRecord::from_track(
+        &track(PIN - 3600, "A", "Song"),
+        RecordSource::EditMirror,
+        NOW,
+    )
+    .unwrap();
+    store
+        .append_scrobbles(&[original.into_tombstone(NOW), mirrored])
+        .await
+        .unwrap();
+    *source.timeline.lock().unwrap() = vec![track(PIN - 3600, "A", "song")];
+
+    SyncEngine::new(store.clone(), source.clone())
+        .with_clock(|| NOW + 300)
+        .extend_to_present()
+        .await
+        .unwrap();
+
+    let tracks: Vec<String> = store
+        .scrobbles_in_range(0..u64::MAX)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| r.track)
+        .collect();
+    assert_eq!(tracks, ["song"]);
 }
 
 #[tokio::test]
@@ -208,7 +291,7 @@ async fn scrobbles_injected_mid_pass_do_not_disturb_the_pass() {
         source.clone(),
         SyncOptions {
             safety_margin_secs: MARGIN,
-            max_pages: None,
+            ..SyncOptions::default()
         },
     )
     .with_clock(|| NOW + 120);
@@ -395,6 +478,7 @@ async fn page_budget_stops_early_and_resumes_cleanly() {
         SyncOptions {
             safety_margin_secs: MARGIN,
             max_pages: Some(2),
+            ..SyncOptions::default()
         },
     )
     .with_clock(|| NOW);

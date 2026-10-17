@@ -9,7 +9,10 @@ use scrobble_scrubber::{
     Planner, Policy, RewriteRulesScrubActionProvider, ScrubFeed, ScrubberEvent, ScrubberEventBus,
     ScrubberState,
 };
-use scrobble_store::{ApiSource, FsStorage, ScrobbleId, Storage, SyncEngine};
+use scrobble_store::{
+    ApiSource, FsStorage, ScrobbleId, ScrobbleRecord, Storage, SyncEngine, SyncEvent,
+    SyncEventReceiver,
+};
 use serde::Deserialize;
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -514,6 +517,45 @@ async fn execute(ctx: &Context, max_edits: Option<u32>, follow: bool) -> Result<
 // Continuous run
 // =====================================================================================
 
+/// Scrobbles the last sync discovered below the previous coverage frontier. They landed in
+/// time the incremental feed has already planned, so it would never revisit them.
+async fn late_arrivals(
+    events: &mut SyncEventReceiver,
+    store: &dyn Storage,
+    frontier: Option<u64>,
+) -> Result<Vec<ScrobbleRecord>> {
+    let mut records = Vec::new();
+    loop {
+        let event = match events.try_recv() {
+            Ok(event) => event,
+            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => continue,
+            Err(_) => break,
+        };
+        let (
+            Some(frontier),
+            SyncEvent::ScrobblesDiscovered {
+                new,
+                oldest: Some(oldest),
+                newest: Some(newest),
+                ..
+            },
+        ) = (frontier, event)
+        else {
+            continue;
+        };
+        if new > 0 && oldest < frontier {
+            records.extend(
+                store
+                    .scrobbles_in_range(oldest..newest.saturating_add(1).min(frontier))
+                    .await?,
+            );
+        }
+    }
+    records.sort_by(|a, b| a.id.cmp(&b.id));
+    records.dedup_by(|a, b| a.id == b.id);
+    Ok(records)
+}
+
 async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     let api_key = std::env::var("LASTFM_EDIT_API_KEY")
         .map_err(|_| "LASTFM_EDIT_API_KEY must be set for continuous mode (store sync)")?;
@@ -524,6 +566,7 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     );
     let source = Arc::new(ApiSource::new(api_client));
     let engine = SyncEngine::new(ctx.store.clone() as Arc<dyn Storage>, source);
+    let mut sync_events = engine.subscribe();
 
     let bus = ScrubberEventBus::new();
     let edit_client = build_edit_client(ctx).await?;
@@ -591,11 +634,27 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         }
         cycle += 1;
         bus.emit(ScrubberEvent::CycleStarted { n: cycle });
+        let frontier = match ctx.store.load_coverage().await {
+            Ok(coverage) => coverage.last().map(|seg| seg.end),
+            Err(err) => {
+                log::error!("sync: {err}");
+                None
+            }
+        };
         if let Err(err) = engine.extend_to_present().await {
             log::error!("sync: {err}");
         }
         if let Err(err) = planner.plan(&ScrubFeed::Incremental { window: None }).await {
             log::error!("plan: {err}");
+        }
+        match late_arrivals(&mut sync_events, ctx.store.as_ref(), frontier).await {
+            Ok(late) if !late.is_empty() => {
+                if let Err(err) = planner.plan_records(&late).await {
+                    log::error!("plan late arrivals: {err}");
+                }
+            }
+            Ok(_) => {}
+            Err(err) => log::error!("plan late arrivals: {err}"),
         }
         bus.emit(ScrubberEvent::CycleCompleted { n: cycle });
         bus.emit(ScrubberEvent::Sleeping { seconds: interval });

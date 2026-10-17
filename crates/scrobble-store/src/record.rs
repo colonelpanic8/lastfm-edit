@@ -128,6 +128,27 @@ impl ScrobbleRecord {
         debug_assert_eq!(self.id, other.id);
         self.fetched_at >= other.fetched_at
     }
+
+    /// This observation layered over `existing`, keeping a known album artist when this
+    /// observation could not see one (the JSON API never reports it) for the same album.
+    pub fn merged_over(&self, existing: &Self) -> Self {
+        let mut merged = self.clone();
+        if merged.album_artist == Provenanced::Unknown && merged.album == existing.album {
+            merged.album_artist = existing.album_artist.clone();
+        }
+        merged
+    }
+
+    /// Whether `other` carries the same data, ignoring when and through which source it was
+    /// observed. Re-fetching an unchanged scrobble is not an update.
+    pub fn same_data(&self, other: &Self) -> bool {
+        let normalized = Self {
+            fetched_at: other.fetched_at,
+            source: other.source,
+            ..self.clone()
+        };
+        normalized == *other
+    }
 }
 
 #[cfg(test)]
