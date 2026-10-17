@@ -117,6 +117,10 @@ impl SuggestionWithContext {
 /// `Send` bound is deliberate: providers never hold the (!Send) lastfm-edit client, so
 /// they remain usable from multi-threaded hosts (e.g. a future UI).
 #[async_trait]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait ScrubActionProvider: Send + Sync {
     type Error: std::error::Error + Send + Sync + 'static;
 

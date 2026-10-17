@@ -25,6 +25,10 @@ pub struct SourcePage {
 /// while paging must not affect which older scrobbles are visited; this is what makes a
 /// `to`-pinned pass deterministic.
 #[async_trait::async_trait(?Send)]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait ScrobbleSource {
     /// Which [`RecordSource`] tag records fetched through this source carry (this drives
     /// album-artist provenance).

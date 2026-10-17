@@ -11,6 +11,10 @@ use async_trait::async_trait;
 /// with automatic pagination and built-in rate limiting.
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait(?Send)]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait AsyncPaginatedIterator<T> {
     /// Fetch the next item from the iterator.
     ///

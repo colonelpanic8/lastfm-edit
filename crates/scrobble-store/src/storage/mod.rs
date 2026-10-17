@@ -86,6 +86,10 @@ pub struct ScrobbleGroup {
 /// still returned by [`Storage::get_scrobble`] so callers can distinguish "deleted" from
 /// "never seen".
 #[async_trait::async_trait]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait Storage: Send + Sync {
     // ---- scrobbles -------------------------------------------------------------------
 

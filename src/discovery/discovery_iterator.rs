@@ -8,6 +8,10 @@ use async_trait::async_trait;
 /// This is particularly useful for discovery operations that might make many API
 /// requests and need to avoid rate limiting by yielding results incrementally.
 #[async_trait(?Send)]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait AsyncDiscoveryIterator<T> {
     /// Get the next item from the iterator
     ///

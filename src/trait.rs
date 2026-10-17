@@ -19,6 +19,10 @@ use async_trait::async_trait;
 /// that implements this trait using the `mockall` library.
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait(?Send)]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait LastFmBaseClient {
     // =============================================================================
     // PAGE FETCHING - Single page data access
@@ -256,6 +260,10 @@ pub trait LastFmBaseClient {
 /// that implements this trait using the `mockall` library.
 ///
 #[async_trait(?Send)]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait LastFmEditClient: LastFmBaseClient {
     // =============================================================================
     // CORE EDITING METHODS - Most important functionality

@@ -16,6 +16,10 @@ use crate::types::LastFmError;
 // =============================================================================
 
 #[async_trait(?Send)]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait LastFmApiClient: Clone {
     /// Fetch a single page of the user's recent tracks via the JSON API.
     ///

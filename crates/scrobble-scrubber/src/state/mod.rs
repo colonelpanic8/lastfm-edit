@@ -88,6 +88,10 @@ pub fn rules_hash(rules: &[RewriteRule]) -> String {
 
 /// The storage contract for scrubber state.
 #[async_trait::async_trait]
+#[allow(
+    clippy::double_must_use,
+    reason = "async-trait adds must_use to generated futures"
+)]
 pub trait ScrubberState: Send + Sync {
     // ---- active rules -------------------------------------------------------------
     /// The active rule set; empty when none configured yet.
