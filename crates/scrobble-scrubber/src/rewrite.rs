@@ -411,67 +411,37 @@ impl RewriteRule {
     /// - A rule with all None fields is treated as always matching (acts as a catch-all)
     /// - If any Some field's pattern doesn't match, the rule doesn't match
     pub fn matches(&self, track: &Track) -> Result<bool, RewriteError> {
-        let rule_name = self.name.as_deref().unwrap_or("unnamed");
-        let mut failed_fields = Vec::new();
-        let mut checked_fields = Vec::new();
-
-        // Check track name pattern if present
-        if let Some(rule) = &self.track_name {
-            checked_fields.push("track_name");
-            if !rule.matches(&track.name)? {
-                failed_fields.push(format!(
-                    "track_name('{}' ≠ pattern '{}')",
-                    track.name, rule.find
-                ));
-            }
-        }
-
-        // Check artist name pattern if present
-        if let Some(rule) = &self.artist_name {
-            checked_fields.push("artist_name");
-            if !rule.matches(&track.artist)? {
-                failed_fields.push(format!(
-                    "artist_name('{}' ≠ pattern '{}')",
-                    track.artist, rule.find
-                ));
-            }
-        }
-
-        // Check album name pattern if present
-        if let Some(rule) = &self.album_name {
-            checked_fields.push("album_name");
-            let album_name = track.album.as_deref().unwrap_or("");
-            if !rule.matches(album_name)? {
-                failed_fields.push(format!(
-                    "album_name('{album_name}' ≠ pattern '{}')",
+        let fields = [
+            ("track_name", &self.track_name, Some(track.name.as_str())),
+            (
+                "artist_name",
+                &self.artist_name,
+                Some(track.artist.as_str()),
+            ),
+            ("album_name", &self.album_name, track.album.as_deref()),
+            // Checked against the track's actual album artist when the source provided one
+            // (v7 Tracks carry honest values).
+            (
+                "album_artist_name",
+                &self.album_artist_name,
+                track.album_artist.as_deref(),
+            ),
+        ];
+        for (field, rule, value) in fields {
+            let Some(rule) = rule else { continue };
+            let value = value.unwrap_or("");
+            if !rule.matches(value)? {
+                log::trace!(
+                    "Rule '{}' does not match track '{}' by '{}' | Failed: {field}('{value}' ≠ pattern '{}')",
+                    self.name.as_deref().unwrap_or("unnamed"),
+                    track.name,
+                    track.artist,
                     rule.find
-                ));
+                );
+                return Ok(false);
             }
         }
-
-        // Check album artist name pattern if present, against the track's actual album
-        // artist when the source provided one (v7 Tracks carry honest values).
-        if let Some(rule) = &self.album_artist_name {
-            checked_fields.push("album_artist_name");
-            let album_artist = track.album_artist.as_deref().unwrap_or("");
-            if !rule.matches(album_artist)? {
-                failed_fields.push(format!(
-                    "album_artist_name('{album_artist}' ≠ pattern '{}')",
-                    rule.find
-                ));
-            }
-        }
-
-        let rule_matches = failed_fields.is_empty();
-        if !checked_fields.is_empty() && !rule_matches {
-            log::trace!(
-                "Rule '{rule_name}' does not match track '{}' by '{}' | Failed: [{}]",
-                track.name,
-                track.artist,
-                failed_fields.join(", ")
-            );
-        }
-        Ok(rule_matches)
+        Ok(true)
     }
 
     /// Helper function to check if a single field matches between rule and ScrobbleEdit
