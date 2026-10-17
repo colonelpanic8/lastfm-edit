@@ -547,3 +547,62 @@ async fn whole_store_rescans_but_only_claims_synced_intervals() {
         "explicit store pass rescans covered data"
     );
 }
+
+#[tokio::test]
+async fn rule_change_uses_new_rules_in_existing_planner() {
+    let (store, state) = seeded(&[record(100, "Queen", "Song - Remastered 2011")]).await;
+    let planner = Planner::new(store, state.clone())
+        .with_provider(RewriteRulesScrubActionProvider::from_rules(vec![]));
+    let feed = ScrubFeed::Incremental { window: None };
+    planner.plan(&feed).await.unwrap();
+    state.save_rules(&[remaster_rule()]).await.unwrap();
+    planner.plan(&feed).await.unwrap();
+    assert_eq!(
+        state.load_queue().await.unwrap().len(),
+        1,
+        "new rules hash was covered using old provider rules"
+    );
+}
+
+#[tokio::test]
+async fn rule_changes_during_a_pass_apply_only_to_the_next_pass() {
+    struct ChangeRules(Arc<MemoryScrubberState>);
+    #[async_trait]
+    impl ScrubActionProvider for ChangeRules {
+        type Error = ActionProviderError;
+        fn provider_name(&self) -> &str {
+            "change_rules"
+        }
+        async fn analyze_tracks(
+            &self,
+            _tracks: &[Track],
+            _open: Option<&[EditIntent]>,
+            _pending: Option<&[PendingRule]>,
+        ) -> Result<Vec<(usize, Vec<SuggestionWithContext>)>, ActionProviderError> {
+            self.0.save_rules(&[remaster_rule()]).await.unwrap();
+            Ok(vec![])
+        }
+    }
+    let (store, state) = seeded(&[
+        record(100, "Queen", "First - Remastered 2011"),
+        record(200, "Queen", "Second - Remastered 2011"),
+    ])
+    .await;
+    let planner = Planner::new(store, state.clone())
+        .with_provider(ChangeRules(state.clone()))
+        .with_provider(RewriteRulesScrubActionProvider::from_rules(vec![]))
+        .with_batch_hint(1);
+    let feed = ScrubFeed::Incremental { window: None };
+    planner.plan(&feed).await.unwrap();
+    assert!(state.load_queue().await.unwrap().is_empty());
+    assert_eq!(
+        state
+            .load_provider_coverage("rewrite_rules")
+            .await
+            .unwrap()
+            .rules_hash,
+        Some(scrobble_scrubber::rules_hash(&[]))
+    );
+    planner.plan(&feed).await.unwrap();
+    assert_eq!(state.load_queue().await.unwrap().len(), 2);
+}

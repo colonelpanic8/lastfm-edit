@@ -34,7 +34,8 @@ fn remaster_rule() -> RewriteRule {
         .with_track_name(SdRule::new(r"^(?P<base>.+) - Remastered \d+$", "${base}"))
 }
 
-fn planner(store: Arc<MemoryStorage>, state: Arc<MemoryScrubberState>) -> Planner {
+async fn planner(store: Arc<MemoryStorage>, state: Arc<MemoryScrubberState>) -> Planner {
+    state.save_rules(&[remaster_rule()]).await.unwrap();
     Planner::new(store, state).with_provider(RewriteRulesScrubActionProvider::from_rules(vec![
         remaster_rule(),
     ]))
@@ -52,7 +53,7 @@ async fn plan_records_pushes_work_without_feeds_or_coverage() {
         record(300, "Clean Song"),
     ];
 
-    let planner = planner(store, state.clone());
+    let planner = planner(store, state.clone()).await;
     let report = planner.plan_records(&pushed).await.unwrap();
 
     assert_eq!(report.subjects_seen, 2);
@@ -100,7 +101,7 @@ async fn actor_processes_consider_and_execute_commands() {
                 .returning(|edit, _| Ok(success_response(edit)));
             let editor = MirroredEditor::new(store.clone() as Arc<dyn Storage>, client);
 
-            let planner = planner(store.clone(), state.clone());
+            let planner = planner(store.clone(), state.clone()).await;
             let bus = planner.event_bus();
             let executor = Executor::from_parts(
                 store.clone() as Arc<dyn Storage>,
@@ -159,7 +160,7 @@ async fn actor_processes_consider_and_execute_commands() {
 async fn cancel_execution_flips_the_executors_flag_without_the_command_channel() {
     let store = Arc::new(MemoryStorage::new());
     let state = Arc::new(MemoryScrubberState::new());
-    let planner = planner(store.clone(), state.clone());
+    let planner = planner(store.clone(), state.clone()).await;
     let bus = planner.event_bus();
     let executor = Executor::from_parts(
         store.clone() as Arc<dyn Storage>,
@@ -190,7 +191,7 @@ async fn actor_survives_command_errors() {
         .run_until(async {
             let store = Arc::new(MemoryStorage::new());
             let state = Arc::new(MemoryScrubberState::new());
-            let planner = planner(store.clone(), state.clone());
+            let planner = planner(store.clone(), state.clone()).await;
             let bus = planner.event_bus();
             let executor = Executor::from_parts(
                 store.clone() as Arc<dyn Storage>,
@@ -252,7 +253,7 @@ async fn sync_bridge_turns_discoveries_into_intents_and_forwards_events() {
                 .await
                 .unwrap();
 
-            let planner = planner(store.clone(), state.clone());
+            let planner = planner(store.clone(), state.clone()).await;
             let bus = planner.event_bus();
             let executor = Executor::from_parts(
                 store.clone() as Arc<dyn Storage>,
@@ -326,11 +327,12 @@ async fn approve_and_reject_commands_emit_events() {
                 .unwrap();
 
             // Queue an awaiting-approval intent by planning with forced confirmation.
-            let planner =
-                planner(store.clone(), state.clone()).with_policy(scrobble_scrubber::Policy {
+            let planner = planner(store.clone(), state.clone()).await.with_policy(
+                scrobble_scrubber::Policy {
                     require_confirmation_all: true,
                     ..Default::default()
-                });
+                },
+            );
             let bus = planner.event_bus();
             let executor = Executor::from_parts(
                 store.clone() as Arc<dyn Storage>,
@@ -364,7 +366,7 @@ async fn approve_and_reject_commands_emit_events() {
             );
 
             // Fresh actor for the approval round-trip.
-            let planner = planner_fresh(store.clone(), state.clone());
+            let planner = planner_fresh(store.clone(), state.clone()).await;
             let bus = planner.event_bus();
             let executor = Executor::from_parts(
                 store.clone() as Arc<dyn Storage>,
@@ -414,11 +416,12 @@ async fn reinstate_command_emits_event() {
                 .unwrap();
 
             // Queue an awaiting-approval intent by planning with forced confirmation.
-            let planner =
-                planner(store.clone(), state.clone()).with_policy(scrobble_scrubber::Policy {
+            let planner = planner(store.clone(), state.clone()).await.with_policy(
+                scrobble_scrubber::Policy {
                     require_confirmation_all: true,
                     ..Default::default()
-                });
+                },
+            );
             let bus = planner.event_bus();
             let executor = Executor::from_parts(
                 store.clone() as Arc<dyn Storage>,
@@ -479,6 +482,6 @@ async fn reinstate_command_emits_event() {
         .await;
 }
 
-fn planner_fresh(store: Arc<MemoryStorage>, state: Arc<MemoryScrubberState>) -> Planner {
-    planner(store, state)
+async fn planner_fresh(store: Arc<MemoryStorage>, state: Arc<MemoryScrubberState>) -> Planner {
+    planner(store, state).await
 }

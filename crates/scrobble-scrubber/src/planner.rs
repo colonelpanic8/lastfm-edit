@@ -33,6 +33,7 @@ pub const RULES_PROVIDER: &str = "rewrite_rules";
 
 /// Everything a planning pass consults besides the records themselves.
 struct PlanContext {
+    rule_snapshots: HashMap<String, BoxedProvider>,
     coverages: HashMap<String, ProviderCoverage>,
     open_intents: Vec<crate::queue::EditIntent>,
     pending_rules: Vec<crate::queue::PendingRule>,
@@ -191,7 +192,17 @@ impl Planner {
         }
 
         // Load provider coverage, applying the rules-hash invalidation rule.
-        let current_rules_hash = rules_hash(&self.state.load_rules().await?);
+        let rules = self.state.load_rules().await?;
+        let current_rules_hash = rules_hash(&rules);
+        let rule_snapshots = self
+            .providers
+            .iter()
+            .filter_map(|provider| {
+                provider
+                    .rules_snapshot(&rules)
+                    .map(|snapshot| (provider.provider_name().to_string(), snapshot))
+            })
+            .collect();
         let mut coverages: HashMap<String, ProviderCoverage> = HashMap::new();
         for provider in &self.providers {
             let name = provider.provider_name().to_string();
@@ -228,6 +239,7 @@ impl Planner {
             .collect();
 
         Ok(PlanContext {
+            rule_snapshots,
             coverages,
             open_intents,
             pending_rules,
@@ -271,6 +283,7 @@ impl Planner {
         skip_covered: bool,
     ) -> Result<()> {
         let PlanContext {
+            rule_snapshots,
             coverages,
             open_intents,
             pending_rules,
@@ -302,6 +315,7 @@ impl Planner {
 
         for provider in &self.providers {
             let name = provider.provider_name().to_string();
+            let provider = rule_snapshots.get(&name).unwrap_or(provider);
             let coverage = coverages.get_mut(&name).expect("loaded for all providers");
 
             // Skip providers that already planned this whole range.

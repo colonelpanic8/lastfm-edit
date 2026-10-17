@@ -136,6 +136,11 @@ pub trait ScrubActionProvider: Send + Sync {
     /// Stable, filesystem-safe identifier for this provider (used for planning-coverage
     /// files and event attribution).
     fn provider_name(&self) -> &str;
+
+    /// Bind rule-dependent analysis to the immutable rules loaded for a planning pass.
+    fn rules_snapshot(&self, _rules: &[RewriteRule]) -> Option<BoxedProvider> {
+        None
+    }
 }
 
 /// Rewrite rules-based action provider
@@ -294,6 +299,10 @@ impl ScrubActionProvider for RewriteRulesScrubActionProvider {
     fn provider_name(&self) -> &'static str {
         "rewrite_rules"
     }
+
+    fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
+        Some(boxed(Self::from_rules(rules.to_vec())))
+    }
 }
 
 /// Shared handles analyze like the provider they wrap (lets hosts keep an `Arc` for
@@ -318,6 +327,9 @@ where
 
     fn provider_name(&self) -> &str {
         (**self).provider_name()
+    }
+    fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
+        (**self).rules_snapshot(rules)
     }
 }
 
@@ -354,6 +366,9 @@ where
 
     fn provider_name(&self) -> &str {
         self.inner.provider_name()
+    }
+    fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
+        self.inner.rules_snapshot(rules)
     }
 }
 
