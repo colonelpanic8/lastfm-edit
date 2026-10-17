@@ -8,10 +8,10 @@
 //!
 //! ## Coverage
 //!
-//! Each provider has its own planning [`CoverageMap`]: a covered instant means "every
-//! scrobble at that instant has been analyzed by this provider under the current rules
-//! generation". Claims are inserted only after a batch's suggestions are durably
-//! enqueued, so a crash before that point simply replans the batch. The rules provider's
+//! Each provider records time coverage and fingerprints of analyzed record revisions.
+//! Incremental passes compare current records even inside covered time, so lost discovery
+//! events and late metadata updates cannot hide work. Checkpoints are saved after the
+//! pass's suggestions are durably enqueued; an interrupted pass safely repeats analysis. The rules provider's
 //! coverage is invalidated automatically when the active rule set changes (tracked by
 //! [`rules_hash`]); other providers' coverage only resets explicitly.
 
@@ -24,6 +24,7 @@ use crate::queue::{QueueEvent, QueueEventKind};
 use crate::state::{rules_hash, ProviderCoverage, ScrubberState};
 use crate::subject::{group_by_subject, Subject};
 use scrobble_store::{CoverageMap, ScrobbleId, ScrobbleRecord, Segment, Storage};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -146,19 +147,16 @@ impl Planner {
         let mut report = PlanReport::default();
         self.plan_batch(&batch, &mut context, &mut report, false)
             .await?;
+        self.save_context(&context).await?;
         Ok(report)
     }
 
     async fn plan_inner(&self, feed: &ScrubFeed) -> Result<PlanReport> {
         let mut context = self.load_context().await?;
 
-        // Resolve the feed. For Incremental: work = union over providers of their gaps,
-        // restricted to synced coverage (and the optional window).
+        // Pin synced intervals, then compare their current records with durable analysis revisions.
         let incremental_work = match feed {
-            ScrubFeed::Incremental { window } => Some(
-                self.incremental_work(&context.coverages, window.clone())
-                    .await?,
-            ),
+            ScrubFeed::Incremental { window } => Some(self.incremental_work(window.clone()).await?),
             _ => None,
         };
         let batches = feed
@@ -179,7 +177,17 @@ impl Planner {
             )
             .await?;
         }
+        self.save_context(&context).await?;
         Ok(report)
+    }
+
+    async fn save_context(&self, context: &PlanContext) -> Result<()> {
+        if !self.policy.dry_run {
+            for (name, coverage) in &context.coverages {
+                self.state.save_provider_coverage(name, coverage).await?;
+            }
+        }
+        Ok(())
     }
 
     /// Everything a planning pass consults besides the records themselves.
@@ -207,14 +215,18 @@ impl Planner {
         for provider in &self.providers {
             let name = provider.provider_name().to_string();
             let mut coverage = self.state.load_provider_coverage(&name).await?;
-            if name == RULES_PROVIDER && coverage.rules_hash.as_deref() != Some(&current_rules_hash)
+            if coverage.analysis_version != 1
+                || (name == RULES_PROVIDER
+                    && coverage.rules_hash.as_deref() != Some(&current_rules_hash))
             {
                 if !coverage.coverage.is_empty() {
                     log::info!("planner: rule set changed; resetting '{name}' planning coverage");
                 }
                 coverage = ProviderCoverage {
                     coverage: CoverageMap::new(),
-                    rules_hash: Some(current_rules_hash.clone()),
+                    rules_hash: (name == RULES_PROVIDER).then(|| current_rules_hash.clone()),
+                    analysis_version: 1,
+                    ..ProviderCoverage::default()
                 };
             }
             coverages.insert(name, coverage);
@@ -248,13 +260,8 @@ impl Planner {
         })
     }
 
-    /// Work remaining for an incremental pass: within synced time (∩ window), any range
-    /// at least one provider hasn't planned yet.
-    async fn incremental_work(
-        &self,
-        coverages: &HashMap<String, ProviderCoverage>,
-        window: Option<std::ops::Range<u64>>,
-    ) -> Result<CoverageMap> {
+    /// Scan current records within synced time; per-provider fingerprints select work.
+    async fn incremental_work(&self, window: Option<std::ops::Range<u64>>) -> Result<CoverageMap> {
         let sync_coverage = self.store.load_coverage().await?;
         let mut work_segments = Vec::new();
         for segment in sync_coverage.segments() {
@@ -266,11 +273,7 @@ impl Planner {
             if range.start >= range.end {
                 continue;
             }
-            for coverage in coverages.values() {
-                for gap in coverage.coverage.gaps(range.clone()) {
-                    work_segments.push(Segment::new(gap.start, gap.end, 0));
-                }
-            }
+            work_segments.push(Segment::new(range.start, range.end, 0));
         }
         Ok(CoverageMap::from_segments(work_segments))
     }
@@ -305,25 +308,36 @@ impl Planner {
         });
         report.subjects_seen += subjects.len() as u64;
 
-        let tracks: Vec<lastfm_edit::Track> = subjects
+        let fingerprints: HashMap<_, _> = batch
+            .records
             .iter()
-            .map(|(subject, ids)| {
-                let newest = ids.iter().map(|id| id.uts()).max();
-                subject.representative_track(ids.len() as u32, newest)
+            .map(|record| {
+                let json = serde_json::to_vec(record)?;
+                Ok((record.id.clone(), format!("{:x}", Sha256::digest(json))))
             })
-            .collect();
+            .collect::<Result<_>>()?;
 
         for provider in &self.providers {
             let name = provider.provider_name().to_string();
             let provider = rule_snapshots.get(&name).unwrap_or(provider);
             let coverage = coverages.get_mut(&name).expect("loaded for all providers");
 
-            // Skip providers that already planned this whole range.
-            if let Some(claim) = &batch.coverage_claim {
-                if skip_covered && coverage.coverage.covers(claim.clone()) {
-                    continue;
-                }
-            }
+            let subjects: Vec<_> = subjects
+                .iter()
+                .filter(|(_, ids)| {
+                    !skip_covered
+                        || ids
+                            .iter()
+                            .any(|id| coverage.analyzed.get(id) != fingerprints.get(id))
+                })
+                .collect();
+            let tracks: Vec<_> = subjects
+                .iter()
+                .map(|(subject, ids)| {
+                    subject
+                        .representative_track(ids.len() as u32, ids.iter().map(|id| id.uts()).max())
+                })
+                .collect();
 
             if !tracks.is_empty() {
                 let results = match provider
@@ -364,13 +378,19 @@ impl Planner {
             if self.policy.dry_run {
                 continue;
             }
+            for (_, ids) in &subjects {
+                for id in ids.iter() {
+                    if let Some(fingerprint) = fingerprints.get(id) {
+                        coverage.analyzed.insert(id.clone(), fingerprint.clone());
+                    }
+                }
+            }
             if let Some(claim) = &batch.coverage_claim {
                 let changes =
                     coverage
                         .coverage
                         .insert(Segment::new(claim.start, claim.end, Self::now()));
                 if !changes.is_empty() {
-                    self.state.save_provider_coverage(&name, coverage).await?;
                     self.events.emit(ScrubberEvent::CoverageAdvanced {
                         provider: name.clone(),
                         range: claim.clone(),

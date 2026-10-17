@@ -66,6 +66,12 @@ pub(crate) fn fold_dismissed(
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ProviderCoverage {
     pub coverage: CoverageMap,
+    /// Version of analysis-completeness semantics; older time-only claims are discarded.
+    #[serde(default)]
+    pub analysis_version: u32,
+    /// Exact record revisions successfully analyzed under this provider generation.
+    #[serde(default)]
+    pub analyzed: std::collections::BTreeMap<scrobble_store::ScrobbleId, String>,
     /// For the rules provider: hash of the rule set the coverage was computed under.
     /// A mismatch on load means the rules changed and coverage must reset (the planner
     /// enforces this; storage just persists it).

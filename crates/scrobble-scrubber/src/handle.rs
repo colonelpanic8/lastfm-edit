@@ -201,6 +201,15 @@ pub async fn bridge_sync_events(
                 log::warn!(
                     "sync bridge lagged {missed} events; incremental planning will reconcile"
                 );
+                if handle
+                    .send(ScrubberCommand::PlanFeed(ScrubFeed::Incremental {
+                        window: None,
+                    }))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
                 continue;
             }
             Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
@@ -208,12 +217,13 @@ pub async fn bridge_sync_events(
 
         if let SyncEvent::ScrobblesDiscovered {
             new,
+            updated,
             oldest: Some(oldest),
             newest: Some(newest),
             ..
         } = &event
         {
-            if *new > 0 {
+            if *new > 0 || *updated > 0 {
                 match store
                     .scrobbles_in_range(*oldest..newest.saturating_add(1))
                     .await

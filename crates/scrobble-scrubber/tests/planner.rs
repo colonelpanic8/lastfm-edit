@@ -606,3 +606,100 @@ async fn rule_changes_during_a_pass_apply_only_to_the_next_pass() {
     planner.plan(&feed).await.unwrap();
     assert_eq!(state.load_queue().await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn restart_finds_late_arrivals_and_metadata_updates_without_events() {
+    use scrobble_scrubber::FsScrubberState;
+    use scrobble_store::FsStorage;
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(FsStorage::open(dir.path()).unwrap());
+    let state = Arc::new(FsScrubberState::open(dir.path().join("scrubber")).unwrap());
+    store
+        .append_scrobbles(&[record(100, "Queen", "Clean")])
+        .await
+        .unwrap();
+    store
+        .save_coverage(&CoverageMap::from_segments(vec![Segment::new(0, 1000, 1)]))
+        .await
+        .unwrap();
+    let album_rule = RewriteRule::new().with_album_name(SdRule::new("^(.*) Dirty$", "$1"));
+    state
+        .save_rules(&[remaster_rule(), album_rule])
+        .await
+        .unwrap();
+    // Legacy coverage must not pre-cover future records or suppress the initial analysis.
+    state
+        .save_provider_coverage(
+            "rewrite_rules",
+            &scrobble_scrubber::ProviderCoverage {
+                coverage: CoverageMap::from_segments(vec![Segment::new(0, u64::MAX, 1)]),
+                rules_hash: Some(scrobble_scrubber::rules_hash(
+                    &state.load_rules().await.unwrap(),
+                )),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let planner = Planner::new(store.clone(), state.clone())
+        .with_provider(RewriteRulesScrubActionProvider::from_rules(vec![]));
+    let feed = ScrubFeed::Incremental { window: None };
+    planner.plan(&feed).await.unwrap();
+    let coverage = state.load_provider_coverage("rewrite_rules").await.unwrap();
+    assert_eq!(coverage.analyzed.len(), 1);
+    assert!(!coverage.coverage.contains(1000));
+    let mut updated = record(100, "Queen", "Clean");
+    updated.album = Some("Album Dirty".into());
+    updated.fetched_at = 2;
+    let stats = store
+        .append_scrobbles(&[updated, record(200, "Queen", "Late - Remastered 2011")])
+        .await
+        .unwrap();
+    assert_eq!((stats.new, stats.updated), (1, 1));
+    drop(planner);
+    drop(store);
+    drop(state);
+    let store = Arc::new(FsStorage::open(dir.path()).unwrap());
+    let state = Arc::new(FsScrubberState::open(dir.path().join("scrubber")).unwrap());
+    let planner = Planner::new(store, state.clone())
+        .with_provider(RewriteRulesScrubActionProvider::from_rules(vec![]));
+    planner.plan(&feed).await.unwrap();
+    let queue = state.load_queue().await.unwrap();
+    assert_eq!(queue.len(), 2);
+    assert!(
+        queue.iter().any(
+            |i| i.proposed.album_name.as_deref() == Some("Album") && i.subject.track == "Clean"
+        ),
+        "{queue:?}"
+    );
+    assert!(queue
+        .iter()
+        .any(|i| i.proposed.track_name.as_deref() == Some("Late")));
+    assert_eq!(planner.plan(&feed).await.unwrap().queued_ready, 0);
+}
+
+#[tokio::test]
+async fn records_deferred_by_an_open_intent_are_revisited_after_it_closes() {
+    let (store, state) = seeded(&[record(100, "A", "Song Dirty")]).await;
+    let provider = ScriptedProvider::new("scripted", "Dirty");
+    let planner = Planner::new(store.clone(), state.clone()).with_provider(provider);
+    let feed = ScrubFeed::Incremental { window: None };
+    planner.plan(&feed).await.unwrap();
+    store
+        .append_scrobbles(&[record(200, "A", "Song Dirty")])
+        .await
+        .unwrap();
+    planner.plan(&feed).await.unwrap();
+    let queue = state.load_queue().await.unwrap();
+    assert_eq!(queue.len(), 1);
+    state
+        .append_queue_events(&[scrobble_scrubber::QueueEvent {
+            id: queue[0].id,
+            at: u64::MAX,
+            kind: scrobble_scrubber::QueueEventKind::Completed,
+        }])
+        .await
+        .unwrap();
+    planner.plan(&feed).await.unwrap();
+    assert_eq!(state.load_queue().await.unwrap().len(), 2);
+}

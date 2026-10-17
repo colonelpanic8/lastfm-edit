@@ -241,7 +241,7 @@ async fn actor_survives_command_errors() {
 }
 
 #[tokio::test]
-async fn sync_bridge_turns_discoveries_into_intents_and_forwards_events() {
+async fn sync_bridge_turns_metadata_updates_into_intents_and_forwards_events() {
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
@@ -279,10 +279,10 @@ async fn sync_bridge_turns_discoveries_into_intents_and_forwards_events() {
                 handle.clone(),
             ));
 
-            // The store "discovers" the scrobble.
+            // An update-only sync event must wake analysis too.
             sync_bus.emit(SyncEvent::ScrobblesDiscovered {
-                new: 1,
-                updated: 0,
+                new: 0,
+                updated: 1,
                 oldest: Some(100),
                 newest: Some(100),
             });

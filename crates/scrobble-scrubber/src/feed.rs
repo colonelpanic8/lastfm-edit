@@ -14,7 +14,7 @@ use std::ops::Range;
 pub enum ScrubFeed {
     /// Rescan everything in the store, or a time slice, regardless of planning coverage.
     StoreRange { range: Option<Range<u64>> },
-    /// Work not yet planned: (sync coverage ∩ optional window) − planning coverage.
+    /// New or changed records within synced coverage and the optional window.
     Incremental { window: Option<Range<u64>> },
     /// All live scrobbles of one artist (optionally windowed).
     Artist {
@@ -60,8 +60,8 @@ impl ScrubFeed {
     ///
     /// `incremental_work` is required for [`ScrubFeed::Incremental`]: the caller (the
     /// planner, which owns per-provider planning coverage) computes the remaining work as
-    /// a coverage map of ranges — typically the union, across active providers, of each
-    /// provider's planning gaps within the store's *synced* coverage. Feeds never claim
+    /// a pinned coverage map of the store's *synced* intervals. Per-provider record
+    /// revisions determine which records need analysis. Feeds never claim
     /// time the store hasn't synced.
     pub async fn batches(
         &self,

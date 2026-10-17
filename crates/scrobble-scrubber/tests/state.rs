@@ -88,6 +88,7 @@ async fn full_round_trip_through_fresh_handles() {
     let provider_coverage = ProviderCoverage {
         coverage,
         rules_hash: Some(rules_hash(&rules)),
+        ..ProviderCoverage::default()
     };
     state
         .save_provider_coverage("rewrite_rules", &provider_coverage)
