@@ -1186,7 +1186,8 @@ mod tests {
                 &[],
                 &MovePolicy::default(),
                 Naming::reviewer(),
-            ),
+            )
+            .proposal,
             None,
             "\"(Clean)\" names the version and is never stripped"
         );
@@ -1226,6 +1227,7 @@ mod tests {
             &MovePolicy::default(),
             Naming::reviewer(),
         )
+        .proposal
         .expect("the move is still proposed");
         assert_eq!(
             (proposal.target.album.as_deref(), proposal.approval),
@@ -1581,7 +1583,8 @@ mod tests {
                 &[],
                 &MovePolicy::default(),
                 Naming::reviewer(),
-            ),
+            )
+            .proposal,
             None
         );
     }

@@ -365,6 +365,7 @@ impl Identity {
             adjudicator,
         )
         .with_researcher(researcher)
+        .with_moves(self.config.moves)
         .holding(lock))
     }
 }

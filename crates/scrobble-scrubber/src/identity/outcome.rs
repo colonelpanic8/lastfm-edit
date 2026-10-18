@@ -117,6 +117,14 @@ pub struct Target {
     pub album_artist: Option<String>,
 }
 
+/// What one outcome derives for a subject.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Derived {
+    pub proposal: Option<Proposal>,
+    /// Unanswered naming questions part of the edit waits on; the lane asks them.
+    pub waiting: Vec<NamingQuestion>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Proposal {
     pub edit: ScrobbleEdit,
@@ -186,10 +194,12 @@ enum AlbumPart<'a> {
         canonical: &'a Canonical,
         naming: &'a NamingJudgement,
     },
+    /// An edition retitle waiting for the lane to ask its question: the album stays.
+    Waiting(NamingQuestion),
 }
 
-/// Pure: subject + outcome -> at most one proposal. `None` when nothing would change or
-/// a human rejected the target for this subject.
+/// Pure: subject + outcome -> at most one proposal, with the naming questions it waits on.
+/// No proposal when nothing would change or a human rejected the target for this subject.
 ///
 /// Title and album keep the user's spelling when, with the packaging or edition suffix
 /// removed, it folds equal to the MB text. Moves off a compilation, single or EP set the
@@ -203,7 +213,7 @@ pub(crate) fn derive_edit(
     rejected: &[Target],
     policy: &MovePolicy,
     naming: Naming<'_>,
-) -> Option<Proposal> {
+) -> Derived {
     let parsed = parse_title(&subject.track);
     let title_change = match classify_title_change(&parsed, &outcome.title) {
         // Only a pick among MusicBrainz options may rewrite a title beyond packaging; a
@@ -231,7 +241,9 @@ pub(crate) fn derive_edit(
             .map(|scrobbled| in_users_spelling(&strip_edition(scrobbled), &canonical.group.title))
     };
     let (album_name, album_artist) = match &album {
-        AlbumPart::Unchanged => (subject.album.clone(), subject.album_artist.clone()),
+        AlbumPart::Unchanged | AlbumPart::Waiting(_) => {
+            (subject.album.clone(), subject.album_artist.clone())
+        }
         AlbumPart::Move {
             kind, canonical, ..
         } => (
@@ -260,21 +272,46 @@ pub(crate) fn derive_edit(
     let unchanged = target.title == subject.track
         && target.album == subject.album
         && target.album_artist == subject.album_artist;
-    if unchanged || rejected.contains(&target) {
-        return None;
+    let proposal = (!unchanged && !rejected.contains(&target)).then(|| {
+        let mut edit = create_no_op_edit(&subject.representative_track(0, None));
+        edit.track_name = Some(target.title.clone());
+        edit.album_name = target.album.clone();
+        edit.album_artist_name = target.album_artist.clone();
+        Proposal {
+            edit,
+            approval: approval(chosen, &outcome.proof, title_change, &album, policy),
+            rationale: rationale(subject, outcome, chosen, title_change, &album),
+            target,
+        }
+    });
+    let waiting = match album {
+        AlbumPart::Waiting(question) => vec![question],
+        _ => Vec::new(),
+    };
+    Derived { proposal, waiting }
+}
+
+/// The provider's walk over a key's plannable outcomes, in preference order: the first
+/// that proposes an edit, or failing that the first that waits on a naming question. A
+/// rejected or no-op outcome passes to the next (the human walk).
+pub(crate) fn derive_first<'a>(
+    subject: &Subject,
+    plannable: Vec<(&'a Outcome, Chosen)>,
+    rejected: &[Target],
+    policy: &MovePolicy,
+    naming: Naming<'_>,
+) -> Option<(&'a Outcome, Derived)> {
+    let mut waiting = None;
+    for (outcome, chosen) in plannable {
+        let derived = derive_edit(subject, outcome, chosen, rejected, policy, naming);
+        if derived.proposal.is_some() {
+            return Some((outcome, derived));
+        }
+        if waiting.is_none() && !derived.waiting.is_empty() {
+            waiting = Some((outcome, derived));
+        }
     }
-
-    let mut edit = create_no_op_edit(&subject.representative_track(0, None));
-    edit.track_name = Some(target.title.clone());
-    edit.album_name = target.album.clone();
-    edit.album_artist_name = target.album_artist.clone();
-
-    Some(Proposal {
-        edit,
-        approval: approval(chosen, &outcome.proof, title_change, &album, policy),
-        rationale: rationale(subject, outcome, chosen, title_change, &album),
-        target,
-    })
+    waiting
 }
 
 fn album_part<'a>(
@@ -326,7 +363,7 @@ fn album_part<'a>(
         },
         // The lane asks about deterministic outcomes; until it answers, the album waits.
         None if naming.judge == RetitleJudge::Llm && chosen == Chosen::Deterministic => {
-            AlbumPart::Unchanged
+            AlbumPart::Waiting(question)
         }
         None => AlbumPart::RetitleForReview {
             canonical,
@@ -399,7 +436,7 @@ fn rationale(
         format!("Album: {from} -> {} ({why})", canonical.group.describe())
     };
     match album {
-        AlbumPart::Unchanged => {}
+        AlbumPart::Unchanged | AlbumPart::Waiting(_) => {}
         AlbumPart::Move {
             kind,
             canonical,
@@ -480,7 +517,7 @@ fn approval(
             && !canonical.single_first
     };
     let album_safe = match album {
-        AlbumPart::Unchanged => true,
+        AlbumPart::Unchanged | AlbumPart::Waiting(_) => true,
         AlbumPart::Move {
             kind, canonical, ..
         } => move_safe(*kind, canonical),
@@ -593,6 +630,7 @@ mod tests {
             &MovePolicy::default(),
             Naming::reviewer(),
         )
+        .proposal
         .unwrap();
         assert_eq!(
             proposal.edit,
@@ -687,6 +725,7 @@ mod tests {
                 &MovePolicy::default(),
                 Naming::reviewer(),
             )
+            .proposal
             .unwrap();
             assert_eq!(
                 (proposal.target, proposal.approval.requires_confirmation()),
@@ -813,6 +852,7 @@ mod tests {
                 &MovePolicy::default(),
                 Naming { verdicts, judge },
             )
+            .proposal
             .map(|p| (p.target, p.approval.requires_confirmation()));
             assert_eq!(actual, expected, "{name}");
         }
@@ -833,6 +873,7 @@ mod tests {
                 judge: RetitleJudge::Llm,
             },
         )
+        .proposal
         .unwrap();
         assert_eq!(
             proposal.rationale,
@@ -854,6 +895,7 @@ mod tests {
             &MovePolicy::default(),
             Naming::reviewer(),
         )
+        .proposal
         .unwrap();
         assert_eq!(
             (proposal.target, proposal.approval.requires_confirmation()),
@@ -946,6 +988,7 @@ mod tests {
                 &MovePolicy::default(),
                 Naming::reviewer(),
             )
+            .proposal
             .unwrap();
             assert_eq!(
                 proposal.target,
@@ -1024,6 +1067,7 @@ mod tests {
                 &policy,
                 Naming::reviewer(),
             )
+            .proposal
             .map(|p| p.approval.requires_confirmation());
             assert_eq!(actual, expected, "{} with {policy:?}", subject.track);
         }
@@ -1332,6 +1376,7 @@ mod tests {
                 &MovePolicy::default(),
                 Naming::reviewer(),
             )
+            .proposal
             .map(|p| (p.target, p.approval.requires_confirmation()));
             assert_eq!(actual, expected, "{name}");
         }

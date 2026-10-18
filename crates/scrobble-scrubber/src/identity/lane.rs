@@ -12,7 +12,7 @@ use super::mb::{MbError, MbLookup, MusicBrainz};
 use super::naming::{
     self, naming_question, NamingJudge, NamingQuestion, NamingVerdict, NAMING_PROMPT_VERSION,
 };
-use super::outcome::{Proof, Target};
+use super::outcome::{MovePolicy, Proof, Target};
 use super::provider::IDENTITY_PROVIDER;
 use super::research::{Prior, ResearchCase, Researcher};
 use super::resolve::{queries, Resolution, ResolveLimits, Resolver};
@@ -110,6 +110,9 @@ pub struct IdentityLane {
     researcher: Option<Researcher>,
     events: ScrubberEventBus,
     options: LaneOptions,
+    /// Which album moves derivation proposes, so only questions that bear on an edit are
+    /// asked.
+    moves: MovePolicy,
     /// Held for the lane's lifetime so only one process writes the log and paces MB.
     _lock: Option<std::fs::File>,
 }
@@ -196,12 +199,18 @@ impl IdentityLane {
             researcher: None,
             events: ScrubberEventBus::new(),
             options: LaneOptions::default(),
+            moves: MovePolicy::default(),
             _lock: None,
         }
     }
 
     pub(crate) fn with_researcher(mut self, researcher: Option<Researcher>) -> Self {
         self.researcher = researcher;
+        self
+    }
+
+    pub(crate) fn with_moves(mut self, moves: MovePolicy) -> Self {
+        self.moves = moves;
         self
     }
 
@@ -367,7 +376,7 @@ impl IdentityLane {
         };
         let snapshot = self.writer.reader().snapshot();
         let plays = library.plays.iter().map(|(key, plays)| (key, *plays));
-        for (key, case) in naming::naming_cases(plays, &snapshot) {
+        for (key, case) in naming::naming_cases(plays, &snapshot, &self.moves) {
             if stop.is_some_and(RunGeneration::is_cancelled) {
                 round.report.ended = LaneEnded::Cancelled;
                 break;
@@ -865,7 +874,7 @@ mod tests {
     use crate::identity::mb::{PrimaryType, ReleaseGroup};
     use crate::identity::mb::{RecordingId, ReleaseGroupId};
     use crate::identity::naming::NAMING_PROMPT;
-    use crate::identity::outcome::Outcome;
+    use crate::identity::outcome::{MoveMode, Outcome};
     use crate::identity::testing::{credit, group, FixtureMb, WALTZ_FOR_DEBBY_TAKE_2};
     use crate::queue::{QueueEvent, QueueEventKind};
     use crate::rewrite::create_no_op_edit;
@@ -1420,6 +1429,30 @@ Answer keep to use "Plastic Ono Band", musicbrainz to use "John Lennon/Plastic O
         let report = h.lane.run_round(10).await.unwrap();
         assert_eq!(report.naming_judged, 0, "the daily budget is spent");
         assert_eq!(backend.requests.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn no_album_naming_question_is_asked_when_edition_fixes_are_off() {
+        let backend = Arc::new(ScriptedBackend::default());
+        let h = harness(
+            FixtureMb::default(),
+            &[("John Lennon", "Mother", Some("Plastic Ono Band"), 5)],
+            Some(Adjudicator::new(Box::new(backend.clone()), 10)),
+        )
+        .await;
+        let mut lane = h.lane.with_moves(MovePolicy {
+            editions: MoveMode::Off,
+            ..MovePolicy::default()
+        });
+        lane.writer
+            .append(vec![settled_on(lennon("Mother"), plastic_ono_band())])
+            .await
+            .unwrap();
+
+        let report = lane.run_round(10).await.unwrap();
+
+        assert_eq!(report.naming_judged, 0);
+        assert_eq!(backend.requests.lock().unwrap().len(), 0);
     }
 
     #[tokio::test]

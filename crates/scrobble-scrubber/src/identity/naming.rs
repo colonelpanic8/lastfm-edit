@@ -8,9 +8,9 @@ use super::book::Snapshot;
 use super::canonical::AlbumMove;
 use super::llm::{ChoiceRequest, LlmBackend};
 use super::mb::ReleaseGroup;
-use super::outcome::{album_move, Chosen, Outcome};
+use super::outcome::{album_move, derive_first, MovePolicy, Naming, Outcome, RetitleJudge};
 use super::title::{fold, strip_edition};
-use crate::subject::ScrobbleKey;
+use crate::subject::{ScrobbleKey, Subject};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use uuid::Uuid;
@@ -205,31 +205,42 @@ fn render_case(case: &NamingCase) -> String {
     out
 }
 
-/// One case per unanswered question the deterministic outcomes of `plays`' keys raise,
-/// with the most-played key that raises it; most-played first.
+/// One case per question derivation waits on for `plays`' keys under `policy`, with the
+/// most-played key that raises it; most-played first. Only these answers can change an
+/// edit.
 pub(crate) fn naming_cases<'a>(
     plays: impl IntoIterator<Item = (&'a ScrobbleKey, u32)>,
     snapshot: &Snapshot,
+    policy: &MovePolicy,
 ) -> Vec<(ScrobbleKey, NamingCase)> {
     struct Album<'a> {
         group: &'a ReleaseGroup,
         keys: Vec<(u32, &'a ScrobbleKey)>,
     }
+    let naming = Naming {
+        verdicts: &snapshot.naming,
+        judge: RetitleJudge::Llm,
+    };
     let mut albums: BTreeMap<NamingQuestion, Album> = BTreeMap::new();
     for (key, key_plays) in plays {
         let Some(entry) = snapshot.keys.get(key) else {
             continue;
         };
-        for (outcome, chosen) in entry.plannable() {
-            let (Chosen::Deterministic, Some(canonical)) = (chosen, &outcome.canonical) else {
-                continue;
-            };
-            let Some(question) = naming_question(&key.artist, key.album.as_deref(), outcome) else {
-                continue;
-            };
-            if snapshot.naming.contains_key(&question) {
-                continue;
-            }
+        let subject = Subject {
+            artist: key.artist.clone(),
+            track: key.track.clone(),
+            album: key.album.clone(),
+            album_artist: None,
+        };
+        let Some((outcome, derived)) =
+            derive_first(&subject, entry.plannable(), &entry.rejected, policy, naming)
+        else {
+            continue;
+        };
+        let Some(canonical) = &outcome.canonical else {
+            continue;
+        };
+        for question in derived.waiting {
             albums
                 .entry(question)
                 .or_insert_with(|| Album {

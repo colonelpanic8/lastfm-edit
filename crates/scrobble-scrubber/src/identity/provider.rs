@@ -1,7 +1,7 @@
 //! The planning-side reader of the resolution log. Pure and fast: no network, ever.
 
 use super::book::ResolutionReader;
-use super::outcome::{derive_edit, MovePolicy, Naming, RetitleJudge};
+use super::outcome::{derive_first, MovePolicy, Naming, RetitleJudge};
 use crate::provider::{
     ActionProviderError, ChangeBatch, ScrubActionProvider, SuggestionWithContext,
 };
@@ -11,7 +11,7 @@ use lastfm_edit::Track;
 
 pub const IDENTITY_PROVIDER: &str = "musicbrainz_identity";
 
-/// Bump when [`derive_edit`] changes what it proposes, so resolved keys are re-planned.
+/// Bump when [`derive_first`] changes what it proposes, so resolved keys are re-planned.
 const DERIVE_VERSION: u32 = 3;
 
 pub struct IdentityProvider {
@@ -60,16 +60,14 @@ impl ScrubActionProvider for IdentityProvider {
             let Some(entry) = snapshot.keys.get(&subject.key()) else {
                 continue;
             };
-            let proposal = entry.plannable().into_iter().find_map(|(outcome, chosen)| {
-                derive_edit(
-                    &subject,
-                    outcome,
-                    chosen,
-                    &entry.rejected,
-                    &self.moves,
-                    naming,
-                )
-            });
+            let proposal = derive_first(
+                &subject,
+                entry.plannable(),
+                &entry.rejected,
+                &self.moves,
+                naming,
+            )
+            .and_then(|(_, derived)| derived.proposal);
             if let Some(proposal) = proposal {
                 let suggestion = SuggestionWithContext::edit_with_confirmation(
                     proposal.edit,
