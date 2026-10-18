@@ -693,7 +693,10 @@ fn precedents(queue: &[EditIntent], artist: &str) -> Vec<Precedent> {
     let mut decided: Vec<&EditIntent> = queue
         .iter()
         .filter(|intent| {
-            intent.provider == IDENTITY_PROVIDER
+            intent
+                .sources
+                .values()
+                .any(|provider| provider == IDENTITY_PROVIDER)
                 && intent.subject.artist == artist
                 && matches!(
                     intent.state,
@@ -932,6 +935,7 @@ mod tests {
                         provider: IDENTITY_PROVIDER.into(),
                         requires_approval: true,
                         rationale: None,
+                        sources: Default::default(),
                     },
                 },
                 QueueEvent {

@@ -23,6 +23,9 @@ pub struct PlanReport {
     pub rules_proposed: u64,
     /// Dry-run: suggestions reported but not enqueued.
     pub reported_only: u64,
+    /// Intents awaiting approval that were replaced by a different merge.
+    #[serde(default)]
+    pub superseded: u64,
 }
 
 /// Why an execution pass returned.

@@ -21,8 +21,11 @@ let mut identity = Identity::open(IdentityConfig {
 }).await?;
 
 let planner = Planner::new(store.clone(), state.clone())
-    .with_provider(identity.provider())
-    .with_provider(RewriteRulesScrubActionProvider::from_rules(rules).with_identity(identity.reader()));
+    .with_corrector(identity.provider(), Ceiling::Auto)
+    .with_corrector(
+        RewriteRulesScrubActionProvider::from_rules(rules).with_identity(identity.reader()),
+        Ceiling::Auto,
+    );
 
 let lane = identity.lane(store.clone()).await?.with_event_bus(bus.clone());
 tokio::spawn(lane.run(generation.clone()));
@@ -30,28 +33,40 @@ tokio::spawn(lane.run(generation.clone()));
 
 ```toml
 # ~/.config/scrobble-scrubber/config.toml
-[identity]
-enabled = true                  # run the resolving lane inside `run`
+[[corrector]]                   # listed first: wins conflicting fields
+kind = "musicbrainz"            # listing it runs the resolving lane inside `run`
+mode = "auto"                   # "review" or "auto" (see Correctors)
 contact = "you@example.com"     # MusicBrainz asks clients for contact info
 llm = "claude-cli"              # adjudicate with `claude -p` on your subscription
-llm_research = true             # let it research unresolved keys on the web (default with claude-cli)
-llm_research_budget = 20        # research calls per day
+research = true                 # let it research unresolved keys on the web (default with claude-cli)
+research_budget = 20            # research calls per day
+moves = { compilations = "auto", editions = "auto", singles = "review" }  # each "off", "review" or "auto"
 
-[identity.moves]                # each "off", "review" or "auto"
-compilations = "auto"          # greatest hits / compilations -> the original album
-editions = "auto"              # "X (Deluxe Edition)" -> "X"
-singles = "review"             # single / EP -> the album (never auto)
+[[corrector]]
+kind = "rules"
+mode = "auto"
 ```
 
-Changing `[identity.moves]` needs no MusicBrainz traffic. The provider reports the policy as its generation, so the next plan re-plans every resolved key under the new setting. "auto" only auto-applies proven moves; weaker evidence still goes to review.
+Changing `moves` needs no MusicBrainz traffic. The provider reports the policy as its generation, so the next plan re-plans every resolved key under the new setting. "auto" only auto-applies proven moves; weaker evidence still goes to review.
 
-The LLM defaults to `claude -p` on that CLI's own login, so a Claude subscription works and no API key is needed. Set `llm = "claude-cli"` under `[identity]` (and optionally `llm_model`, default `opus`). It runs with no tools, settings, MCP servers or session history, from the temp directory, and `--json-schema` holds the answer to the allowed option ids. The `SCRUBBER_LLM_*` environment variables override the config. `SCRUBBER_LLM_PROVIDER=command` with a JSON argv in `SCRUBBER_LLM_COMMAND` runs any other harness CLI (`{schema}`, `{system}` and `{model}` are substituted; the case arrives on stdin). `anthropic` and `openai` call those HTTP APIs with a key. Research needs a command backend: `claude-cli` runs `claude -p` with only WebSearch and WebFetch, and `command` takes its argv from `SCRUBBER_LLM_RESEARCH_COMMAND`.
+The LLM defaults to `claude -p` on that CLI's own login, so a Claude subscription works and no API key is needed. Set `llm = "claude-cli"` on the `musicbrainz` corrector (and optionally `llm_model`, default `opus`). It runs with no tools, settings, MCP servers or session history, from the temp directory, and `--json-schema` holds the answer to the allowed option ids. The `SCRUBBER_LLM_*` environment variables override the config. `SCRUBBER_LLM_PROVIDER=command` with a JSON argv in `SCRUBBER_LLM_COMMAND` runs any other harness CLI (`{schema}`, `{system}` and `{model}` are substituted; the case arrives on stdin). `anthropic` and `openai` call those HTTP APIs with a key. Research needs a command backend: `claude-cli` runs `claude -p` with only WebSearch and WebFetch, and `command` takes its argv from `SCRUBBER_LLM_RESEARCH_COMMAND`.
+
+`identity resolve|status|show` read the `musicbrainz` entry, or its defaults when it isn't listed.
 
 ```text
 $ scrobble-scrubber identity resolve --budget 50
 $ scrobble-scrubber identity status
 $ scrobble-scrubber identity show "Eric Clapton" "Cocaine" --album "The Cream of Clapton"
 ```
+
+## Correctors
+
+A corrector is a provider with a mode. `[[corrector]]` entries are listed in priority order. A kind not listed is off. With no entries, the rules corrector runs alone. An unknown or repeated kind is a config error.
+
+- **Mode is a ceiling.** `review` sends everything the corrector proposes to a human. `auto` keeps the corrector's own judgment, so research and other weak evidence still go to review.
+- **Merge.** All correctors analyze a subject, then their edits merge into one, field by field (track, artist, album, album artist). Each field takes the value of the best-ranked corrector that changes it. The merge needs review if any contributor does. The intent records which corrector set each field (`sources`), and its `provider` is the best-ranked contributor.
+- **Supersede.** An intent awaiting approval is merged again with new proposals, its fields ranked by their sources. If the merge differs, the old intent is abandoned with reason `superseded` and the merge is queued. Ready and in-progress intents are never touched, because the executor may be claiming them. A merge a human already rejected is never queued.
+- **No ping-pong.** Once an edit is applied, a worse-ranked corrector may not change the fields a better one set on the resulting scrobbles. This looks one edit back.
 
 ## Shape
 
@@ -85,7 +100,7 @@ The lane holds an exclusive lock on `<cache_dir>/lane.lock`, so only one process
 3. **The LLM picks an option for ambiguous cases.** It chooses an option id, or keep, or unsure. Nothing it writes reaches last.fm; the strings come from MusicBrainz. Each answer is logged with the evidence hash, model, and prompt version, and the same evidence is never asked about twice. With no LLM configured, or after an unsure answer, the options are offered to the human one at a time through the normal approve/reject queue.
 4. **Research is the last resort.** After resolution and the choice LLM, the lane researches the most-played keys still unsettled: not-found keys, cases the LLM was unsure about, and title-only matches of keys that have an album. See [Research](#research).
 5. **Rejections feed back through the log.** The lane records each rejected identity intent as `HumanRejected`. That excludes the target from future proposals, and the new event puts the key back in the change feed, so the next option gets proposed.
-6. **The planner stays pure.** `IdentityProvider` maps each subject's key to its plannable outcomes and derives at most one edit. The planner drains `changes_since(cursor)` after its time batches. A key resolved after its time range was planned is still planned exactly once, and `occupied` absorbs any overlap.
+6. **The planner stays pure.** `IdentityProvider` maps each subject's key to its plannable outcomes and derives at most one edit. The planner drains `changes_since(cursor)` after its time batches. A key resolved after its time range was planned is still planned exactly once, and `occupants` absorbs any overlap.
 
 **Research.** An LLM with web search gets the scrobble, the user's other albums for the title, and what the resolver tried. It answers with a MusicBrainz recording id and release group id, not strings. Ids that aren't UUIDs count as no answer.
 
@@ -144,7 +159,7 @@ Three designs were sketched in parallel and judged against a six-criterion rubri
 
 ## Tradeoffs accepted
 
-- **Two edits for some scrobbles.** We accept that a key resolved after the rules provider already cleaned it may get a second edit, in exchange for keeping rules fast and independent.
+- **Two edits for some scrobbles.** We accept that a key resolved after the rules provider's edit was approved or applied may get a second edit, in exchange for keeping rules fast and independent. An edit still awaiting approval is merged instead (see [Correctors](#correctors)).
 - **Occasional ISRC errors.** ISRC equivalence can be wrong when MB data entry is wrong. We accept that, mitigated by the length tolerance and never moving off live or remix albums, in exchange for auto-fixing the most common compilation case.
 - **Plain albums never move.** We accept missing the rare studio-album reissue under a new title, in exchange for one request per key on the majority path.
 - **Slower human walk.** We accept walking ambiguous options one at a time through approve/reject, in exchange for needing no new review UI.

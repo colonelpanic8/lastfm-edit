@@ -45,6 +45,7 @@ async fn full_round_trip_through_fresh_handles() {
                     provider: "rewrite_rules".into(),
                     requires_approval: true,
                     rationale: None,
+                    sources: Default::default(),
                 },
             },
             QueueEvent {
@@ -142,6 +143,7 @@ async fn reinstate_reopens_intent_and_lifts_dismissal() {
                 provider: "rewrite_rules".into(),
                 requires_approval: true,
                 rationale: None,
+                sources: Default::default(),
             },
         }])
         .await
@@ -179,6 +181,7 @@ async fn torn_queue_tail_is_tolerated() {
                 provider: "rewrite_rules".into(),
                 requires_approval: false,
                 rationale: None,
+                sources: Default::default(),
             },
         }])
         .await

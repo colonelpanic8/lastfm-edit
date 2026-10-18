@@ -17,6 +17,7 @@ pub mod feed;
 pub mod filters;
 pub mod handle;
 pub mod identity;
+pub mod merge;
 pub mod ops;
 pub mod planner;
 pub mod policy;
@@ -37,11 +38,12 @@ pub use executor::{Executor, ExecutorOptions};
 pub use feed::{FeedBatch, ScrubFeed};
 pub use filters::{ReleaseFilterConfig, ReleaseFilterType};
 pub use handle::{bridge_sync_events, ScrubberActor, ScrubberCommand, ScrubberHandle};
+pub use merge::EditField;
 pub use ops::{
     approve_intent, approve_pending_rule, reinstate_intent, reject_intent, reject_pending_rule,
 };
 pub use planner::{Planner, RULES_PROVIDER};
-pub use policy::{EditDecision, Policy};
+pub use policy::{Ceiling, EditDecision, Policy};
 pub use projection::{
     execution_order, review_status, work_queue_view, work_status, ReviewStatus, WorkItem,
     WorkQueueView, WorkStatus,

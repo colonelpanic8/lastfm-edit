@@ -45,7 +45,7 @@ use std::time::Duration;
 /// Bump whenever resolve/canonical/title/outcome policy changes meaning. Older records
 /// fold to `Stale`: planning ignores them and the lane re-resolves them (mostly from
 /// cache).
-pub(crate) const RESOLVER_VERSION: u32 = 2;
+pub const RESOLVER_VERSION: u32 = 2;
 
 pub struct IdentityConfig {
     pub state: Arc<dyn ScrubberState>,

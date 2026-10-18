@@ -76,6 +76,7 @@ async fn queue_ready_intent(state: &dyn ScrubberState) -> Uuid {
                 provider: "rewrite_rules".into(),
                 requires_approval: false,
                 rationale: None,
+                sources: Default::default(),
             },
         }])
         .await
@@ -519,6 +520,7 @@ async fn queue_intent_for(
                 provider: "rewrite_rules".into(),
                 requires_approval: false,
                 rationale: None,
+                sources: Default::default(),
             },
         }])
         .await

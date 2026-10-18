@@ -168,6 +168,7 @@ mod tests {
             provider: "rewrite_rules".into(),
             requires_approval: false,
             rationale: None,
+            sources: Default::default(),
             state,
             instances: BTreeMap::new(),
             created_at,
