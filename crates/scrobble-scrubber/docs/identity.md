@@ -124,7 +124,7 @@ The lane holds an exclusive lock on `<cache_dir>/lane.lock`, so only one process
   - any album move is an edition fix or a move off a compilation, onto a plain Album that wasn't preceded by a single;
   - any title change is packaging only.
 
-  Everything else goes to review. `Approval::Auto` can only be constructed by `approval()`. A rewrite rule that requires MusicBrainz confirmation is confirmed only by a settled outcome with one of those two proofs.
+  Everything else goes to review. `Approval::Auto` can only be constructed by `approval()`. A rewrite rule that requires MusicBrainz confirmation is confirmed only by a settled outcome with one of those two proofs. Until then (unresolved, deferred, not found, or settled without proof) the rule still applies but its edit goes to review. The rules provider follows the log's change feed, so once the key settles with proof it is re-planned: a confirmation replaces the waiting edit with one that auto-applies, and a contradiction drops the rule's part of it.
 
 **What it deliberately does not do.**
 

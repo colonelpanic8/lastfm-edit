@@ -612,7 +612,8 @@ impl Planner {
     }
 
     /// Merge one subject's fresh proposals with the intent awaiting approval on it, if any,
-    /// and queue the result unless it matches that intent.
+    /// and queue the result unless it matches that intent and still needs approval. A
+    /// match that no longer needs approval replaces the intent with a Ready one.
     async fn record_merge(
         &self,
         subject: &Subject,
@@ -638,9 +639,10 @@ impl Planner {
         let Some(merged) = merge(&proposals, owned) else {
             return Ok(());
         };
-        if superseded
-            .as_ref()
-            .is_some_and(|(_, open)| *open == changes(&merged.edit))
+        if self.policy.requires_approval(merged.requires_confirmation)
+            && superseded
+                .as_ref()
+                .is_some_and(|(_, open)| *open == changes(&merged.edit))
         {
             return Ok(());
         }

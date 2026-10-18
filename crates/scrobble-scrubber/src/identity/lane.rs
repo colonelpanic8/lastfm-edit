@@ -21,7 +21,7 @@ use crate::run::RunGeneration;
 use crate::state::ScrubberState;
 use crate::subject::ScrobbleKey;
 use scrobble_store::Storage;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -278,7 +278,12 @@ impl IdentityLane {
             llm_calls_left: self.llm_calls_left(&snapshot, now),
             llm_down: false,
         };
-        let worklist = self.worklist(&library, &snapshot, now, round.llm_calls_left > 0);
+        let queued: BTreeSet<ScrobbleKey> = queue
+            .iter()
+            .filter(|intent| intent.state.is_open())
+            .map(|intent| intent.subject.key())
+            .collect();
+        let worklist = self.worklist(&library, &snapshot, &queued, now, round.llm_calls_left > 0);
 
         for item in worklist {
             if stop.is_some_and(RunGeneration::is_cancelled) {
@@ -483,11 +488,12 @@ impl IdentityLane {
         &self,
         library: &Library,
         snapshot: &Snapshot,
+        queued: &BTreeSet<ScrobbleKey>,
         now: u64,
         llm_budget_left: bool,
     ) -> Vec<WorkItem> {
         let not_found_retry = self.options.not_found_retry.as_secs();
-        let mut items: Vec<(bool, WorkItem)> = library
+        let mut items: Vec<((bool, bool), WorkItem)> = library
             .plays
             .iter()
             .filter_map(|(key, &plays)| {
@@ -512,7 +518,7 @@ impl IdentityLane {
                     || !parsed.identity.is_empty()
                     || !library.siblings(key).is_empty();
                 Some((
-                    trigger,
+                    (queued.contains(key), trigger),
                     WorkItem {
                         key: key.clone(),
                         plays,
@@ -521,9 +527,9 @@ impl IdentityLane {
                 ))
             })
             .collect();
-        items.sort_by(|(a_trigger, a), (b_trigger, b)| {
-            b_trigger.cmp(a_trigger).then(b.plays.cmp(&a.plays))
-        });
+        // Keys with an open intent first: their answer settles edits a human would otherwise
+        // review.
+        items.sort_by(|(a_rank, a), (b_rank, b)| b_rank.cmp(a_rank).then(b.plays.cmp(&a.plays)));
         items.into_iter().map(|(_, item)| item).collect()
     }
 
@@ -908,6 +914,59 @@ mod tests {
         assert_eq!(
             (report.keys_attempted, report.ended),
             (1, LaneEnded::WorklistEmpty)
+        );
+    }
+
+    #[tokio::test]
+    async fn keys_with_an_open_intent_resolve_before_the_rest() {
+        let mb = FixtureMb::default().wild_horses().four_on_six();
+        let mut h = harness(
+            mb,
+            &[
+                (
+                    "The Rolling Stones",
+                    "Wild Horses - 2009 Re-Mastered Digital Version",
+                    Some("Sticky Fingers"),
+                    9,
+                ),
+                (
+                    "Wes Montgomery",
+                    "Four on Six",
+                    Some("Smokin' at the Half Note"),
+                    1,
+                ),
+            ],
+            None,
+        )
+        .await;
+        let subject = Subject {
+            artist: "Wes Montgomery".into(),
+            track: "Four on Six".into(),
+            album: Some("Smokin' at the Half Note".into()),
+            album_artist: None,
+        };
+        let mut edit = create_no_op_edit(&subject.representative_track(0, None));
+        edit.album_name = Some("Smokin' at the Half Note (Live)".into());
+        h.state
+            .append_queue_events(&[QueueEvent {
+                id: Uuid::new_v4(),
+                at: 1,
+                kind: QueueEventKind::Created {
+                    subject,
+                    proposed: Box::new(edit),
+                    provider: "rewrite_rules".into(),
+                    requires_approval: true,
+                    rationale: None,
+                    sources: Default::default(),
+                },
+            }])
+            .await
+            .unwrap();
+
+        h.lane.run_round(1).await.unwrap();
+        assert_eq!(
+            log(&h.state).await,
+            vec![row("Four on Six", "Smokin' at the Half Note", "resolved")]
         );
     }
 
