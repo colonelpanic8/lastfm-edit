@@ -1,7 +1,7 @@
 //! The planning-side reader of the resolution log. Pure and fast: no network, ever.
 
 use super::book::ResolutionReader;
-use super::outcome::{derive_edit, MovePolicy};
+use super::outcome::{derive_edit, MovePolicy, Naming, RetitleJudge};
 use crate::provider::{
     ActionProviderError, ChangeBatch, ScrubActionProvider, SuggestionWithContext,
 };
@@ -11,14 +11,22 @@ use lastfm_edit::Track;
 
 pub const IDENTITY_PROVIDER: &str = "musicbrainz_identity";
 
+/// Bump when [`derive_edit`] changes what it proposes, so resolved keys are re-planned.
+const DERIVE_VERSION: u32 = 2;
+
 pub struct IdentityProvider {
     reader: ResolutionReader,
     moves: MovePolicy,
+    retitles: RetitleJudge,
 }
 
 impl IdentityProvider {
-    pub fn new(reader: ResolutionReader, moves: MovePolicy) -> Self {
-        Self { reader, moves }
+    pub fn new(reader: ResolutionReader, moves: MovePolicy, retitles: RetitleJudge) -> Self {
+        Self {
+            reader,
+            moves,
+            retitles,
+        }
     }
 }
 
@@ -37,6 +45,10 @@ impl ScrubActionProvider for IdentityProvider {
         _pending_rules: Option<&[PendingRule]>,
     ) -> Result<Vec<(usize, Vec<SuggestionWithContext>)>, Self::Error> {
         let snapshot = self.reader.snapshot();
+        let naming = Naming {
+            verdicts: &snapshot.naming,
+            judge: self.retitles,
+        };
         let mut results = Vec::new();
         for (idx, track) in tracks.iter().enumerate() {
             let subject = Subject {
@@ -49,7 +61,14 @@ impl ScrubActionProvider for IdentityProvider {
                 continue;
             };
             let proposal = entry.plannable().into_iter().find_map(|(outcome, chosen)| {
-                derive_edit(&subject, outcome, chosen, &entry.rejected, &self.moves)
+                derive_edit(
+                    &subject,
+                    outcome,
+                    chosen,
+                    &entry.rejected,
+                    &self.moves,
+                    naming,
+                )
             });
             if let Some(proposal) = proposal {
                 let suggestion = SuggestionWithContext::edit_with_confirmation(
@@ -69,7 +88,11 @@ impl ScrubActionProvider for IdentityProvider {
     }
 
     fn generation(&self) -> Option<String> {
-        Some(self.moves.fingerprint())
+        Some(format!(
+            "{} retitles={:?} derive={DERIVE_VERSION}",
+            self.moves.fingerprint(),
+            self.retitles
+        ))
     }
 
     fn changes_since(&self, cursor: u64) -> Option<ChangeBatch> {
@@ -239,7 +262,7 @@ mod tests {
             ),
         ]);
 
-        let results = IdentityProvider::new(reader, MovePolicy::default())
+        let results = IdentityProvider::new(reader, MovePolicy::default(), RetitleJudge::Llm)
             .analyze_tracks(&[horses, four, cocaine, unresolved], None, None)
             .await
             .unwrap();

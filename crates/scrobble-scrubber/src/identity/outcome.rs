@@ -3,10 +3,14 @@
 
 use super::canonical::{album_move_allowed, AlbumMove, Canonical, Rung};
 use super::mb::{RecordingId, ReleaseGroup};
+use super::naming::{
+    classify_edition_fix, EditionFix, NamingJudgement, NamingQuestion, NamingVerdict,
+};
 use super::title::{classify_title_change, fold, parse_title, strip_edition, TitleChange};
 use crate::rewrite::create_no_op_edit;
 use crate::subject::Subject;
 use lastfm_edit::ScrobbleEdit;
+use std::collections::HashMap;
 
 /// ISRC-linked duplicates further apart than this are plausibly different edits or
 /// mislabeled, so they never auto-apply.
@@ -146,19 +150,59 @@ pub(crate) enum Chosen {
     Adjudicated,
 }
 
+/// Who answers a retitle's naming question before anyone has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RetitleJudge {
+    /// The lane asks the LLM; a deterministic retitle waits for its answer.
+    Llm,
+    /// No LLM is configured: retitles go to review.
+    Reviewer,
+}
+
+/// The naming answers a derivation consults.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Naming<'a> {
+    pub verdicts: &'a HashMap<NamingQuestion, NamingJudgement>,
+    pub judge: RetitleJudge,
+}
+
+/// What a proposal does to the album.
+enum AlbumPart<'a> {
+    Unchanged,
+    /// To the canonical release group's title. `naming` is the verdict that allowed a
+    /// retitle.
+    Move {
+        kind: AlbumMove,
+        canonical: &'a Canonical,
+        naming: Option<&'a NamingJudgement>,
+    },
+    /// An edition retitle no verdict allowed: a person decides.
+    RetitleForReview {
+        canonical: &'a Canonical,
+        naming: Option<&'a NamingJudgement>,
+    },
+    /// The user's title stays over the group's; only its edition suffix goes.
+    KeepTitle {
+        canonical: &'a Canonical,
+        naming: &'a NamingJudgement,
+    },
+}
+
 /// Pure: subject + outcome -> at most one proposal. `None` when nothing would change or
 /// a human rejected the target for this subject.
 ///
 /// Title and album keep the user's spelling when, with the packaging or edition suffix
 /// removed, it folds equal to the MB text. Moves off a compilation, single or EP set the
 /// album artist to the canonical credit (the executor otherwise keeps "Various Artists");
-/// an edition fix leaves it alone.
+/// an edition fix leaves it alone. An edition fix that retitles the album follows its
+/// naming verdict.
 pub(crate) fn derive_edit(
     subject: &Subject,
     outcome: &Outcome,
     chosen: Chosen,
     rejected: &[Target],
     policy: &MovePolicy,
+    naming: Naming<'_>,
 ) -> Option<Proposal> {
     let parsed = parse_title(&subject.track);
     let title_change = match classify_title_change(&parsed, &outcome.title) {
@@ -172,11 +216,7 @@ pub(crate) fn derive_edit(
         }
         change => change,
     };
-    let album_move = album_move(subject.album.as_deref(), outcome)
-        .filter(|(kind, _)| policy.mode(*kind) != MoveMode::Off);
-    if title_change == TitleChange::None && album_move.is_none() {
-        return None;
-    }
+    let album = album_part(subject, outcome, chosen, policy, naming);
 
     let title = match title_change {
         TitleChange::None => subject.track.clone(),
@@ -184,12 +224,18 @@ pub(crate) fn derive_edit(
             in_users_spelling(&parsed.base, &outcome.title)
         }
     };
-    let (album, album_artist) = match (album_move, &subject.album) {
-        (Some((kind, canonical)), Some(scrobbled)) => (
-            Some(in_users_spelling(
-                &strip_edition(scrobbled),
-                &canonical.group.title,
-            )),
+    let moved = |canonical: &Canonical| {
+        subject
+            .album
+            .as_deref()
+            .map(|scrobbled| in_users_spelling(&strip_edition(scrobbled), &canonical.group.title))
+    };
+    let (album_name, album_artist) = match &album {
+        AlbumPart::Unchanged => (subject.album.clone(), subject.album_artist.clone()),
+        AlbumPart::Move {
+            kind, canonical, ..
+        } => (
+            moved(canonical),
             match kind {
                 AlbumMove::EditionToGroup => subject.album_artist.clone(),
                 AlbumMove::FromCompilation | AlbumMove::FromSingleOrEp => {
@@ -197,14 +243,23 @@ pub(crate) fn derive_edit(
                 }
             },
         ),
-        _ => (subject.album.clone(), subject.album_artist.clone()),
+        AlbumPart::RetitleForReview { canonical, .. } => {
+            (moved(canonical), subject.album_artist.clone())
+        }
+        AlbumPart::KeepTitle { .. } => (
+            subject.album.as_deref().map(strip_edition),
+            subject.album_artist.clone(),
+        ),
     };
     let target = Target {
         title,
-        album,
+        album: album_name,
         album_artist,
     };
-    if rejected.contains(&target) {
+    let unchanged = target.title == subject.track
+        && target.album == subject.album
+        && target.album_artist == subject.album_artist;
+    if unchanged || rejected.contains(&target) {
         return None;
     }
 
@@ -215,10 +270,68 @@ pub(crate) fn derive_edit(
 
     Some(Proposal {
         edit,
-        approval: approval(chosen, &outcome.proof, title_change, album_move, policy),
-        rationale: rationale(subject, outcome, chosen, title_change, album_move),
+        approval: approval(chosen, &outcome.proof, title_change, &album, policy),
+        rationale: rationale(subject, outcome, chosen, title_change, &album),
         target,
     })
+}
+
+fn album_part<'a>(
+    subject: &Subject,
+    outcome: &'a Outcome,
+    chosen: Chosen,
+    policy: &MovePolicy,
+    naming: Naming<'a>,
+) -> AlbumPart<'a> {
+    let Some((kind, canonical)) = album_move(subject.album.as_deref(), outcome)
+        .filter(|(kind, _)| policy.mode(*kind) != MoveMode::Off)
+    else {
+        return AlbumPart::Unchanged;
+    };
+    let question = match (kind, subject.album.as_deref()) {
+        (AlbumMove::EditionToGroup, Some(album)) => {
+            match classify_edition_fix(&subject.artist, album, &canonical.group.title) {
+                EditionFix::Retitle(question) => Some(question),
+                EditionFix::SuffixOnly => None,
+            }
+        }
+        _ => None,
+    };
+    let Some(question) = question else {
+        return AlbumPart::Move {
+            kind,
+            canonical,
+            naming: None,
+        };
+    };
+    match naming.verdicts.get(&question) {
+        Some(judgement) => match judgement.verdict {
+            NamingVerdict::MusicBrainz => AlbumPart::Move {
+                kind,
+                canonical,
+                naming: Some(judgement),
+            },
+            NamingVerdict::Keep if question.album != subject.album.as_deref().unwrap_or("") => {
+                AlbumPart::KeepTitle {
+                    canonical,
+                    naming: judgement,
+                }
+            }
+            NamingVerdict::Keep => AlbumPart::Unchanged,
+            NamingVerdict::Unsure => AlbumPart::RetitleForReview {
+                canonical,
+                naming: Some(judgement),
+            },
+        },
+        // The lane asks about deterministic outcomes; until it answers, the album waits.
+        None if naming.judge == RetitleJudge::Llm && chosen == Chosen::Deterministic => {
+            AlbumPart::Unchanged
+        }
+        None => AlbumPart::RetitleForReview {
+            canonical,
+            naming: None,
+        },
+    }
 }
 
 /// The user's own text when it already says what MusicBrainz says, so typography
@@ -252,7 +365,7 @@ fn rationale(
     outcome: &Outcome,
     chosen: Chosen,
     title: TitleChange,
-    album: Option<(AlbumMove, &Canonical)>,
+    album: &AlbumPart,
 ) -> String {
     let mut lines = Vec::new();
     match title {
@@ -266,20 +379,44 @@ fn rationale(
             subject.track, outcome.title
         )),
     }
-    if let Some((kind, canonical)) = album {
-        let from = outcome
-            .scrobbled_group
-            .as_ref()
-            .map_or_else(String::new, ReleaseGroup::describe);
+    let from = outcome
+        .scrobbled_group
+        .as_ref()
+        .map_or_else(String::new, ReleaseGroup::describe);
+    let moved = |kind: AlbumMove, canonical: &Canonical| {
         let why = match kind {
             AlbumMove::EditionToGroup => "edition title of the same release group",
             AlbumMove::FromCompilation => "off a compilation",
             AlbumMove::FromSingleOrEp => "off a single or EP",
         };
-        lines.push(format!(
-            "Album: {from} -> {} ({why})",
-            canonical.group.describe()
-        ));
+        format!("Album: {from} -> {} ({why})", canonical.group.describe())
+    };
+    match album {
+        AlbumPart::Unchanged => {}
+        AlbumPart::Move {
+            kind,
+            canonical,
+            naming,
+        } => {
+            lines.push(moved(*kind, canonical));
+            lines.extend(naming.map(naming_line));
+        }
+        AlbumPart::RetitleForReview { canonical, naming } => {
+            lines.push(moved(AlbumMove::EditionToGroup, canonical));
+            lines.push(naming.map_or_else(
+                || "Naming: the title changes beyond its edition suffix; for review".to_string(),
+                naming_line,
+            ));
+        }
+        AlbumPart::KeepTitle { canonical, naming } => {
+            let album = subject.album.as_deref().unwrap_or_default();
+            lines.push(format!(
+                "Album: \"{album}\" -> \"{}\" (edition suffix stripped; MusicBrainz titles it \"{}\")",
+                strip_edition(album),
+                canonical.group.title
+            ));
+            lines.push(naming_line(naming));
+        }
     }
     lines.push(match &outcome.proof {
         Proof::SameRecording => "Proof: the same MusicBrainz recording".to_string(),
@@ -299,15 +436,27 @@ fn rationale(
     lines.join("\n")
 }
 
-pub(crate) fn approval(
+fn naming_line(judgement: &NamingJudgement) -> String {
+    let verdict = match judgement.verdict {
+        NamingVerdict::Keep => "keep your title",
+        NamingVerdict::MusicBrainz => "use MusicBrainz's title",
+        NamingVerdict::Unsure => "unsure",
+    };
+    format!(
+        "Naming: {verdict} ({}): {}",
+        judgement.by.describe(),
+        judgement.reason
+    )
+}
+
+fn approval(
     chosen: Chosen,
     proof: &Proof,
     title: TitleChange,
-    album: Option<(AlbumMove, &Canonical)>,
+    album: &AlbumPart,
     policy: &MovePolicy,
 ) -> Approval {
-    let proven = proof.is_proven();
-    let album_safe = album.is_none_or(|(kind, canonical)| {
+    let move_safe = |kind: AlbumMove, canonical: &Canonical| {
         let kind_safe = match kind {
             AlbumMove::EditionToGroup => true,
             AlbumMove::FromCompilation => credited_album_artist(canonical).is_some(),
@@ -317,9 +466,17 @@ pub(crate) fn approval(
             && policy.mode(kind) == MoveMode::Auto
             && canonical.rung == Rung::PlainAlbum
             && !canonical.single_first
-    });
+    };
+    let album_safe = match album {
+        AlbumPart::Unchanged => true,
+        AlbumPart::Move {
+            kind, canonical, ..
+        } => move_safe(*kind, canonical),
+        AlbumPart::KeepTitle { canonical, .. } => move_safe(AlbumMove::EditionToGroup, canonical),
+        AlbumPart::RetitleForReview { .. } => false,
+    };
     let title_safe = matches!(title, TitleChange::None | TitleChange::PackagingOnly);
-    if chosen == Chosen::Deterministic && proven && album_safe && title_safe {
+    if chosen == Chosen::Deterministic && proof.is_proven() && album_safe && title_safe {
         Approval::Auto(AutoProof(()))
     } else {
         Approval::Review
@@ -327,9 +484,21 @@ pub(crate) fn approval(
 }
 
 #[cfg(test)]
+impl Naming<'static> {
+    /// No LLM and no verdicts.
+    pub(crate) fn reviewer() -> Self {
+        Self {
+            verdicts: Box::leak(Box::default()),
+            judge: RetitleJudge::Reviewer,
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::super::canonical::examples::*;
     use super::super::mb::{ArtistCredit, PrimaryType, SecondaryType};
+    use super::super::naming::NamingJudge;
     use super::*;
 
     const ISRC: &str = "NLF057790024";
@@ -410,6 +579,7 @@ mod tests {
             Chosen::Deterministic,
             &[],
             &MovePolicy::default(),
+            Naming::reviewer(),
         )
         .unwrap();
         assert_eq!(
@@ -461,14 +631,6 @@ mod tests {
             "1971-08-14",
             credit(&[("the-who", "The Who", "")]),
         );
-        let mingus_ah_um = group(
-            "mingus-ah-um",
-            "Mingus Ah Um",
-            PrimaryType::Album,
-            &[],
-            "1959-10",
-            credit(&[("charles-mingus", "Charles Mingus", "")]),
-        );
         let cases = [
             (
                 subject(
@@ -496,17 +658,6 @@ mod tests {
                 whos_next,
                 target("Won't Get Fooled Again", "Who's Next", None),
             ),
-            (
-                subject(
-                    "Charles Mingus",
-                    "Better Git It in Your Soul",
-                    "AH UM - 50th Anniversary (Legacy Edition)",
-                    None,
-                ),
-                "Better Git It in Your Soul",
-                mingus_ah_um,
-                target("Better Git It in Your Soul", "Mingus Ah Um", None),
-            ),
         ];
         for (subject, title, group, expected) in cases {
             let outcome = Outcome {
@@ -522,6 +673,7 @@ mod tests {
                 Chosen::Deterministic,
                 &[],
                 &MovePolicy::default(),
+                Naming::reviewer(),
             )
             .unwrap();
             assert_eq!(
@@ -534,6 +686,151 @@ mod tests {
     }
 
     #[test]
+    fn edition_retitles_follow_the_albums_naming_verdict() {
+        let group = group(
+            "8be83468-4917-390d-82b6-d890f058cd22",
+            "John Lennon/Plastic Ono Band",
+            PrimaryType::Album,
+            &[],
+            "1970-12-11",
+            credit(&[("john-lennon", "John Lennon", "")]),
+        );
+        let question = NamingQuestion {
+            artist: "John Lennon".into(),
+            album: "Plastic Ono Band".into(),
+            title: "John Lennon/Plastic Ono Band".into(),
+        };
+        let judged = |verdict| {
+            HashMap::from([(
+                question.clone(),
+                NamingJudgement {
+                    verdict,
+                    reason: "Restores the official title.".into(),
+                    by: NamingJudge::Llm {
+                        model: "claude:opus".into(),
+                        prompt_version: 1,
+                    },
+                    at: 1,
+                },
+            )])
+        };
+        let no_verdicts = HashMap::new();
+        let musicbrainz = judged(NamingVerdict::MusicBrainz);
+        let keep = judged(NamingVerdict::Keep);
+        let unsure = judged(NamingVerdict::Unsure);
+        let retitled = |track: &str| target(track, "John Lennon/Plastic Ono Band", None);
+
+        let cases = [
+            (
+                "musicbrainz: retitled automatically",
+                "Mother",
+                "Plastic Ono Band",
+                &musicbrainz,
+                RetitleJudge::Llm,
+                Some((retitled("Mother"), false)),
+            ),
+            (
+                "keep: no album change",
+                "Mother",
+                "Plastic Ono Band",
+                &keep,
+                RetitleJudge::Llm,
+                None,
+            ),
+            (
+                "keep: the edition suffix still goes",
+                "Mother",
+                "Plastic Ono Band (Remastered)",
+                &keep,
+                RetitleJudge::Llm,
+                Some((target("Mother", "Plastic Ono Band", None), false)),
+            ),
+            (
+                "keep: the rest of the edit stands",
+                "Mother - Remastered 2010",
+                "Plastic Ono Band",
+                &keep,
+                RetitleJudge::Llm,
+                Some((target("Mother", "Plastic Ono Band", None), false)),
+            ),
+            (
+                "unsure: for review",
+                "Mother",
+                "Plastic Ono Band",
+                &unsure,
+                RetitleJudge::Llm,
+                Some((retitled("Mother"), true)),
+            ),
+            (
+                "no verdict and no LLM: for review",
+                "Mother",
+                "Plastic Ono Band",
+                &no_verdicts,
+                RetitleJudge::Reviewer,
+                Some((retitled("Mother"), true)),
+            ),
+            (
+                "no verdict yet: the album waits for the LLM",
+                "Mother",
+                "Plastic Ono Band",
+                &no_verdicts,
+                RetitleJudge::Llm,
+                None,
+            ),
+            (
+                "no verdict yet: the title fix goes ahead",
+                "Mother - Remastered 2010",
+                "Plastic Ono Band",
+                &no_verdicts,
+                RetitleJudge::Llm,
+                Some((target("Mother", "Plastic Ono Band", None), false)),
+            ),
+        ];
+        for (name, track, album, verdicts, judge, expected) in cases {
+            let outcome = outcome(
+                "Mother",
+                group.clone(),
+                plain_album(group.clone()),
+                Proof::SameRecording,
+            );
+            let actual = derive_edit(
+                &subject("John Lennon", track, album, None),
+                &outcome,
+                Chosen::Deterministic,
+                &[],
+                &MovePolicy::default(),
+                Naming { verdicts, judge },
+            )
+            .map(|p| (p.target, p.approval.requires_confirmation()));
+            assert_eq!(actual, expected, "{name}");
+        }
+
+        let proposal = derive_edit(
+            &subject("John Lennon", "Mother", "Plastic Ono Band", None),
+            &outcome(
+                "Mother",
+                group.clone(),
+                plain_album(group),
+                Proof::SameRecording,
+            ),
+            Chosen::Deterministic,
+            &[],
+            &MovePolicy::default(),
+            Naming {
+                verdicts: &musicbrainz,
+                judge: RetitleJudge::Llm,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            proposal.rationale,
+            "Album: John Lennon/Plastic Ono Band (Album, 1970) -> John Lennon/Plastic Ono Band (Album, 1970) (edition title of the same release group)\n\
+             Naming: use MusicBrainz's title (claude:opus): Restores the official title.\n\
+             Proof: the same MusicBrainz recording"
+        );
+    }
+
+    #[test]
     fn compilation_move_without_a_canonical_credit_keeps_the_album_artist_for_review() {
         let (subject, mut outcome) = cocaine_on_cream();
         outcome.canonical.as_mut().unwrap().group.credit = ArtistCredit::default();
@@ -543,6 +840,7 @@ mod tests {
             Chosen::Deterministic,
             &[],
             &MovePolicy::default(),
+            Naming::reviewer(),
         )
         .unwrap();
         assert_eq!(
@@ -613,6 +911,7 @@ mod tests {
                 Chosen::Deterministic,
                 &[],
                 &MovePolicy::default(),
+                Naming::reviewer(),
             )
             .unwrap();
             assert_eq!(
@@ -684,8 +983,15 @@ mod tests {
             ),
         ];
         for (subject, outcome, policy, expected) in cases {
-            let actual = derive_edit(subject, outcome, Chosen::Deterministic, &[], &policy)
-                .map(|p| p.approval.requires_confirmation());
+            let actual = derive_edit(
+                subject,
+                outcome,
+                Chosen::Deterministic,
+                &[],
+                &policy,
+                Naming::reviewer(),
+            )
+            .map(|p| p.approval.requires_confirmation());
             assert_eq!(actual, expected, "{} with {policy:?}", subject.track);
         }
     }
@@ -991,6 +1297,7 @@ mod tests {
                 chosen,
                 &rejected,
                 &MovePolicy::default(),
+                Naming::reviewer(),
             )
             .map(|p| (p.target, p.approval.requires_confirmation()));
             assert_eq!(actual, expected, "{name}");
