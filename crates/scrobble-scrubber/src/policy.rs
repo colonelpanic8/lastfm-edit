@@ -29,10 +29,13 @@ impl Policy {
             EditDecision::Report
         } else {
             EditDecision::Queue {
-                requires_approval: suggestion_requires_confirmation
-                    || self.require_confirmation_all,
+                requires_approval: self.requires_approval(suggestion_requires_confirmation),
             }
         }
+    }
+
+    pub fn requires_approval(&self, suggestion_requires_confirmation: bool) -> bool {
+        suggestion_requires_confirmation || self.require_confirmation_all
     }
 }
 

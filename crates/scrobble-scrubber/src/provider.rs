@@ -229,16 +229,18 @@ impl RewriteRulesScrubActionProvider {
             if rule.requires_musicbrainz_confirmation {
                 match self.musicbrainz_confirmation(track, &candidate) {
                     MbConfirmation::Confirmed => {}
-                    MbConfirmation::Contradicted | MbConfirmation::Unresolved => {
+                    MbConfirmation::Contradicted => {
                         log::debug!(
-                            "Rewrite rule '{}' not confirmed by MusicBrainz identity for '{} - {}'",
+                            "Rewrite rule '{}' contradicted by MusicBrainz identity for '{} - {}'",
                             rule.name.as_deref().unwrap_or("Unnamed"),
                             track.artist,
                             track.name,
                         );
                         continue;
                     }
-                    MbConfirmation::NoIdentity => requires_confirmation_applied = true,
+                    MbConfirmation::Unresolved | MbConfirmation::NoIdentity => {
+                        requires_confirmation_applied = true;
+                    }
                 }
             }
 
@@ -257,8 +259,9 @@ impl RewriteRulesScrubActionProvider {
 
     /// Whether the resolved identity of `track`'s key agrees with a rule's rewrite: the
     /// rewritten title fold-equals the MB recording title, and a rewritten album
-    /// fold-equals the scrobbled or canonical release-group title. `Unresolved` skips the
-    /// rule for now; the identity change feed re-plans the key once it resolves.
+    /// fold-equals the scrobbled or canonical release-group title. `Unresolved` (not yet
+    /// settled, deferred, not found, or settled without proof) applies the rule for human
+    /// review, as without identity.
     fn musicbrainz_confirmation(&self, track: &Track, candidate: &ScrobbleEdit) -> MbConfirmation {
         let Some(reader) = &self.identity else {
             return MbConfirmation::NoIdentity;
@@ -580,7 +583,7 @@ mod tests {
             .with_musicbrainz_confirmation_required(true);
         let cases = [
             ("no identity configured", None, Some(true)),
-            ("unresolved", Some(vec![]), None),
+            ("unresolved", Some(vec![]), Some(true)),
             (
                 "scrobbled group agrees",
                 Some(vec![settled(
@@ -599,7 +602,7 @@ mod tests {
                     "Sticky Fingers",
                     Proof::SameWork,
                 )]),
-                None,
+                Some(true),
             ),
             (
                 "canonical group agrees",
