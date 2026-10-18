@@ -9,12 +9,14 @@ use super::book::{
     KeyStatus, ResolutionEvent, ResolutionEventKind, ResolutionReader, ResolutionWriter, Snapshot,
 };
 use super::mb::{MbError, MbLookup, MusicBrainz};
-use super::naming::{self, NamingJudge, NAMING_PROMPT_VERSION};
+use super::naming::{
+    self, naming_question, NamingJudge, NamingQuestion, NamingVerdict, NAMING_PROMPT_VERSION,
+};
 use super::outcome::{Proof, Target};
 use super::provider::IDENTITY_PROVIDER;
 use super::research::{Prior, ResearchCase, Researcher};
 use super::resolve::{queries, Resolution, ResolveLimits, Resolver};
-use super::title::parse_title;
+use super::title::{fold, parse_title};
 use super::RESOLVER_VERSION;
 use crate::events::{ScrubberEvent, ScrubberEventBus};
 use crate::queue::{EditIntent, IntentState};
@@ -505,34 +507,55 @@ impl IdentityLane {
         Ok(())
     }
 
+    /// Also answers "keep" for the album of a rejected intent whose album was a retitle,
+    /// so sibling tracks stop proposing it.
     async fn record_rejections(&mut self, queue: &[EditIntent]) -> crate::Result<u64> {
-        let consumed = &self.reader().snapshot().consumed_rejections;
+        let snapshot = self.reader().snapshot();
         let at = unix_now();
-        let events: Vec<ResolutionEvent> = queue
-            .iter()
-            .filter(|intent| {
-                matches!(intent.state, IntentState::Rejected { .. })
-                    && !consumed.contains(&intent.id)
-            })
-            .map(|intent| ResolutionEvent {
+        let mut recorded = 0;
+        let mut kept = BTreeSet::new();
+        let mut events = Vec::new();
+        let rejected = queue.iter().filter(|intent| {
+            matches!(intent.state, IntentState::Rejected { .. })
+                && !snapshot.consumed_rejections.contains(&intent.id)
+        });
+        for intent in rejected {
+            recorded += 1;
+            let event = |kind| ResolutionEvent {
                 key: intent.subject.key(),
                 at,
                 resolver: RESOLVER_VERSION,
-                kind: ResolutionEventKind::HumanRejected {
-                    intent: intent.id,
-                    target: Target {
-                        title: intent
-                            .proposed
-                            .track_name
-                            .clone()
-                            .unwrap_or_else(|| intent.subject.track.clone()),
-                        album: intent.proposed.album_name.clone(),
-                        album_artist: intent.proposed.album_artist_name.clone(),
-                    },
+                kind,
+            };
+            events.push(event(ResolutionEventKind::HumanRejected {
+                intent: intent.id,
+                target: Target {
+                    title: intent
+                        .proposed
+                        .track_name
+                        .clone()
+                        .unwrap_or_else(|| intent.subject.track.clone()),
+                    album: intent.proposed.album_name.clone(),
+                    album_artist: intent.proposed.album_artist_name.clone(),
                 },
-            })
-            .collect();
-        let recorded = events.len() as u64;
+            }));
+            let Some(question) = rejected_retitle(&snapshot, intent) else {
+                continue;
+            };
+            let already_kept = snapshot
+                .naming
+                .get(&question)
+                .is_some_and(|judgement| judgement.verdict == NamingVerdict::Keep);
+            if kept.insert(question.clone()) && !already_kept {
+                events.push(event(ResolutionEventKind::NamingJudged {
+                    question,
+                    verdict: NamingVerdict::Keep,
+                    reason: "A person rejected the retitle in review.".to_string(),
+                    by: NamingJudge::Human { intent: intent.id },
+                    raw: String::new(),
+                }));
+            }
+        }
         self.writer.append(events).await?;
         Ok(recorded)
     }
@@ -762,6 +785,19 @@ fn research_cases(library: &Library, snapshot: &Snapshot, now: u64) -> Vec<Resea
     cases
 }
 
+/// The naming question whose retitle `intent` proposed for its album.
+fn rejected_retitle(snapshot: &Snapshot, intent: &EditIntent) -> Option<NamingQuestion> {
+    let key = intent.subject.key();
+    let proposed = fold(intent.proposed.album_name.as_deref()?);
+    snapshot
+        .keys
+        .get(&key)?
+        .plannable()
+        .into_iter()
+        .filter_map(|(outcome, _)| naming_question(&key.artist, key.album.as_deref(), outcome))
+        .find(|question| fold(&question.title) == proposed)
+}
+
 /// The most recent human decisions on identity proposals for this artist.
 fn precedents(queue: &[EditIntent], artist: &str) -> Vec<Precedent> {
     let mut decided: Vec<&EditIntent> = queue
@@ -828,7 +864,7 @@ mod tests {
     use crate::identity::llm::{RawChoice, RawResearch};
     use crate::identity::mb::{PrimaryType, ReleaseGroup};
     use crate::identity::mb::{RecordingId, ReleaseGroupId};
-    use crate::identity::naming::{NamingQuestion, NamingVerdict, NAMING_PROMPT};
+    use crate::identity::naming::NAMING_PROMPT;
     use crate::identity::outcome::Outcome;
     use crate::identity::testing::{credit, group, FixtureMb, WALTZ_FOR_DEBBY_TAKE_2};
     use crate::queue::{QueueEvent, QueueEventKind};
@@ -1384,6 +1420,128 @@ Answer keep to use "Plastic Ono Band", musicbrainz to use "John Lennon/Plastic O
         let report = h.lane.run_round(10).await.unwrap();
         assert_eq!(report.naming_judged, 0, "the daily budget is spent");
         assert_eq!(backend.requests.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn rejecting_a_retitle_keeps_the_title_for_the_whole_album() {
+        let mut h = harness(
+            FixtureMb::default(),
+            &[
+                ("John Lennon", "Mother", Some("Plastic Ono Band"), 5),
+                ("John Lennon", "Love", Some("Plastic Ono Band"), 3),
+            ],
+            None,
+        )
+        .await;
+        let question = NamingQuestion {
+            artist: "John Lennon".into(),
+            album: "Plastic Ono Band".into(),
+            title: "John Lennon/Plastic Ono Band".into(),
+        };
+        h.lane
+            .writer
+            .append(vec![
+                settled_on(lennon("Mother"), plastic_ono_band()),
+                settled_on(lennon("Love"), plastic_ono_band()),
+                ResolutionEvent {
+                    key: lennon("Mother"),
+                    at: unix_now(),
+                    resolver: RESOLVER_VERSION,
+                    kind: ResolutionEventKind::NamingJudged {
+                        question: question.clone(),
+                        verdict: NamingVerdict::MusicBrainz,
+                        reason: "The official title.".into(),
+                        by: NamingJudge::Llm {
+                            model: "scripted".into(),
+                            prompt_version: 1,
+                        },
+                        raw: String::new(),
+                    },
+                },
+            ])
+            .await
+            .unwrap();
+        let provider = crate::identity::IdentityProvider::new(
+            h.lane.reader(),
+            crate::identity::MovePolicy::default(),
+            crate::identity::RetitleJudge::Llm,
+        );
+        let love = lastfm_edit::Track {
+            name: "Love".into(),
+            artist: "John Lennon".into(),
+            playcount: 3,
+            timestamp: None,
+            album: Some("Plastic Ono Band".into()),
+            album_artist: None,
+        };
+        let proposed_albums = || async {
+            use crate::provider::{ScrubActionProvider, ScrubActionSuggestion};
+            provider
+                .analyze_tracks(std::slice::from_ref(&love), None, None)
+                .await
+                .unwrap()
+                .into_iter()
+                .flat_map(|(_, suggestions)| suggestions)
+                .filter_map(|suggestion| match suggestion.suggestion {
+                    ScrubActionSuggestion::Edit(edit) => edit.album_name,
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            proposed_albums().await,
+            vec!["John Lennon/Plastic Ono Band".to_string()]
+        );
+
+        let subject = Subject {
+            artist: "John Lennon".into(),
+            track: "Mother".into(),
+            album: Some("Plastic Ono Band".into()),
+            album_artist: None,
+        };
+        let mut edit = create_no_op_edit(&subject.representative_track(0, None));
+        edit.album_name = Some("John Lennon/Plastic Ono Band".into());
+        let id = Uuid::new_v4();
+        h.state
+            .append_queue_events(&[
+                QueueEvent {
+                    id,
+                    at: 1,
+                    kind: QueueEventKind::Created {
+                        subject,
+                        proposed: Box::new(edit),
+                        provider: IDENTITY_PROVIDER.into(),
+                        requires_approval: false,
+                        rationale: None,
+                        sources: Default::default(),
+                    },
+                },
+                QueueEvent {
+                    id,
+                    at: 2,
+                    kind: QueueEventKind::Rejected {
+                        dismiss_subject: false,
+                    },
+                },
+            ])
+            .await
+            .unwrap();
+
+        h.lane.run_round(10).await.unwrap();
+
+        assert_eq!(
+            log(&h.state).await[3..],
+            [
+                row("Mother", "Plastic Ono Band", "human_rejected"),
+                row("Mother", "Plastic Ono Band", "naming_judged"),
+            ]
+        );
+        let judgement = h.lane.reader().snapshot().naming[&question].clone();
+        assert_eq!(
+            (judgement.verdict, judgement.by),
+            (NamingVerdict::Keep, NamingJudge::Human { intent: id })
+        );
+        assert_eq!(proposed_albums().await, Vec::<String>::new());
     }
 
     fn research_answer(recording: &str, release_group: &str) -> RawResearch {
