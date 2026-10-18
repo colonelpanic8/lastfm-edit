@@ -860,8 +860,8 @@ async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
             eprintln!();
             println!(
                 "{} keys: {} resolved, {} ambiguous ({} adjudicated), {} not found, {} deferred, \
-                 {} researched, {} rejections recorded; {} MusicBrainz requests, {} cache hits; \
-                 ended {:?}",
+                 {} researched, {} naming verdicts, {} rejections recorded; {} MusicBrainz \
+                 requests, {} cache hits; ended {:?}",
                 report.keys_attempted,
                 report.resolved,
                 report.ambiguous,
@@ -869,6 +869,7 @@ async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
                 report.not_found,
                 report.deferred,
                 report.researched,
+                report.naming_judged,
                 report.rejections_recorded,
                 report.mb_requests,
                 report.cache_hits,
