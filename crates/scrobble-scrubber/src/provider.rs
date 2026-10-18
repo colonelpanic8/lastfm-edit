@@ -64,6 +64,8 @@ pub struct SuggestionWithContext {
     pub suggestion: ScrubActionSuggestion,
     pub requires_confirmation: bool,
     pub provider_name: String,
+    /// Human-readable reason shown in review. Not machine-parsed.
+    pub rationale: Option<String>,
 }
 
 impl SuggestionWithContext {
@@ -76,7 +78,13 @@ impl SuggestionWithContext {
             suggestion,
             requires_confirmation,
             provider_name,
+            rationale: None,
         }
+    }
+
+    pub fn with_rationale(mut self, rationale: impl Into<String>) -> Self {
+        self.rationale = Some(rationale.into());
+        self
     }
 
     pub fn edit_with_confirmation(
@@ -145,6 +153,28 @@ pub trait ScrubActionProvider: Send + Sync {
     fn rules_snapshot(&self, _rules: &[RewriteRule]) -> Option<BoxedProvider> {
         None
     }
+
+    /// Durable change feed: keys whose analysis may differ since `cursor` because the
+    /// provider's external evidence changed. The planner re-plans their live records
+    /// (without a coverage claim) and persists `next_cursor` only after enqueueing.
+    /// Providers whose answers depend only on the record have no feed.
+    fn changes_since(&self, _cursor: u64) -> Option<ChangeBatch> {
+        None
+    }
+
+    /// Identifies the provider's configuration. When it differs from the one its planning
+    /// coverage was built under, the planner forgets that coverage and change cursor so
+    /// everything is re-planned under the new configuration.
+    fn generation(&self) -> Option<String> {
+        None
+    }
+}
+
+/// Keys a provider's change feed reports, and the cursor to resume after them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ChangeBatch {
+    pub keys: Vec<crate::subject::ScrobbleKey>,
+    pub next_cursor: u64,
 }
 
 /// Rewrite rules-based action provider
@@ -277,6 +307,14 @@ where
     fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
         (**self).rules_snapshot(rules)
     }
+
+    fn changes_since(&self, cursor: u64) -> Option<ChangeBatch> {
+        (**self).changes_since(cursor)
+    }
+
+    fn generation(&self) -> Option<String> {
+        (**self).generation()
+    }
 }
 
 /// Adapter to convert different error types to the unified [`ActionProviderError`].
@@ -315,6 +353,14 @@ where
     }
     fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
         self.inner.rules_snapshot(rules)
+    }
+
+    fn changes_since(&self, cursor: u64) -> Option<ChangeBatch> {
+        self.inner.changes_since(cursor)
+    }
+
+    fn generation(&self) -> Option<String> {
+        self.inner.generation()
     }
 }
 

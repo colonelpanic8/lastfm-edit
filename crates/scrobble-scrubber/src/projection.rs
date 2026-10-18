@@ -167,6 +167,7 @@ mod tests {
             proposed: Box::new(create_no_op_edit(&track)),
             provider: "rewrite_rules".into(),
             requires_approval: false,
+            rationale: None,
             state,
             instances: BTreeMap::new(),
             created_at,

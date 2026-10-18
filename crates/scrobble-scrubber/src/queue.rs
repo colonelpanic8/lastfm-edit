@@ -42,6 +42,9 @@ pub enum QueueEventKind {
         proposed: Box<ScrobbleEdit>,
         provider: String,
         requires_approval: bool,
+        /// Why the provider proposed it, for review.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rationale: Option<String>,
     },
     /// Human (or auto-policy at creation) released the intent for execution.
     Approved,
@@ -115,6 +118,7 @@ pub struct EditIntent {
     pub proposed: Box<ScrobbleEdit>,
     pub provider: String,
     pub requires_approval: bool,
+    pub rationale: Option<String>,
     pub state: IntentState,
     /// Per-instance progress, populated once expanded.
     pub instances: BTreeMap<ScrobbleId, InstanceStatus>,
@@ -162,6 +166,7 @@ pub fn fold_queue(events: impl IntoIterator<Item = QueueEvent>) -> Vec<EditInten
                 proposed,
                 provider,
                 requires_approval,
+                rationale,
             } => {
                 if intents.contains_key(&event.id) {
                     log::warn!("queue: duplicate Created for {}; ignoring", event.id);
@@ -176,6 +181,7 @@ pub fn fold_queue(events: impl IntoIterator<Item = QueueEvent>) -> Vec<EditInten
                         proposed,
                         provider,
                         requires_approval,
+                        rationale,
                         state: if requires_approval {
                             IntentState::AwaitingApproval
                         } else {
@@ -423,6 +429,7 @@ mod tests {
                 proposed: Box::new(create_no_op_edit(&track)),
                 provider: "rewrite_rules".into(),
                 requires_approval,
+                rationale: None,
             },
         }
     }

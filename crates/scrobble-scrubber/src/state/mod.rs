@@ -77,6 +77,13 @@ pub struct ProviderCoverage {
     /// enforces this; storage just persists it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rules_hash: Option<String>,
+    /// Position in the provider's change feed already planned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub change_cursor: Option<u64>,
+    /// [`ScrubActionProvider::generation`](crate::provider::ScrubActionProvider::generation)
+    /// the coverage and cursor were built under.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generation: Option<String>,
 }
 
 /// Hash of a rule set, for coverage invalidation when rules change.

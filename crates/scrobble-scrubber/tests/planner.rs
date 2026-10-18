@@ -5,12 +5,12 @@
 use async_trait::async_trait;
 use lastfm_edit::Track;
 use scrobble_scrubber::provider::{
-    ActionProviderError, ScrubActionProvider, SuggestionWithContext,
+    ActionProviderError, ChangeBatch, ScrubActionProvider, SuggestionWithContext,
 };
 use scrobble_scrubber::queue::{EditIntent, PendingRule};
 use scrobble_scrubber::{
     DismissedEntry, IntentState, MemoryScrubberState, Planner, Policy, RewriteRule,
-    RewriteRulesScrubActionProvider, ScrubFeed, ScrubberState, SdRule, Subject,
+    RewriteRulesScrubActionProvider, ScrobbleKey, ScrubFeed, ScrubberState, SdRule, Subject,
 };
 use scrobble_store::{
     CoverageMap, MemoryStorage, Provenanced, RecordSource, ScrobbleId, ScrobbleRecord, Segment,
@@ -702,4 +702,255 @@ async fn records_deferred_by_an_open_intent_are_revisited_after_it_closes() {
         .unwrap();
     planner.plan(&feed).await.unwrap();
     assert_eq!(state.load_queue().await.unwrap().len(), 2);
+}
+
+// =====================================================================================
+// Change feeds
+// =====================================================================================
+
+/// A provider whose answers depend on external evidence that arrives later: it renames a
+/// track only once its key has been "resolved", and reports each resolution through its
+/// change feed (seq = position in the resolution list).
+struct LateEvidenceProvider {
+    resolved: Mutex<Vec<(ScrobbleKey, String)>>,
+    analyzed: Mutex<Vec<String>>,
+    generation: Mutex<Option<String>>,
+}
+
+impl LateEvidenceProvider {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            resolved: Mutex::new(Vec::new()),
+            analyzed: Mutex::new(Vec::new()),
+            generation: Mutex::new(None),
+        })
+    }
+
+    fn resolve(&self, key: ScrobbleKey, title: &str) {
+        self.resolved.lock().unwrap().push((key, title.to_string()));
+    }
+
+    fn analyzed(&self) -> Vec<String> {
+        self.analyzed.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl ScrubActionProvider for LateEvidenceProvider {
+    type Error = ActionProviderError;
+
+    async fn analyze_tracks(
+        &self,
+        tracks: &[Track],
+        _open_intents: Option<&[EditIntent]>,
+        _pending_rules: Option<&[PendingRule]>,
+    ) -> Result<Vec<(usize, Vec<SuggestionWithContext>)>, Self::Error> {
+        let resolved = self.resolved.lock().unwrap();
+        let mut results = Vec::new();
+        for (idx, track) in tracks.iter().enumerate() {
+            self.analyzed.lock().unwrap().push(track.name.clone());
+            let key = ScrobbleKey {
+                artist: track.artist.clone(),
+                track: track.name.clone(),
+                album: track.album.clone(),
+            };
+            if let Some((_, title)) = resolved.iter().rev().find(|(k, _)| *k == key) {
+                let mut edit = scrobble_scrubber::create_no_op_edit(track);
+                edit.track_name = Some(title.clone());
+                results.push((
+                    idx,
+                    vec![SuggestionWithContext::edit_with_confirmation(
+                        edit,
+                        false,
+                        "late".to_string(),
+                    )],
+                ));
+            }
+        }
+        Ok(results)
+    }
+
+    fn provider_name(&self) -> &str {
+        "late"
+    }
+
+    fn generation(&self) -> Option<String> {
+        self.generation.lock().unwrap().clone()
+    }
+
+    fn changes_since(&self, cursor: u64) -> Option<ChangeBatch> {
+        let resolved = self.resolved.lock().unwrap();
+        Some(ChangeBatch {
+            keys: resolved
+                .iter()
+                .skip(cursor as usize)
+                .map(|(key, _)| key.clone())
+                .collect(),
+            next_cursor: resolved.len() as u64,
+        })
+    }
+}
+
+#[tokio::test]
+async fn keys_resolved_after_their_range_was_planned_are_planned_once_via_the_change_feed() {
+    let dirty = "Wild Horses - 2009 Re-Mastered Digital Version";
+    let (store, state) = seeded(&[
+        record(100, "The Rolling Stones", dirty),
+        record(200, "The Rolling Stones", dirty),
+        record(300, "The Rolling Stones", "Brown Sugar"),
+    ])
+    .await;
+    let provider = LateEvidenceProvider::new();
+    let planner = Planner::new(store, state.clone()).with_provider(provider.clone());
+    let incremental = ScrubFeed::Incremental { window: None };
+
+    planner.plan(&incremental).await.unwrap();
+    assert!(state.load_queue().await.unwrap().is_empty());
+    assert!(state
+        .load_provider_coverage("late")
+        .await
+        .unwrap()
+        .coverage
+        .covers(100..301));
+
+    provider.resolve(
+        ScrobbleKey {
+            artist: "The Rolling Stones".into(),
+            track: dirty.into(),
+            album: Some("Album".into()),
+        },
+        "Wild Horses",
+    );
+    let report = planner.plan(&incremental).await.unwrap();
+    assert_eq!(report.queued_ready, 1);
+    let queue = state.load_queue().await.unwrap();
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue[0].subject.track, dirty);
+    assert_eq!(queue[0].proposed.track_name.as_deref(), Some("Wild Horses"));
+    assert_eq!(
+        state
+            .load_provider_coverage("late")
+            .await
+            .unwrap()
+            .change_cursor,
+        Some(1)
+    );
+    assert_eq!(provider.analyzed(), vec!["Brown Sugar", dirty, dirty]);
+
+    let report = planner.plan(&incremental).await.unwrap();
+    assert_eq!(report.suggestions, 0);
+    assert_eq!(state.load_queue().await.unwrap().len(), 1);
+    assert_eq!(
+        provider.analyzed().len(),
+        3,
+        "a drained cursor replans nothing"
+    );
+}
+
+#[tokio::test]
+async fn dry_run_drains_the_change_feed_without_persisting_its_cursor() {
+    let dirty = "Cocaine - Remastered";
+    let (store, state) = seeded(&[record(100, "Eric Clapton", dirty)]).await;
+    let provider = LateEvidenceProvider::new();
+    provider.resolve(
+        ScrobbleKey {
+            artist: "Eric Clapton".into(),
+            track: dirty.into(),
+            album: Some("Album".into()),
+        },
+        "Cocaine",
+    );
+    let planner = Planner::new(store, state.clone())
+        .with_provider(provider.clone())
+        .with_policy(Policy {
+            dry_run: true,
+            ..Policy::default()
+        });
+
+    let spot = planner.plan(&ScrubFeed::Ids(Vec::new())).await.unwrap();
+    assert_eq!(
+        spot.reported_only, 0,
+        "spot feeds don't drain the change feed"
+    );
+
+    let report = planner
+        .plan(&ScrubFeed::Incremental { window: Some(0..1) })
+        .await
+        .unwrap();
+    assert_eq!(report.reported_only, 1);
+    assert!(state.load_queue().await.unwrap().is_empty());
+    assert_eq!(
+        state
+            .load_provider_coverage("late")
+            .await
+            .unwrap()
+            .change_cursor,
+        None
+    );
+}
+
+#[tokio::test]
+async fn a_rejected_edit_is_not_requeued_when_its_key_changes_again() {
+    let dirty = "Cocaine - Remastered";
+    let key = ScrobbleKey {
+        artist: "Eric Clapton".into(),
+        track: dirty.into(),
+        album: Some("Album".into()),
+    };
+    let (store, state) = seeded(&[record(100, "Eric Clapton", dirty)]).await;
+    let provider = LateEvidenceProvider::new();
+    let planner = Planner::new(store, state.clone()).with_provider(provider.clone());
+    let incremental = ScrubFeed::Incremental { window: None };
+
+    provider.resolve(key.clone(), "Cocaine");
+    planner.plan(&incremental).await.unwrap();
+    let id = state.load_queue().await.unwrap()[0].id;
+    scrobble_scrubber::reject_intent(state.as_ref(), id, false)
+        .await
+        .unwrap();
+
+    provider.resolve(key.clone(), "Cocaine");
+    let report = planner.plan(&incremental).await.unwrap();
+    assert_eq!(report.queued_ready + report.queued_awaiting_approval, 0);
+    assert_eq!(state.load_queue().await.unwrap().len(), 1);
+
+    provider.resolve(key, "Cocaine (Live)");
+    let report = planner.plan(&incremental).await.unwrap();
+    assert_eq!(report.queued_ready, 1, "a different edit is still proposed");
+}
+
+#[tokio::test]
+async fn a_configuration_change_replans_the_whole_change_feed() {
+    let dirty = "Cocaine - Remastered";
+    let (store, state) = seeded(&[record(100, "Eric Clapton", dirty)]).await;
+    let provider = LateEvidenceProvider::new();
+    let planner = Planner::new(store, state.clone()).with_provider(provider.clone());
+    let incremental = ScrubFeed::Incremental { window: None };
+    provider.resolve(
+        ScrobbleKey {
+            artist: "Eric Clapton".into(),
+            track: dirty.into(),
+            album: Some("Album".into()),
+        },
+        "Cocaine",
+    );
+    planner.plan(&incremental).await.unwrap();
+    let id = state.load_queue().await.unwrap()[0].id;
+    scrobble_scrubber::reject_intent(state.as_ref(), id, false)
+        .await
+        .unwrap();
+    let analyzed = provider.analyzed().len();
+
+    planner.plan(&incremental).await.unwrap();
+    assert_eq!(provider.analyzed().len(), analyzed, "nothing new to plan");
+
+    *provider.generation.lock().unwrap() = Some("compilations=off".into());
+    planner.plan(&incremental).await.unwrap();
+    assert!(
+        provider.analyzed().len() > analyzed,
+        "the new configuration re-analyzes resolved keys"
+    );
+    let coverage = state.load_provider_coverage("late").await.unwrap();
+    assert_eq!(coverage.generation.as_deref(), Some("compilations=off"));
+    assert_eq!(coverage.change_cursor, Some(1));
 }

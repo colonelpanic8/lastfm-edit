@@ -24,6 +24,16 @@ pub struct Subject {
 }
 
 impl Subject {
+    /// The identity-resolution key: everything but the album artist, which doesn't decide
+    /// which recording a scrobble is.
+    pub fn key(&self) -> ScrobbleKey {
+        ScrobbleKey {
+            artist: self.artist.clone(),
+            track: self.track.clone(),
+            album: self.album.clone(),
+        }
+    }
+
     /// The subject of a stored scrobble record.
     pub fn of_record(record: &ScrobbleRecord) -> Self {
         let album_artist = match &record.album_artist {
@@ -69,6 +79,36 @@ impl Subject {
             album: self.album.clone(),
             album_artist: self.album_artist.clone(),
         }
+    }
+}
+
+/// The unit of MusicBrainz identity resolution: one distinct `(artist, track, album)`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ScrobbleKey {
+    pub artist: String,
+    pub track: String,
+    pub album: Option<String>,
+}
+
+impl ScrobbleKey {
+    /// Live records with exactly this key, via the indexed per-artist query.
+    pub async fn live_records(
+        &self,
+        store: &dyn scrobble_store::Storage,
+    ) -> scrobble_store::Result<Vec<ScrobbleRecord>> {
+        let mut records = store.artist_scrobbles(&self.artist, None).await?;
+        records.retain(|record| record.track == self.track && record.album == self.album);
+        Ok(records)
+    }
+}
+
+impl std::fmt::Display for ScrobbleKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} — {}", self.artist, self.track)?;
+        if let Some(album) = &self.album {
+            write!(f, " [{album}]")?;
+        }
+        Ok(())
     }
 }
 

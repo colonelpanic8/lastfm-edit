@@ -41,6 +41,21 @@ struct PlanContext {
     dismissed: HashSet<Subject>,
     /// Subjects that must not receive new intents (open intents + queued this pass).
     occupied: HashSet<Subject>,
+    /// Edits a human already rejected, by subject and target; never re-queued.
+    rejected: HashSet<(Subject, EditTarget)>,
+}
+
+/// The fields an edit sets, which is what a human rejected (timestamps and originals
+/// vary between proposals of the same edit).
+type EditTarget = (Option<String>, String, Option<String>, Option<String>);
+
+fn edit_target(edit: &lastfm_edit::ScrobbleEdit) -> EditTarget {
+    (
+        edit.track_name.clone(),
+        edit.artist_name.clone(),
+        edit.album_name.clone(),
+        edit.album_artist_name.clone(),
+    )
 }
 
 pub struct Planner {
@@ -177,6 +192,10 @@ impl Planner {
             )
             .await?;
         }
+        // Spot feeds (one artist, album, ids) stay within what was asked for.
+        if matches!(feed, ScrubFeed::Incremental { .. }) {
+            self.drain_change_feeds(&mut context, &mut report).await?;
+        }
         self.save_context(&context).await?;
         Ok(report)
     }
@@ -186,6 +205,53 @@ impl Planner {
             for (name, coverage) in &context.coverages {
                 self.state.save_provider_coverage(name, coverage).await?;
             }
+        }
+        Ok(())
+    }
+
+    /// Re-plan keys that providers' change feeds report since their saved cursor, with
+    /// every provider and no coverage claim. The advanced cursor is saved with the rest of
+    /// the pass's checkpoints, after its suggestions are enqueued.
+    ///
+    /// No subject is lost: a feed reports every key with an event after the cursor in one
+    /// snapshot and returns that snapshot's head as the next cursor. Record fingerprints
+    /// don't change when only a provider's evidence does, so a key resolved after its
+    /// records were analyzed is re-planned here. Overlap is absorbed by `occupied`.
+    async fn drain_change_feeds(
+        &self,
+        context: &mut PlanContext,
+        report: &mut PlanReport,
+    ) -> Result<()> {
+        for provider in &self.providers {
+            let name = provider.provider_name().to_string();
+            let cursor = context.coverages[&name].change_cursor.unwrap_or(0);
+            let Some(changes) = provider.changes_since(cursor) else {
+                continue;
+            };
+            // Chunk whole keys so a subject is never split across batches.
+            let mut chunk: Vec<ScrobbleRecord> = Vec::new();
+            for key in &changes.keys {
+                chunk.extend(key.live_records(self.store.as_ref()).await?);
+                if chunk.len() >= self.batch_hint {
+                    let batch = FeedBatch {
+                        records: std::mem::take(&mut chunk),
+                        coverage_claim: None,
+                    };
+                    self.plan_batch(&batch, context, report, false).await?;
+                }
+            }
+            if !chunk.is_empty() {
+                let batch = FeedBatch {
+                    records: chunk,
+                    coverage_claim: None,
+                };
+                self.plan_batch(&batch, context, report, false).await?;
+            }
+            context
+                .coverages
+                .get_mut(&name)
+                .expect("loaded for all providers")
+                .change_cursor = Some(changes.next_cursor);
         }
         Ok(())
     }
@@ -226,6 +292,20 @@ impl Planner {
                     coverage: CoverageMap::new(),
                     rules_hash: (name == RULES_PROVIDER).then(|| current_rules_hash.clone()),
                     analysis_version: 1,
+                    change_cursor: coverage.change_cursor,
+                    generation: coverage.generation,
+                    ..ProviderCoverage::default()
+                };
+            }
+            let generation = provider.generation();
+            if coverage.generation != generation {
+                if coverage.generation.is_some() {
+                    log::info!("planner: '{name}' configuration changed; re-planning");
+                }
+                coverage = ProviderCoverage {
+                    rules_hash: coverage.rules_hash,
+                    analysis_version: 1,
+                    generation,
                     ..ProviderCoverage::default()
                 };
             }
@@ -233,6 +313,11 @@ impl Planner {
         }
 
         let queue = self.state.load_queue().await?;
+        let rejected = queue
+            .iter()
+            .filter(|intent| matches!(intent.state, crate::queue::IntentState::Rejected { .. }))
+            .map(|intent| (intent.subject.clone(), edit_target(&intent.proposed)))
+            .collect();
         let open_intents: Vec<_> = queue
             .into_iter()
             .filter(|intent| intent.state.is_open())
@@ -257,6 +342,7 @@ impl Planner {
             pending_rules,
             dismissed,
             occupied,
+            rejected,
         })
     }
 
@@ -292,6 +378,7 @@ impl Planner {
             pending_rules,
             dismissed,
             occupied: occupied_subjects,
+            rejected,
         } = context;
         // Dedup to subjects, keeping instance stats for representative tracks.
         let groups = group_by_subject(&batch.records);
@@ -367,8 +454,14 @@ impl Planner {
                     });
                     for suggestion in suggestions {
                         report.suggestions += 1;
-                        self.record_suggestion(subject, suggestion, occupied_subjects, report)
-                            .await?;
+                        self.record_suggestion(
+                            subject,
+                            suggestion,
+                            occupied_subjects,
+                            rejected,
+                            report,
+                        )
+                        .await?;
                     }
                 }
             }
@@ -406,6 +499,7 @@ impl Planner {
         subject: &Subject,
         suggestion: crate::provider::SuggestionWithContext,
         occupied_subjects: &mut HashSet<Subject>,
+        rejected: &HashSet<(Subject, EditTarget)>,
         report: &mut PlanReport,
     ) -> Result<()> {
         match suggestion.suggestion {
@@ -413,6 +507,9 @@ impl Planner {
             ScrubActionSuggestion::Edit(proposed) => {
                 if occupied_subjects.contains(subject) {
                     return Ok(()); // another provider already queued this subject
+                }
+                if rejected.contains(&(subject.clone(), edit_target(&proposed))) {
+                    return Ok(());
                 }
                 match self.policy.decide_edit(suggestion.requires_confirmation) {
                     EditDecision::Report => {
@@ -434,6 +531,7 @@ impl Planner {
                                 proposed,
                                 provider: suggestion.provider_name.clone(),
                                 requires_approval,
+                                rationale: suggestion.rationale.clone(),
                             },
                         };
                         self.state.append_queue_events(&[event]).await?;

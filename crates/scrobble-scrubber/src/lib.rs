@@ -46,8 +46,9 @@ pub use projection::{
     WorkQueueView, WorkStatus,
 };
 pub use provider::{
-    ActionProviderError, BoxedProvider, OrScrubActionProvider, RewriteRulesScrubActionProvider,
-    ScrubActionProvider, ScrubActionSuggestion, SuggestionWithContext,
+    ActionProviderError, BoxedProvider, ChangeBatch, OrScrubActionProvider,
+    RewriteRulesScrubActionProvider, ScrubActionProvider, ScrubActionSuggestion,
+    SuggestionWithContext,
 };
 pub use queue::{
     EditIntent, InstanceStatus, IntentState, PendingRule, PendingRuleState, QueueEvent,
@@ -61,4 +62,4 @@ pub use state::{
     rules_hash, DismissedEntry, FsScrubberState, MemoryScrubberState, ProviderCoverage,
     ScrubberState,
 };
-pub use subject::{group_by_subject, Subject};
+pub use subject::{group_by_subject, ScrobbleKey, Subject};

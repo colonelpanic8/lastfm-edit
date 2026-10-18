@@ -44,6 +44,7 @@ async fn full_round_trip_through_fresh_handles() {
                     proposed: Box::new(create_no_op_edit(&track)),
                     provider: "rewrite_rules".into(),
                     requires_approval: true,
+                    rationale: None,
                 },
             },
             QueueEvent {
@@ -140,6 +141,7 @@ async fn reinstate_reopens_intent_and_lifts_dismissal() {
                 proposed: Box::new(create_no_op_edit(&track)),
                 provider: "rewrite_rules".into(),
                 requires_approval: true,
+                rationale: None,
             },
         }])
         .await
@@ -176,6 +178,7 @@ async fn torn_queue_tail_is_tolerated() {
                 proposed: Box::new(create_no_op_edit(&track)),
                 provider: "rewrite_rules".into(),
                 requires_approval: false,
+                rationale: None,
             },
         }])
         .await
