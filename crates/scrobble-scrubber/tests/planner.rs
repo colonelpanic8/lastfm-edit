@@ -1115,7 +1115,7 @@ async fn corrector_order_decides_each_conflicting_field() {
         };
         got.push((
             intent.proposed.album_name.clone().unwrap(),
-            intent.proposed.album_artist_name.clone().unwrap(),
+            intent.proposed.album_artist_name.clone(),
             intent.provider.clone(),
             intent.sources.clone(),
         ));
@@ -1125,13 +1125,13 @@ async fn corrector_order_decides_each_conflicting_field() {
         vec![
             (
                 "Slowhand".to_string(),
-                "Eric Clapton".to_string(),
+                None,
                 MB.to_string(),
-                sources(&[(EditField::Album, MB), (EditField::AlbumArtist, RULES)]),
+                sources(&[(EditField::Album, MB)]),
             ),
             (
                 "The Cream Of Clapton".to_string(),
-                "Eric Clapton".to_string(),
+                Some("Eric Clapton".to_string()),
                 RULES.to_string(),
                 sources(&[(EditField::Album, RULES), (EditField::AlbumArtist, RULES)]),
             ),

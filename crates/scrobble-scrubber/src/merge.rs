@@ -1,7 +1,8 @@
 //! Combining several correctors' edits of one subject into a single edit, field by field.
 //!
 //! Correctors are ranked by their position in the configured order (0 is the highest
-//! priority). For each field, the best-ranked proposal that changes it supplies the value.
+//! priority). For each field group, the best-ranked proposal that changes it supplies the
+//! whole group.
 
 use lastfm_edit::ScrobbleEdit;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,14 @@ pub enum EditField {
 
 impl EditField {
     pub const ALL: [Self; 4] = [Self::Track, Self::Artist, Self::Album, Self::AlbumArtist];
+
+    /// Fields one corrector supplies together. An album artist is the credit of its album,
+    /// so it only makes sense with the album it came with.
+    const GROUPS: [&'static [Self]; 3] = [
+        &[Self::Track],
+        &[Self::Artist],
+        &[Self::Album, Self::AlbumArtist],
+    ];
 
     /// The value `edit` writes to this field, when that differs from the original. This is
     /// what the executor applies.
@@ -101,25 +110,34 @@ pub struct Merged {
     pub rationale: Option<String>,
 }
 
-/// Merge `proposals` field by field. `owned` holds, per field, the rank of the corrector
-/// that last set it on this subject; a worse-ranked proposal may not change that field
-/// back. Equal ranks resolve to the earlier proposal. `None` when nothing changes.
+/// Merge `proposals` group by group (see [`EditField::GROUPS`]). A group's winner supplies
+/// all of its fields, keeping the original where it leaves one alone. `owned` holds, per
+/// field, the rank of the corrector that last set it on this subject; a worse-ranked
+/// proposal may not change that field's group. Equal ranks resolve to the earlier
+/// proposal. `None` when nothing changes.
 pub fn merge(proposals: &[Proposal], owned: &BTreeMap<EditField, usize>) -> Option<Merged> {
-    let winners: BTreeMap<EditField, usize> = EditField::ALL
+    let winners: BTreeMap<EditField, usize> = EditField::GROUPS
         .into_iter()
-        .filter_map(|field| {
-            proposals
+        .filter_map(|group| {
+            let owner = group.iter().filter_map(|field| owned.get(field)).min();
+            let (index, winner) = proposals
                 .iter()
                 .enumerate()
-                .filter(|(_, proposal)| field.change(&proposal.edit).is_some())
                 .filter(|(_, proposal)| {
-                    owned
-                        .get(&field)
-                        .is_none_or(|&owner| proposal.rank <= owner)
+                    group
+                        .iter()
+                        .any(|field| field.change(&proposal.edit).is_some())
                 })
-                .min_by_key(|(_, proposal)| proposal.rank)
-                .map(|(index, _)| (field, index))
+                .filter(|(_, proposal)| owner.is_none_or(|&owner| proposal.rank <= owner))
+                .min_by_key(|(_, proposal)| proposal.rank)?;
+            Some(
+                group
+                    .iter()
+                    .filter(|field| field.change(&winner.edit).is_some())
+                    .map(move |&field| (field, index)),
+            )
         })
+        .flatten()
         .collect();
 
     let mut contributors: Vec<&Proposal> = winners
@@ -308,6 +326,30 @@ mod tests {
                     MB,
                     false,
                     "musicbrainz_identity says so\nrewrite_rules says so",
+                ),
+            ),
+            (
+                "album and album artist come from one corrector",
+                vec![
+                    proposal(&HORSES, RULES, 0, false, &[(Album, "Sticky Fingers")]),
+                    proposal(
+                        &HORSES,
+                        MB,
+                        1,
+                        false,
+                        &[
+                            (Album, "Sticky Fingers (Remastered)"),
+                            (AlbumArtist, "The Rolling Stones"),
+                        ],
+                    ),
+                ],
+                BTreeMap::new(),
+                expect(
+                    &[(Album, "Sticky Fingers")],
+                    &[(Album, RULES)],
+                    RULES,
+                    false,
+                    "rewrite_rules says so",
                 ),
             ),
             (
