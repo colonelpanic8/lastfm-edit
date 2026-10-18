@@ -127,4 +127,12 @@ pub trait ScrubberState: Send + Sync {
         provider: &str,
         coverage: &ProviderCoverage,
     ) -> Result<()>;
+
+    // ---- identity resolutions -----------------------------------------------------------
+    async fn append_resolution_events(
+        &self,
+        events: &[crate::identity::ResolutionEvent],
+    ) -> Result<()>;
+    /// Every resolution event, in append order.
+    async fn load_resolution_events(&self) -> Result<Vec<crate::identity::ResolutionEvent>>;
 }

@@ -6,7 +6,7 @@
 
 use crate::feed::ScrubFeed;
 use crate::queue::IntentState;
-use crate::subject::Subject;
+use crate::subject::{ScrobbleKey, Subject};
 use scrobble_store::{PauseReason, ScrobbleId, SyncEvent};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -135,6 +135,15 @@ pub enum ScrubberEvent {
     ExecutorResumed,
     ExecCompleted {
         report: ExecReport,
+    },
+
+    // ---- identity lane ----------------------------------------------------------
+    IdentityKeyProcessed {
+        key: ScrobbleKey,
+        status: String,
+    },
+    IdentityRoundCompleted {
+        report: crate::identity::LaneReport,
     },
 
     // ---- lifecycle / continuous mode ---------------------------------------------

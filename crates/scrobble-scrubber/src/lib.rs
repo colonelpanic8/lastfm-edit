@@ -4,7 +4,7 @@
 //! local mirror.
 //!
 //! Architecture: a fast, local **planner** turns scrobbles into durable *edit intents*
-//! (via a pluggable provider stack of regex rewrite rules); a paced
+//! (via a pluggable provider stack: regex rewrite rules and MusicBrainz identity); a paced
 //! **executor** drains the intent queue through the store's crash-safe
 //! [`MirroredEditor`](scrobble_store::MirroredEditor), owning all rate-limited last.fm
 //! write traffic. The two communicate only through durable state and broadcast events.
