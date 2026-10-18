@@ -228,7 +228,7 @@ fn in_users_spelling(users: &str, mb: &str) -> String {
 }
 
 fn credited_album_artist(canonical: &Canonical) -> Option<String> {
-    Some(canonical.group.credit.display()).filter(|credit| !credit.trim().is_empty())
+    Some(canonical.group.credit.main_artists()).filter(|credit| !credit.trim().is_empty())
 }
 
 fn album_move<'a>(subject: &Subject, outcome: &'a Outcome) -> Option<(AlbumMove, &'a Canonical)> {
@@ -545,6 +545,78 @@ mod tests {
             (proposal.target, proposal.approval.requires_confirmation()),
             (target("Cocaine", "Slowhand", Some("Various Artists")), true)
         );
+    }
+
+    #[test]
+    fn moves_credit_the_album_to_its_main_artists_without_featured_ones() {
+        let cases = [
+            (
+                "Despacito",
+                credit(&[
+                    ("luis-fonsi", "Luis Fonsi", " ft. "),
+                    ("daddy-yankee", "Daddy Yankee", ""),
+                ]),
+                "Luis Fonsi",
+            ),
+            (
+                "See You Again",
+                credit(&[
+                    ("wiz-khalifa", "Wiz Khalifa", " feat. "),
+                    ("charlie-puth", "Charlie Puth", ""),
+                ]),
+                "Wiz Khalifa",
+            ),
+            (
+                "The Sound of Silence",
+                credit(&[
+                    ("paul-simon", "Simon", " & "),
+                    ("art-garfunkel", "Garfunkel", ""),
+                ]),
+                "Simon & Garfunkel",
+            ),
+        ];
+        for (track, canonical_credit, expected) in cases {
+            let subject = subject(
+                "Various",
+                track,
+                "Now That's What I Call Music!",
+                Some("Various Artists"),
+            );
+            let now = group(
+                "now",
+                "Now That's What I Call Music!",
+                PrimaryType::Album,
+                &[SecondaryType::Compilation],
+                "2017",
+                credit(&[(VARIOUS, "Various Artists", "")]),
+            );
+            let canonical = Canonical {
+                group: group(
+                    track,
+                    track,
+                    PrimaryType::Single,
+                    &[],
+                    "2017",
+                    canonical_credit,
+                ),
+                rung: Rung::Single,
+                single_first: false,
+            };
+            let outcome = outcome(track, now, Some(canonical), Proof::SameRecording);
+            let proposal = derive_edit(
+                &subject,
+                &outcome,
+                Chosen::Deterministic,
+                &[],
+                &MovePolicy::default(),
+            )
+            .unwrap();
+            assert_eq!(
+                proposal.target,
+                target(track, track, Some(expected)),
+                "{track}"
+            );
+        }
     }
 
     #[test]
