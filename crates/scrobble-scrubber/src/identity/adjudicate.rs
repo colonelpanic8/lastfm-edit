@@ -10,7 +10,7 @@ use std::fmt::Write;
 /// Bump when the prompt or option rendering changes; recorded with every verdict.
 pub(crate) const PROMPT_VERSION: u32 = 1;
 
-const MAX_REASON_CHARS: usize = 300;
+pub(crate) const MAX_REASON_CHARS: usize = 300;
 pub(crate) const MAX_RAW_BYTES: usize = 4096;
 
 pub(crate) const SYSTEM_PROMPT: &str = "\
@@ -190,6 +190,10 @@ impl Adjudicator {
 
     pub fn daily_budget(&self) -> u32 {
         self.daily_budget
+    }
+
+    pub fn backend(&self) -> &dyn LlmBackend {
+        self.backend.as_ref()
     }
 
     pub async fn adjudicate(

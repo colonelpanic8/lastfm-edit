@@ -4,7 +4,7 @@
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use clap::{Parser, Subcommand};
 use scrobble_scrubber::identity::{
-    Identity, IdentityConfig, KeyStatus, LlmConfig, MovePolicy, Outcome, UserAgent,
+    Identity, IdentityConfig, KeyStatus, LlmConfig, MovePolicy, NamingKind, Outcome, UserAgent,
 };
 use scrobble_scrubber::{
     approve_intent, approve_pending_rule, load_comprehensive_default_rules, reject_intent,
@@ -860,8 +860,8 @@ async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
             eprintln!();
             println!(
                 "{} keys: {} resolved, {} ambiguous ({} adjudicated), {} not found, {} deferred, \
-                 {} researched, {} rejections recorded; {} MusicBrainz requests, {} cache hits; \
-                 ended {:?}",
+                 {} researched, {} naming verdicts, {} rejections recorded; {} MusicBrainz \
+                 requests, {} cache hits; ended {:?}",
                 report.keys_attempted,
                 report.resolved,
                 report.ambiguous,
@@ -869,6 +869,7 @@ async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
                 report.not_found,
                 report.deferred,
                 report.researched,
+                report.naming_judged,
                 report.rejections_recorded,
                 report.mb_requests,
                 report.cache_hits,
@@ -931,6 +932,26 @@ async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
                         println!("  deferred until {}", fmt_ts(*retry_after))
                     }
                     KeyStatus::Stale => println!("  stale (older resolver version)"),
+                }
+                for (question, judgement) in snapshot.naming_questions(key) {
+                    let kind = match question.kind {
+                        NamingKind::Album => "album",
+                        NamingKind::Track => "track",
+                    };
+                    let asked = format!(
+                        "  naming ({kind}): \"{}\" or MusicBrainz's \"{}\"",
+                        question.users_title, question.title
+                    );
+                    match judgement {
+                        Some(judgement) => println!(
+                            "{asked}: {:?} by {} at {}\n    {}",
+                            judgement.verdict,
+                            judgement.by.describe(),
+                            fmt_ts(judgement.at),
+                            judgement.reason
+                        ),
+                        None => println!("{asked}: not answered yet"),
+                    }
                 }
                 if let Some(note) = &entry.research {
                     let id = |id: Option<&str>| id.unwrap_or("none").to_string();

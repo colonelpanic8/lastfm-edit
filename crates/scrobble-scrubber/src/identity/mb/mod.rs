@@ -103,6 +103,20 @@ impl ArtistCredit {
             .collect()
     }
 
+    /// The credit up to its first featured artist: "Luis Fonsi" for "Luis Fonsi ft. Daddy
+    /// Yankee". Other joins ("&", "and", ",") stay. `spell` maps each credited name.
+    pub fn main_artists(&self, spell: impl Fn(&str) -> String) -> String {
+        let mut out = String::new();
+        for part in &self.parts {
+            out.push_str(&spell(&part.name));
+            if is_featuring(&part.joinphrase) {
+                break;
+            }
+            out.push_str(&part.joinphrase);
+        }
+        out
+    }
+
     pub fn artist_ids(&self) -> BTreeSet<&ArtistId> {
         self.parts.iter().map(|part| &part.artist).collect()
     }
@@ -115,6 +129,17 @@ impl ArtistCredit {
 }
 
 const VARIOUS_ARTISTS_ID: &str = "89ad4ac3-39f7-470e-963a-56509c546377";
+
+fn is_featuring(joinphrase: &str) -> bool {
+    let word = joinphrase
+        .trim()
+        .trim_start_matches(['(', '['])
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_lowercase();
+    matches!(word.as_str(), "ft" | "ft." | "feat" | "feat." | "featuring")
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PrimaryType {

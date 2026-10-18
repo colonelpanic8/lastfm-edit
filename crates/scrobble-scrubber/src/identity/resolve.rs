@@ -779,7 +779,7 @@ fn conclude(mut candidates: Vec<Candidate>, queries: Vec<String>) -> Resolution 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::identity::outcome::{derive_edit, Approval, Chosen, MovePolicy};
+    use crate::identity::outcome::{derive_edit, Approval, Chosen, MovePolicy, Naming};
     use crate::identity::testing::*;
     use crate::subject::Subject;
 
@@ -1185,7 +1185,9 @@ mod tests {
                 Chosen::Deterministic,
                 &[],
                 &MovePolicy::default(),
-            ),
+                Naming::reviewer(),
+            )
+            .proposal,
             None,
             "\"(Clean)\" names the version and is never stripped"
         );
@@ -1223,7 +1225,9 @@ mod tests {
             Chosen::Deterministic,
             &[],
             &MovePolicy::default(),
+            Naming::reviewer(),
         )
+        .proposal
         .expect("the move is still proposed");
         assert_eq!(
             (proposal.target.album.as_deref(), proposal.approval),
@@ -1578,7 +1582,9 @@ mod tests {
                 Chosen::Adjudicated,
                 &[],
                 &MovePolicy::default(),
-            ),
+                Naming::reviewer(),
+            )
+            .proposal,
             None
         );
     }
