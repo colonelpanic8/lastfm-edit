@@ -2,17 +2,15 @@
 
 ## Unreleased
 
-- Compaction holds a partition lock from reading through replacement, preserving
-  scrobbles and tombstones appended concurrently by another process.
+## Scrobble Scrubber 0.2.0 (2026-10-18)
 
-- Only one scrubber executor can own a store at a time. A second app or CLI run
-  reports `Busy` without retrying an edit still owned by the first run.
-
-- Breaking scrubber API: replace queued `ScrubberCommand::{Approve, Reject, Reinstate,
-  ApproveRule, RejectRule}` with immediate async `ScrubberHandle::{approve, reject,
-  reinstate, approve_rule, reject_rule}` methods. Decisions now return their result
-  directly and rejection interrupts active execution. The next scrubber release
-  requires a minor version bump.
+- Replace queued human decisions with immediate async handle methods. Decisions return
+  their result directly and rejection interrupts active execution.
+- Hold a per-store execution lease so simultaneous app and CLI runs cannot submit the
+  same edit twice.
+- Keep the partition lock across compaction reads and replacement, preserving scrobbles
+  and tombstones appended concurrently by another process.
+- Show Last.fm album covers and artist photos in the library and intent views.
 
 ## Scrobble Scrubber 0.1.5 (2026-10-17)
 

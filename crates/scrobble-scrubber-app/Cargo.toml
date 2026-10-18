@@ -1,6 +1,6 @@
 [package]
 name = "scrobble-scrubber-app"
-version = "0.1.5"
+version = "0.2.0"
 description = "Dioxus desktop and mobile UI for scrobble-scrubber"
 edition.workspace = true
 license.workspace = true
