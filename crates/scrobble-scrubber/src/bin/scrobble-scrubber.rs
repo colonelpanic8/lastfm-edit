@@ -3,6 +3,9 @@
 
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use clap::{Parser, Subcommand};
+use scrobble_scrubber::identity::{
+    Identity, IdentityConfig, KeyStatus, LlmConfig, MovePolicy, Outcome, UserAgent,
+};
 use scrobble_scrubber::{
     approve_intent, approve_pending_rule, load_comprehensive_default_rules, reject_intent,
     reject_pending_rule, ExecEnded, Executor, ExecutorOptions, FsScrubberState, IntentState,
@@ -83,6 +86,11 @@ enum Command {
         #[command(subcommand)]
         action: PendingRulesCommand,
     },
+    /// MusicBrainz identity: resolve scrobbles to recordings and canonical albums
+    Identity {
+        #[command(subcommand)]
+        action: IdentityCommand,
+    },
     /// Inspect or reset per-provider planning coverage
     Coverage {
         #[command(subcommand)]
@@ -154,6 +162,24 @@ enum PendingRulesCommand {
 }
 
 #[derive(Subcommand)]
+enum IdentityCommand {
+    /// Resolve up to `budget` keys against MusicBrainz now (paced at ~1 request/s)
+    Resolve {
+        #[arg(long, default_value_t = 50)]
+        budget: usize,
+    },
+    /// Counts of resolved, open, not-found and deferred keys
+    Status,
+    /// What identity concluded about one artist/track (every album, or one)
+    Show {
+        artist: String,
+        track: String,
+        #[arg(long)]
+        album: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
 enum CoverageCommand {
     Show {
         #[arg(long)]
@@ -181,6 +207,48 @@ struct FileConfig {
     store: StoreSection,
     executor: ExecutorSection,
     lastfm: LastfmSection,
+    identity: IdentitySection,
+}
+
+/// MusicBrainz identity. `enabled` runs the resolving lane inside `run` and lets
+/// MusicBrainz-gated rules consult its conclusions. The LLM is configured through
+/// `SCRUBBER_LLM_*` environment variables (see `LlmConfig::from_env`).
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct IdentitySection {
+    enabled: bool,
+    /// Contact info MusicBrainz asks clients to send (an email or URL).
+    contact: String,
+    /// Rebuildable MusicBrainz response cache (default: ~/.cache/scrobble-scrubber/<username>).
+    cache_dir: Option<PathBuf>,
+    /// `[identity.moves]`: `compilations`, `editions`, `singles`, each "off", "review" or
+    /// "auto" (defaults: auto, auto, review).
+    moves: MovePolicy,
+    /// "claude-cli" adjudicates ambiguous matches with `claude -p` on its own login.
+    /// `SCRUBBER_LLM_*` environment variables take precedence.
+    llm: Option<String>,
+    /// Model for `llm` (default: opus).
+    llm_model: Option<String>,
+    /// Let the LLM research unresolved keys with web search (default: on with
+    /// "claude-cli"). Its answers are verified on MusicBrainz and always go to review.
+    llm_research: Option<bool>,
+    /// Research calls per day (default 20).
+    llm_research_budget: Option<u32>,
+}
+
+impl Default for IdentitySection {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            contact: "https://github.com/colonelpanic8/lastfm-edit".to_string(),
+            cache_dir: None,
+            moves: MovePolicy::default(),
+            llm: None,
+            llm_model: None,
+            llm_research: None,
+            llm_research_budget: None,
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -313,8 +381,63 @@ async fn run(cli: Cli) -> Result<()> {
         Command::Queue { action } => queue_cmd(&ctx, action).await,
         Command::Rules { action } => rules_cmd(&ctx, action).await,
         Command::PendingRules { action } => pending_rules_cmd(&ctx, action).await,
+        Command::Identity { action } => identity_cmd(&ctx, action).await,
         Command::Coverage { action } => coverage_cmd(&ctx, action).await,
     }
+}
+
+fn llm_config(identity: &IdentitySection) -> Result<Option<LlmConfig>> {
+    let config = match (LlmConfig::from_env(), identity.llm.as_deref()) {
+        (Some(config), _) => config,
+        (None, None) => return Ok(None),
+        (None, Some("claude-cli")) => {
+            let mut config = LlmConfig::claude_cli();
+            if let Some(model) = &identity.llm_model {
+                config.model = model.clone();
+            }
+            config
+        }
+        (None, Some(other)) => {
+            return Err(format!(
+                "identity.llm = {other:?} is not supported in the config file; use \"claude-cli\" \
+                 or the SCRUBBER_LLM_* environment variables"
+            )
+            .into())
+        }
+    };
+    Ok(Some(LlmConfig {
+        research_command: match identity.llm_research {
+            Some(false) => Vec::new(),
+            _ => config.research_command,
+        },
+        research_daily_budget: identity
+            .llm_research_budget
+            .unwrap_or(config.research_daily_budget),
+        ..config
+    }))
+}
+
+async fn open_identity(ctx: &Context) -> Result<Identity> {
+    let cache_dir = match &ctx.config.identity.cache_dir {
+        Some(dir) => dir.clone(),
+        None => dirs::cache_dir()
+            .ok_or("cannot determine a cache directory; set identity.cache_dir")?
+            .join("scrobble-scrubber")
+            .join(&ctx.username),
+    };
+    let user_agent = UserAgent::new(
+        concat!("scrobble-scrubber/", env!("CARGO_PKG_VERSION")),
+        &ctx.config.identity.contact,
+    )?;
+    Ok(Identity::open(IdentityConfig {
+        state: ctx.state.clone() as Arc<dyn ScrubberState>,
+        cache_dir,
+        http: Arc::new(http_client::native::NativeClient::new()),
+        user_agent,
+        llm: llm_config(&ctx.config.identity)?,
+        moves: ctx.config.identity.moves,
+    })
+    .await?)
 }
 
 // =====================================================================================
@@ -347,7 +470,12 @@ fn parse_feed(feed: &FeedCommand) -> Result<ScrubFeed> {
     })
 }
 
-async fn build_planner(ctx: &Context, policy: Policy, bus: ScrubberEventBus) -> Result<Planner> {
+async fn build_planner(
+    ctx: &Context,
+    identity: &Identity,
+    policy: Policy,
+    bus: ScrubberEventBus,
+) -> Result<Planner> {
     let rules = ctx.state.load_rules().await?;
     if rules.is_empty() {
         return Err(
@@ -355,11 +483,16 @@ async fn build_planner(ctx: &Context, policy: Policy, bus: ScrubberEventBus) -> 
                 .into(),
         );
     }
+    let mut rules_provider = RewriteRulesScrubActionProvider::from_rules(rules);
+    if ctx.config.identity.enabled {
+        rules_provider = rules_provider.with_identity(identity.reader());
+    }
     Ok(Planner::new(
         ctx.store.clone(),
         ctx.state.clone() as Arc<dyn ScrubberState>,
     )
-    .with_provider(RewriteRulesScrubActionProvider::from_rules(rules))
+    .with_provider(identity.provider())
+    .with_provider(rules_provider)
     .with_policy(policy)
     .with_batch_hint(ctx.config.scrubber.batch_size)
     .with_event_bus(bus))
@@ -377,7 +510,8 @@ async fn plan(
         auto_approve_rules: false,
     };
     let bus = ScrubberEventBus::new();
-    let planner = build_planner(ctx, policy, bus.clone()).await?;
+    let identity = open_identity(ctx).await?;
+    let planner = build_planner(ctx, &identity, policy, bus.clone()).await?;
     let printer = tokio::task::spawn_local(render_events(bus.subscribe()));
 
     let feed = parse_feed(feed)?;
@@ -546,7 +680,8 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         require_confirmation_all: ctx.config.scrubber.require_confirmation,
         auto_approve_rules: false,
     };
-    let planner = build_planner(ctx, policy, bus.clone()).await?;
+    let mut identity = open_identity(ctx).await?;
+    let planner = build_planner(ctx, &identity, policy, bus.clone()).await?;
 
     let generation = RunGeneration::new();
     {
@@ -560,6 +695,15 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     let (handle, actor) = ScrubberActor::new(planner, executor, ctx.state.clone());
     let actor_task = tokio::task::spawn_local(actor.run());
     let printer = tokio::task::spawn_local(render_events(bus.subscribe()));
+    let identity_task = if ctx.config.identity.enabled {
+        let lane = identity
+            .lane(ctx.store.clone() as Arc<dyn Storage>)
+            .await?
+            .with_event_bus(bus.clone());
+        Some(tokio::task::spawn_local(lane.run(generation.clone())))
+    } else {
+        None
+    };
     let mut cycle = 0;
     let mut actor_failed = false;
     while !generation.is_cancelled() {
@@ -595,6 +739,10 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     }
     let _ = handle.send(ScrubberCommand::Stop).await;
     let actor_result = actor_task.await;
+    generation.cancel();
+    if let Some(task) = identity_task {
+        let _ = task.await;
+    }
     printer.abort();
     actor_result?;
     if actor_failed {
@@ -602,6 +750,148 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     }
     println!("stopped after {cycle} cycle(s)");
     Ok(())
+}
+
+// =====================================================================================
+// Identity
+// =====================================================================================
+
+async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
+    let mut identity = open_identity(ctx).await?;
+    match action {
+        IdentityCommand::Resolve { budget } => {
+            let bus = ScrubberEventBus::new();
+            let printer = tokio::task::spawn_local(render_events(bus.subscribe()));
+            let mut lane = identity
+                .lane(ctx.store.clone() as Arc<dyn Storage>)
+                .await?
+                .with_event_bus(bus);
+            let report = lane.run_round(*budget).await?;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            printer.abort();
+            eprintln!();
+            println!(
+                "{} keys: {} resolved, {} ambiguous ({} adjudicated), {} not found, {} deferred, \
+                 {} researched, {} rejections recorded; {} MusicBrainz requests, {} cache hits; \
+                 ended {:?}",
+                report.keys_attempted,
+                report.resolved,
+                report.ambiguous,
+                report.adjudicated,
+                report.not_found,
+                report.deferred,
+                report.researched,
+                report.rejections_recorded,
+                report.mb_requests,
+                report.cache_hits,
+                report.ended,
+            );
+        }
+        IdentityCommand::Status => {
+            let counts = identity.reader().status_counts();
+            println!(
+                "settled {}  open {}  not found {}  deferred {}  stale {}",
+                counts.settled, counts.open, counts.not_found, counts.deferred, counts.stale
+            );
+        }
+        IdentityCommand::Show {
+            artist,
+            track,
+            album,
+        } => {
+            let snapshot = identity.reader().snapshot();
+            let mut entries: Vec<_> = snapshot
+                .keys
+                .iter()
+                .filter(|(key, _)| {
+                    key.artist == *artist
+                        && key.track == *track
+                        && album
+                            .as_ref()
+                            .is_none_or(|album| key.album.as_ref() == Some(album))
+                })
+                .collect();
+            entries.sort_by(|a, b| a.0.cmp(b.0));
+            if entries.is_empty() {
+                println!("no resolutions for {artist} — {track}");
+            }
+            for (key, entry) in entries {
+                println!("{key}");
+                match &entry.status {
+                    KeyStatus::Settled { outcome } => print_outcome("  ", outcome),
+                    KeyStatus::Open {
+                        case,
+                        awaiting_llm,
+                        verdict,
+                    } => {
+                        println!("  ambiguous ({} options)", case.options.len());
+                        for option in &case.options {
+                            println!("  option {}:", option.id.0);
+                            print_outcome("    ", &option.outcome);
+                        }
+                        match verdict {
+                            Some(verdict) => println!(
+                                "  llm: {:?} ({:?}) {}",
+                                verdict.choice, verdict.confidence, verdict.reason
+                            ),
+                            None if *awaiting_llm => println!("  llm: pending"),
+                            None => println!("  llm: none (options go to review one at a time)"),
+                        }
+                    }
+                    KeyStatus::NotFound => println!("  not found on MusicBrainz"),
+                    KeyStatus::Deferred { retry_after } => {
+                        println!("  deferred until {}", fmt_ts(*retry_after))
+                    }
+                    KeyStatus::Stale => println!("  stale (older resolver version)"),
+                }
+                if let Some(note) = &entry.research {
+                    let id = |id: Option<&str>| id.unwrap_or("none").to_string();
+                    println!(
+                        "  research {} by {} ({:?}): recording {}, release group {}, {}",
+                        fmt_ts(note.at),
+                        note.by,
+                        note.confidence,
+                        id(note.recording.as_ref().map(|r| r.0.as_str())),
+                        id(note.release_group.as_ref().map(|g| g.0.as_str())),
+                        if note.verified {
+                            "verified on MusicBrainz"
+                        } else {
+                            "not confirmed by MusicBrainz"
+                        }
+                    );
+                    println!("    {}", note.reason);
+                }
+                for target in &entry.rejected {
+                    println!(
+                        "  rejected: title {:?}, album {:?}",
+                        target.title, target.album
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn print_outcome(indent: &str, outcome: &Outcome) {
+    println!("{indent}title    {}", outcome.title);
+    if let Some(group) = &outcome.scrobbled_group {
+        println!("{indent}on       {}", group.describe());
+    }
+    match &outcome.canonical {
+        Some(canonical) => println!(
+            "{indent}canonical {} [{:?}{}]",
+            canonical.group.describe(),
+            canonical.rung,
+            if canonical.single_first {
+                ", single first"
+            } else {
+                ""
+            }
+        ),
+        None => println!("{indent}canonical none"),
+    }
+    println!("{indent}proof    {:?}", outcome.proof);
 }
 
 // =====================================================================================
@@ -863,6 +1153,7 @@ async fn render_events(mut rx: scrobble_scrubber::ScrubberEventReceiver) {
                     }
                     ScrubberEvent::CycleStarted { n } => status_line(&format!("cycle {n}: syncing…")),
                     ScrubberEvent::Sleeping { seconds } => status_line(&format!("idle, next cycle in {seconds}s")),
+                    ScrubberEvent::IdentityKeyProcessed { key, status } => status_line(&format!("identity {status}: {key}")),
                     _ => {}
                 }
             }
