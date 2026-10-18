@@ -1,5 +1,7 @@
 //! Library: local-mirror listening stats — top artists, albums, and per-artist drill-down.
 
+use crate::artwork::ArtSubject;
+use crate::components::Art;
 use crate::model::fmt_ts;
 use crate::{CoreSignal, UiSignal};
 use dioxus::prelude::*;
@@ -37,6 +39,8 @@ impl RangeChoice {
         Some(now.saturating_sub(days * 86_400)..now)
     }
 }
+
+const COVER_WALL_SIZE: usize = 12;
 
 /// Range-scoped library aggregates plus the always-global status figures.
 #[derive(Clone, PartialEq, Default)]
@@ -226,7 +230,10 @@ pub fn Library() -> Element {
                         rsx! {
                             div { class: "card",
                                 div { class: "row", style: "justify-content: space-between; margin-bottom: 10px;",
-                                    div { class: "headline-count", "{artist}" }
+                                    div { class: "artist-head",
+                                        Art { subject: ArtSubject::Artist(artist.clone()), class: "art-hero" }
+                                        div { class: "headline-count", "{artist}" }
+                                    }
                                     button {
                                         class: "btn",
                                         onclick: move |_| selected_artist.set(None),
@@ -272,8 +279,15 @@ pub fn Library() -> Element {
                                                     let pct = album.count * 100 / album_max;
                                                     let rank = i + 1;
                                                     rsx! {
-                                                        div { class: "lib-row",
+                                                        div { class: "lib-row", key: "{album.artist}/{album.album}",
                                                             span { class: "lib-rank", "{rank}" }
+                                                            Art {
+                                                                subject: ArtSubject::Album {
+                                                                    artist: album.artist.clone(),
+                                                                    album: album.album.clone(),
+                                                                },
+                                                                class: "art-thumb",
+                                                            }
                                                             span { class: "lib-name", "{album.album}" }
                                                             div { class: "lib-bar",
                                                                 div { class: "lib-bar-fill", style: "width: {pct}%;" }
@@ -283,6 +297,35 @@ pub fn Library() -> Element {
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !data.albums.is_empty() {
+                    div { class: "cover-wall",
+                        for album in data.albums.iter().take(COVER_WALL_SIZE) {
+                            {
+                                let name = album.artist.clone();
+                                rsx! {
+                                    button {
+                                        class: "cover-tile",
+                                        key: "{album.artist}/{album.album}",
+                                        title: "{album.album} — {album.artist}",
+                                        onclick: move |_| selected_artist.set(Some(name.clone())),
+                                        Art {
+                                            subject: ArtSubject::Album {
+                                                artist: album.artist.clone(),
+                                                album: album.album.clone(),
+                                            },
+                                            class: "art-tile",
+                                        }
+                                        div { class: "cover-caption",
+                                            div { class: "cover-album", "{album.album}" }
+                                            div { class: "cover-artist", "{album.artist}" }
+                                            div { class: "cover-count", "{album.count} plays" }
                                         }
                                     }
                                 }
@@ -305,8 +348,10 @@ pub fn Library() -> Element {
                                     rsx! {
                                         div {
                                             class: "lib-row clickable",
+                                            key: "{artist.artist}",
                                             onclick: move |_| selected_artist.set(Some(name.clone())),
                                             span { class: "lib-rank", "{rank}" }
+                                            Art { subject: ArtSubject::Artist(artist.artist.clone()), class: "art-thumb" }
                                             span { class: "lib-name", "{artist.artist}" }
                                             div { class: "lib-bar",
                                                 div { class: "lib-bar-fill", style: "width: {pct}%;" }
@@ -332,8 +377,16 @@ pub fn Library() -> Element {
                                     rsx! {
                                         div {
                                             class: "lib-row clickable",
+                                            key: "{album.artist}/{album.album}",
                                             onclick: move |_| selected_artist.set(Some(name.clone())),
                                             span { class: "lib-rank", "{rank}" }
+                                            Art {
+                                                subject: ArtSubject::Album {
+                                                    artist: album.artist.clone(),
+                                                    album: album.album.clone(),
+                                                },
+                                                class: "art-thumb",
+                                            }
                                             span { class: "lib-name", "{album.album} — {album.artist}" }
                                             div { class: "lib-bar",
                                                 div { class: "lib-bar-fill", style: "width: {pct}%;" }

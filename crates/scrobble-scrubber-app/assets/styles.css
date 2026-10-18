@@ -570,6 +570,157 @@ input[type="password"] {
   font-size: 12px;
 }
 
+/* ---- artwork --------------------------------------------------------------- */
+
+.art {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--art-hue) 32% 30%),
+    hsl(calc(var(--art-hue) + 40) 30% 18%)
+  );
+  display: grid;
+  place-items: center;
+}
+
+.art.artist {
+  border-radius: 50%;
+}
+
+.art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: art-in 180ms ease-out;
+}
+
+@keyframes art-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.art-initial {
+  color: hsl(var(--art-hue) 45% 80%);
+  font-weight: 700;
+  user-select: none;
+}
+
+.art-thumb {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+
+.art-card {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+
+.art-hero {
+  width: 88px;
+  height: 88px;
+  font-size: 32px;
+}
+
+.art-tile {
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+  border-radius: 0;
+  font-size: 40px;
+}
+
+.cover-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cover-tile {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.cover-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.cover-caption {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 30px 9px 8px;
+  background: linear-gradient(
+    transparent,
+    rgba(10, 10, 14, 0.78) 45%,
+    rgba(10, 10, 14, 0.95)
+  );
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.cover-album,
+.cover-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cover-album {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.cover-artist {
+  color: #c9cad6;
+  font-size: 12px;
+}
+
+.cover-count {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.artist-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.artist-head .headline-count {
+  font-size: 22px;
+  margin-bottom: 0;
+}
+
+.intent-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.intent-title {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---- sync ------------------------------------------------------------------- */
 
 .cov-track {
@@ -624,7 +775,7 @@ input.history-search {
 
 .feed-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   padding: 4px 6px;
   border-radius: var(--radius);
@@ -673,7 +824,7 @@ input.history-search {
   }
 
   .feed-time {
-    width: 100%;
+    width: calc(100% - 44px);
   }
 }
 

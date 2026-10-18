@@ -5333,10 +5333,12 @@ dependencies = [
  "scrobble-scrubber",
  "scrobble-store",
  "serde",
+ "serde_json",
  "tokio",
  "toml",
  "tracing",
  "tracing-subscriber",
+ "urlencoding",
  "uuid",
 ]
 

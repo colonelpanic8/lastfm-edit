@@ -1,5 +1,6 @@
 //! Scrobble Scrubber app: review and drive scrobble metadata cleanup.
 
+mod artwork;
 mod background;
 mod components;
 mod core;

@@ -23,6 +23,8 @@ tokio = { version = "1", default-features = false, features = ["rt-multi-thread"
 toml = "0.8"
 chrono.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+urlencoding = "2.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 dirs = "5.0"
 futures-util = "0.3"

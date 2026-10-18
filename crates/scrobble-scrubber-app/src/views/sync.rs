@@ -2,6 +2,8 @@
 //! entirely from the local mirror. This view never talks to Last.fm — the "Sync now"
 //! button hands off to the backend sync engine, which is the only thing that does.
 
+use crate::artwork::ArtSubject;
+use crate::components::Art;
 use crate::model::{fmt_ts, SyncStatus};
 use crate::{CoreSignal, UiSignal};
 use chrono::{DateTime, Local};
@@ -376,7 +378,11 @@ pub fn Sync() -> Element {
                 } else {
                     div { class: "feed-list",
                         for scrobble in history_scrobbles.iter() {
-                            div { class: "feed-row",
+                            div { class: "feed-row", key: "{scrobble.id}",
+                                Art {
+                                    subject: ArtSubject::for_track(&scrobble.artist, scrobble.album.as_deref()),
+                                    class: "art-thumb",
+                                }
                                 span { class: "feed-time mono",
                                     "{fmt_ts(scrobble.uts)}"
                                 }

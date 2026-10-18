@@ -99,6 +99,7 @@ pub struct AppCore {
     /// Hash of the active rule set (None when empty) — for spotting stale planning
     /// coverage in the UI before the planner resets it.
     pub rules_hash: Option<String>,
+    pub artwork: Arc<crate::artwork::ArtworkResolver>,
 }
 
 /// Built on the backend thread; `!Send` parts never leave it.
@@ -720,6 +721,7 @@ async fn build(
         }
     }
     .non_blocking();
+    let session = client.get_session();
 
     let bus = ScrubberEventBus::new();
     let planner = Planner::new(
@@ -752,6 +754,12 @@ async fn build(
         Some(api_key) => Some(api_key),
         None => env_or_pass("LASTFM_EDIT_API_KEY", Some("api-key")).map_err(StartupError::Other)?,
     };
+    let artwork = crate::artwork::ArtworkResolver::new(
+        &session,
+        api_key.clone().filter(|key| !key.is_empty()),
+        store_root.join("artwork.json"),
+    )
+    .map_err(StartupError::Other)?;
     let (sync, sync_events) = match api_key {
         Some(api_key) if !api_key.is_empty() => {
             let api_client =
@@ -779,6 +787,7 @@ async fn build(
             sync_available: sync.is_some(),
             rules_empty,
             rules_hash: active_rules_hash,
+            artwork: Arc::new(artwork),
         },
         actor,
         sync,

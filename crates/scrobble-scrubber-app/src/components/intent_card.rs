@@ -1,6 +1,8 @@
 //! One edit intent, rendered as a reviewable card with diff, progress, and
 //! context-appropriate actions.
 
+use crate::artwork::ArtSubject;
+use crate::components::Art;
 use crate::core::BackendCommand;
 use crate::model::{edit_diff, fmt_ts};
 use crate::CoreSignal;
@@ -66,6 +68,14 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
     let created = fmt_ts(intent.created_at);
     let updated = fmt_ts(intent.updated_at);
     let subject_line = intent.subject.to_string();
+    let art = ArtSubject::for_track(
+        intent
+            .subject
+            .album_artist
+            .as_deref()
+            .unwrap_or(&intent.subject.artist),
+        intent.subject.album.as_deref(),
+    );
 
     let total = intent.instances.len();
     let done = intent.done_count();
@@ -86,15 +96,20 @@ pub fn IntentCard(intent: EditIntent, context: CardContext) -> Element {
 
     rsx! {
         div { class: "intent",
-            div { class: "subject", "{subject_line}" }
-            div { class: "meta",
-                span { class: "pill {state_class}", "{state_label}" }
-                span { class: "pill", "{intent.provider}" }
-                if intent.requires_approval {
-                    span { class: "pill accent", "needs approval" }
+            div { class: "intent-head",
+                Art { subject: art, class: "art-card" }
+                div { class: "intent-title",
+                    div { class: "subject", "{subject_line}" }
+                    div { class: "meta",
+                        span { class: "pill {state_class}", "{state_label}" }
+                        span { class: "pill", "{intent.provider}" }
+                        if intent.requires_approval {
+                            span { class: "pill accent", "needs approval" }
+                        }
+                        span { "created {created}" }
+                        span { "updated {updated}" }
+                    }
                 }
-                span { "created {created}" }
-                span { "updated {updated}" }
             }
             if diffs.is_empty() {
                 div { class: "muted", "no field changes (metadata-only intent)" }
