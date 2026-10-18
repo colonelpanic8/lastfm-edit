@@ -64,6 +64,8 @@ pub struct SuggestionWithContext {
     pub suggestion: ScrubActionSuggestion,
     pub requires_confirmation: bool,
     pub provider_name: String,
+    /// Human-readable reason shown in review. Not machine-parsed.
+    pub rationale: Option<String>,
 }
 
 impl SuggestionWithContext {
@@ -76,7 +78,13 @@ impl SuggestionWithContext {
             suggestion,
             requires_confirmation,
             provider_name,
+            rationale: None,
         }
+    }
+
+    pub fn with_rationale(mut self, rationale: impl Into<String>) -> Self {
+        self.rationale = Some(rationale.into());
+        self
     }
 
     pub fn edit_with_confirmation(
@@ -145,17 +153,51 @@ pub trait ScrubActionProvider: Send + Sync {
     fn rules_snapshot(&self, _rules: &[RewriteRule]) -> Option<BoxedProvider> {
         None
     }
+
+    /// Durable change feed: keys whose analysis may differ since `cursor` because the
+    /// provider's external evidence changed. The planner re-plans their live records
+    /// (without a coverage claim) and persists `next_cursor` only after enqueueing.
+    /// Providers whose answers depend only on the record have no feed.
+    fn changes_since(&self, _cursor: u64) -> Option<ChangeBatch> {
+        None
+    }
+
+    /// Identifies the provider's configuration. When it differs from the one its planning
+    /// coverage was built under, the planner forgets that coverage and change cursor so
+    /// everything is re-planned under the new configuration.
+    fn generation(&self) -> Option<String> {
+        None
+    }
+}
+
+/// Keys a provider's change feed reports, and the cursor to resume after them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ChangeBatch {
+    pub keys: Vec<crate::subject::ScrobbleKey>,
+    pub next_cursor: u64,
 }
 
 /// Rewrite rules-based action provider
 pub struct RewriteRulesScrubActionProvider {
     rules: Vec<RewriteRule>,
+    identity: Option<crate::identity::ResolutionReader>,
 }
 
 impl RewriteRulesScrubActionProvider {
     #[must_use]
     pub const fn from_rules(rules: Vec<RewriteRule>) -> Self {
-        Self { rules }
+        Self {
+            rules,
+            identity: None,
+        }
+    }
+
+    /// Confirm `requires_musicbrainz_confirmation` rules against resolved identities
+    /// instead of degrading them to human confirmation.
+    #[must_use]
+    pub fn with_identity(mut self, reader: crate::identity::ResolutionReader) -> Self {
+        self.identity = Some(reader);
+        self
     }
 
     pub fn rules(&self) -> &[RewriteRule] {
@@ -185,35 +227,18 @@ impl RewriteRulesScrubActionProvider {
             }
 
             if rule.requires_musicbrainz_confirmation {
-                #[cfg(feature = "musicbrainz")]
-                {
-                    let confirmed = Self::verify_with_musicbrainz_using_rule_filters(
-                        &candidate,
-                        track,
-                        rule.musicbrainz_release_filters.as_ref(),
-                    )
-                    .await?;
-                    if !confirmed {
-                        log::info!(
-                            "Rewrite rule '{}' rejected by MusicBrainz confirmation for track '{} - {}' (album: {})",
+                match self.musicbrainz_confirmation(track, &candidate) {
+                    MbConfirmation::Confirmed => {}
+                    MbConfirmation::Contradicted | MbConfirmation::Unresolved => {
+                        log::debug!(
+                            "Rewrite rule '{}' not confirmed by MusicBrainz identity for '{} - {}'",
                             rule.name.as_deref().unwrap_or("Unnamed"),
                             track.artist,
                             track.name,
-                            track.album.as_deref().unwrap_or("none")
                         );
-                        continue; // Skip this rule only
+                        continue;
                     }
-                }
-                #[cfg(not(feature = "musicbrainz"))]
-                {
-                    // Without the musicbrainz feature, a human replaces MusicBrainz:
-                    // the rule still applies but the result requires confirmation.
-                    log::debug!(
-                        "Rule '{}' wants MusicBrainz confirmation but the feature is disabled; \
-                         degrading to human confirmation",
-                        rule.name.as_deref().unwrap_or("Unnamed")
-                    );
-                    requires_confirmation_applied = true;
+                    MbConfirmation::NoIdentity => requires_confirmation_applied = true,
                 }
             }
 
@@ -230,38 +255,46 @@ impl RewriteRulesScrubActionProvider {
         }
     }
 
-    /// Verify that the candidate edit corresponds to a real MusicBrainz match using
-    /// rule-specific filters.
-    #[cfg(feature = "musicbrainz")]
-    async fn verify_with_musicbrainz_using_rule_filters(
-        candidate: &ScrobbleEdit,
-        track: &Track,
-        release_filters: Option<&crate::filters::ReleaseFilterConfig>,
-    ) -> Result<bool, ActionProviderError> {
-        let artist = candidate.artist_name.clone();
+    /// Whether the resolved identity of `track`'s key agrees with a rule's rewrite: the
+    /// rewritten title fold-equals the MB recording title, and a rewritten album
+    /// fold-equals the scrobbled or canonical release-group title. `Unresolved` skips the
+    /// rule for now; the identity change feed re-plans the key once it resolves.
+    fn musicbrainz_confirmation(&self, track: &Track, candidate: &ScrobbleEdit) -> MbConfirmation {
+        let Some(reader) = &self.identity else {
+            return MbConfirmation::NoIdentity;
+        };
+        // Identity never vouches for artists.
+        if candidate.artist_name != track.artist {
+            return MbConfirmation::Contradicted;
+        }
+        let key = crate::subject::ScrobbleKey {
+            artist: track.artist.clone(),
+            track: track.name.clone(),
+            album: track.album.clone(),
+        };
         let title = candidate
             .track_name
-            .clone()
-            .unwrap_or_else(|| track.name.clone());
-        let album = candidate.album_name.clone();
-
-        if let Some(filters) = release_filters {
-            crate::musicbrainz::MusicBrainzScrubActionProvider::verify_track_exists_with_filters(
-                &artist,
-                &title,
-                album.as_deref(),
-                filters,
-            )
-            .await
-            .map_err(|e| ActionProviderError(format!("MusicBrainz verification failed: {e}")))
-        } else {
-            let default_provider = crate::musicbrainz::MusicBrainzScrubActionProvider::new(0.8, 20);
-            default_provider
-                .verify_track_exists(&artist, &title, album.as_deref())
-                .await
-                .map_err(|e| ActionProviderError(format!("MusicBrainz verification failed: {e}")))
+            .as_deref()
+            .filter(|title| *title != track.name);
+        let album = candidate
+            .album_name
+            .as_deref()
+            .filter(|album| track.album.as_deref() != Some(*album));
+        match reader.settled_agrees(&key, title, album) {
+            Some(true) => MbConfirmation::Confirmed,
+            Some(false) => MbConfirmation::Contradicted,
+            None => MbConfirmation::Unresolved,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MbConfirmation {
+    Confirmed,
+    Contradicted,
+    Unresolved,
+    /// No identity reader configured: a human confirms instead.
+    NoIdentity,
 }
 
 #[async_trait]
@@ -305,7 +338,10 @@ impl ScrubActionProvider for RewriteRulesScrubActionProvider {
     }
 
     fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
-        Some(boxed(Self::from_rules(rules.to_vec())))
+        Some(boxed(Self {
+            rules: rules.to_vec(),
+            identity: self.identity.clone(),
+        }))
     }
 }
 
@@ -334,6 +370,14 @@ where
     }
     fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
         (**self).rules_snapshot(rules)
+    }
+
+    fn changes_since(&self, cursor: u64) -> Option<ChangeBatch> {
+        (**self).changes_since(cursor)
+    }
+
+    fn generation(&self) -> Option<String> {
+        (**self).generation()
     }
 }
 
@@ -373,6 +417,14 @@ where
     }
     fn rules_snapshot(&self, rules: &[RewriteRule]) -> Option<BoxedProvider> {
         self.inner.rules_snapshot(rules)
+    }
+
+    fn changes_since(&self, cursor: u64) -> Option<ChangeBatch> {
+        self.inner.changes_since(cursor)
+    }
+
+    fn generation(&self) -> Option<String> {
+        self.inner.generation()
     }
 }
 
@@ -458,5 +510,148 @@ impl ScrubActionProvider for OrScrubActionProvider {
 
     fn provider_name(&self) -> &'static str {
         "or_provider"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::identity::{
+        Canonical, Outcome, Proof, ResolutionEvent, ResolutionEventKind, ResolutionReader, Rung,
+    };
+    use crate::rewrite::SdRule;
+    use crate::subject::ScrobbleKey;
+
+    fn group(title: &str) -> crate::identity::ReleaseGroup {
+        let secondary: &[&str] = if title.starts_with("Hot Rocks") {
+            &["Compilation"]
+        } else {
+            &[]
+        };
+        serde_json::from_value(serde_json::json!({
+            "id": title.to_lowercase(),
+            "title": title,
+            "primary": "Album",
+            "secondary": secondary,
+            "first_release": null,
+            "credit": { "parts": [] },
+        }))
+        .unwrap()
+    }
+
+    fn settled(track: &Track, scrobbled: &str, canonical: &str, proof: Proof) -> ResolutionEvent {
+        ResolutionEvent {
+            key: ScrobbleKey {
+                artist: track.artist.clone(),
+                track: track.name.clone(),
+                album: track.album.clone(),
+            },
+            at: 1,
+            resolver: crate::identity::RESOLVER_VERSION,
+            kind: ResolutionEventKind::Resolved {
+                outcome: Outcome {
+                    master: Vec::new(),
+                    title: "Wild Horses".into(),
+                    scrobbled_group: Some(group(scrobbled)),
+                    canonical: Some(Canonical {
+                        group: group(canonical),
+                        rung: Rung::PlainAlbum,
+                        single_first: false,
+                    }),
+                    proof,
+                },
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn musicbrainz_gated_rules_follow_the_settled_identity() {
+        let track = Track {
+            name: "Wild Horses".into(),
+            artist: "The Rolling Stones".into(),
+            playcount: 1,
+            timestamp: None,
+            album: Some("Sticky Fingers (Deluxe Edition)".into()),
+            album_artist: None,
+        };
+        let rule = RewriteRule::new()
+            .with_name("Remove Deluxe Edition (MB-confirmed)")
+            .with_album_name(SdRule::new(r"^(.+?) \([Dd]eluxe [Ee]dition\)$", "$1"))
+            .with_musicbrainz_confirmation_required(true);
+        let cases = [
+            ("no identity configured", None, Some(true)),
+            ("unresolved", Some(vec![]), None),
+            (
+                "scrobbled group agrees",
+                Some(vec![settled(
+                    &track,
+                    "Sticky Fingers",
+                    "Sticky Fingers",
+                    Proof::SameRecording,
+                )]),
+                Some(false),
+            ),
+            (
+                "settled on the same work only",
+                Some(vec![settled(
+                    &track,
+                    "Sticky Fingers",
+                    "Sticky Fingers",
+                    Proof::SameWork,
+                )]),
+                None,
+            ),
+            (
+                "canonical group agrees",
+                Some(vec![settled(
+                    &track,
+                    "Hot Rocks 1964–1971",
+                    "Sticky Fingers",
+                    Proof::SameRecording,
+                )]),
+                Some(false),
+            ),
+            (
+                "contradicted",
+                Some(vec![settled(
+                    &track,
+                    "Hot Rocks 1964–1971",
+                    "Exile on Main St.",
+                    Proof::SameRecording,
+                )]),
+                None,
+            ),
+        ];
+        for (name, events, expected) in cases {
+            let mut provider = RewriteRulesScrubActionProvider::from_rules(vec![rule.clone()]);
+            if let Some(events) = events {
+                provider = provider.with_identity(ResolutionReader::from_events(events));
+            }
+            let result = provider.apply_rules_sequentially(&track).await.unwrap();
+            let got = result.map(|(edit, requires_confirmation)| {
+                assert_eq!(edit.album_name.as_deref(), Some("Sticky Fingers"), "{name}");
+                requires_confirmation
+            });
+            assert_eq!(got, expected, "{name}");
+        }
+
+        let snapshot = RewriteRulesScrubActionProvider::from_rules(Vec::new())
+            .with_identity(ResolutionReader::from_events(vec![settled(
+                &track,
+                "Sticky Fingers",
+                "Sticky Fingers",
+                Proof::SameRecording,
+            )]))
+            .rules_snapshot(std::slice::from_ref(&rule))
+            .unwrap();
+        let results = snapshot
+            .analyze_tracks(std::slice::from_ref(&track), None, None)
+            .await
+            .unwrap();
+        let confirmations: Vec<bool> = results
+            .iter()
+            .flat_map(|(_, suggestions)| suggestions.iter().map(|s| s.requires_confirmation))
+            .collect();
+        assert_eq!(confirmations, vec![false], "rules snapshot kept identity");
     }
 }

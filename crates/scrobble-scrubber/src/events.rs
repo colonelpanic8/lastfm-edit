@@ -6,7 +6,7 @@
 
 use crate::feed::ScrubFeed;
 use crate::queue::IntentState;
-use crate::subject::Subject;
+use crate::subject::{ScrobbleKey, Subject};
 use scrobble_store::{PauseReason, ScrobbleId, SyncEvent};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -23,6 +23,9 @@ pub struct PlanReport {
     pub rules_proposed: u64,
     /// Dry-run: suggestions reported but not enqueued.
     pub reported_only: u64,
+    /// Intents awaiting approval that were replaced by a different merge.
+    #[serde(default)]
+    pub superseded: u64,
 }
 
 /// Why an execution pass returned.
@@ -135,6 +138,15 @@ pub enum ScrubberEvent {
     ExecutorResumed,
     ExecCompleted {
         report: ExecReport,
+    },
+
+    // ---- identity lane ----------------------------------------------------------
+    IdentityKeyProcessed {
+        key: ScrobbleKey,
+        status: String,
+    },
+    IdentityRoundCompleted {
+        report: crate::identity::LaneReport,
     },
 
     // ---- lifecycle / continuous mode ---------------------------------------------

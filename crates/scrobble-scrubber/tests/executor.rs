@@ -75,6 +75,8 @@ async fn queue_ready_intent(state: &dyn ScrubberState) -> Uuid {
                 proposed: Box::new(proposal()),
                 provider: "rewrite_rules".into(),
                 requires_approval: false,
+                rationale: None,
+                sources: Default::default(),
             },
         }])
         .await
@@ -517,6 +519,8 @@ async fn queue_intent_for(
                 proposed: Box::new(proposed),
                 provider: "rewrite_rules".into(),
                 requires_approval: false,
+                rationale: None,
+                sources: Default::default(),
             },
         }])
         .await

@@ -10,6 +10,7 @@
 //! A parallel, smaller log (`pending_rules.jsonl`) holds provider-proposed rewrite rules
 //! awaiting human approval.
 
+use crate::merge::EditField;
 use crate::subject::Subject;
 use lastfm_edit::ScrobbleEdit;
 use scrobble_store::ScrobbleId;
@@ -42,6 +43,12 @@ pub enum QueueEventKind {
         proposed: Box<ScrobbleEdit>,
         provider: String,
         requires_approval: bool,
+        /// Why the provider proposed it, for review.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rationale: Option<String>,
+        /// Which corrector set each changed field. Empty means `provider` set them all.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        sources: BTreeMap<EditField, String>,
     },
     /// Human (or auto-policy at creation) released the intent for execution.
     Approved,
@@ -115,6 +122,9 @@ pub struct EditIntent {
     pub proposed: Box<ScrobbleEdit>,
     pub provider: String,
     pub requires_approval: bool,
+    pub rationale: Option<String>,
+    /// Which corrector set each changed field.
+    pub sources: BTreeMap<EditField, String>,
     pub state: IntentState,
     /// Per-instance progress, populated once expanded.
     pub instances: BTreeMap<ScrobbleId, InstanceStatus>,
@@ -162,10 +172,18 @@ pub fn fold_queue(events: impl IntoIterator<Item = QueueEvent>) -> Vec<EditInten
                 proposed,
                 provider,
                 requires_approval,
+                rationale,
+                mut sources,
             } => {
                 if intents.contains_key(&event.id) {
                     log::warn!("queue: duplicate Created for {}; ignoring", event.id);
                     continue;
+                }
+                if sources.is_empty() {
+                    sources = crate::merge::changes(&proposed)
+                        .into_keys()
+                        .map(|field| (field, provider.clone()))
+                        .collect();
                 }
                 order.push(event.id);
                 intents.insert(
@@ -176,6 +194,8 @@ pub fn fold_queue(events: impl IntoIterator<Item = QueueEvent>) -> Vec<EditInten
                         proposed,
                         provider,
                         requires_approval,
+                        rationale,
+                        sources,
                         state: if requires_approval {
                             IntentState::AwaitingApproval
                         } else {
@@ -252,8 +272,10 @@ pub fn fold_queue(events: impl IntoIterator<Item = QueueEvent>) -> Vec<EditInten
                             intent.state = IntentState::Applied;
                         }
                     }
+                    // The executor abandons executable intents; the planner abandons
+                    // awaiting ones it supersedes.
                     QueueEventKind::Abandoned { reason } => {
-                        if intent.state.is_executable() {
+                        if intent.state.is_open() {
                             intent.state = IntentState::Abandoned { reason };
                         }
                     }
@@ -423,6 +445,8 @@ mod tests {
                 proposed: Box::new(create_no_op_edit(&track)),
                 provider: "rewrite_rules".into(),
                 requires_approval,
+                rationale: None,
+                sources: BTreeMap::new(),
             },
         }
     }

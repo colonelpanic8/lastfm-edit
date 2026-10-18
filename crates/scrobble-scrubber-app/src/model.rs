@@ -329,6 +329,14 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
                 report.instances_failed
             ),
         ),
+        ScrubberEvent::IdentityKeyProcessed { .. } => return None,
+        ScrubberEvent::IdentityRoundCompleted { report } => (
+            "♫",
+            format!(
+                "identity round: {} keys, {} resolved, {} ambiguous, {} not found",
+                report.keys_attempted, report.resolved, report.ambiguous, report.not_found
+            ),
+        ),
         ScrubberEvent::CycleStarted { n } => ("↻", format!("cycle {n}")),
         ScrubberEvent::CycleCompleted { .. } => return None,
         ScrubberEvent::Sleeping { seconds } => ("z", format!("idle for {seconds}s")),

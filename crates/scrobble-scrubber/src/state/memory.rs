@@ -17,6 +17,7 @@ struct Inner {
     rule_events: Vec<RuleEvent>,
     dismissed: Vec<DismissedEntry>,
     coverage: HashMap<String, ProviderCoverage>,
+    resolution_events: Vec<crate::identity::ResolutionEvent>,
 }
 
 pub struct MemoryScrubberState {
@@ -120,5 +121,21 @@ impl ScrubberState for MemoryScrubberState {
             .coverage
             .insert(provider.to_string(), coverage.clone());
         Ok(())
+    }
+
+    async fn append_resolution_events(
+        &self,
+        events: &[crate::identity::ResolutionEvent],
+    ) -> Result<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .resolution_events
+            .extend_from_slice(events);
+        Ok(())
+    }
+
+    async fn load_resolution_events(&self) -> Result<Vec<crate::identity::ResolutionEvent>> {
+        Ok(self.inner.lock().unwrap().resolution_events.clone())
     }
 }

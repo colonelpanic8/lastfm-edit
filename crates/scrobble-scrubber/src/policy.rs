@@ -35,3 +35,19 @@ impl Policy {
         }
     }
 }
+
+/// The most a corrector may decide on its own. `Review` sends everything it proposes to a
+/// human; `Auto` keeps the corrector's own judgment, which may still ask for review.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Ceiling {
+    Review,
+    #[default]
+    Auto,
+}
+
+impl Ceiling {
+    pub fn requires_confirmation(self, proposed: bool) -> bool {
+        proposed || self == Ceiling::Review
+    }
+}

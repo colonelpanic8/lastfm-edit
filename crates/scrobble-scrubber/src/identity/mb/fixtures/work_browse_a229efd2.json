@@ -1,0 +1,42 @@
+{
+  "recording-count": 378,
+  "recording-offset": 0,
+  "recordings": [
+    {
+      "id": "04cfc359-e11a-46a1-ab11-0be97b2a3e3d",
+      "title": "Cocaine",
+      "length": 122000,
+      "disambiguation": ""
+    },
+    {
+      "id": "069e43a4-6a14-46d6-9d86-ba54fa5a640c",
+      "title": "Cocaine",
+      "length": 95000,
+      "disambiguation": ""
+    },
+    {
+      "id": "07a57746-d956-4053-9b54-39ef8e6d49ff",
+      "title": "Cocaine",
+      "length": null,
+      "disambiguation": ""
+    },
+    {
+      "id": "0a6d7266-b039-43a7-935f-5c8bec073999",
+      "title": "Cocaine",
+      "length": 167866,
+      "disambiguation": ""
+    },
+    {
+      "id": "0a8926e0-fa86-4e28-8306-dacd547893c1",
+      "title": "Cocaine",
+      "length": 301673,
+      "disambiguation": ""
+    },
+    {
+      "id": "0b0861e0-0aa5-42f4-bf49-4b065b908ee8",
+      "title": "Cocaine",
+      "length": 212000,
+      "disambiguation": ""
+    }
+  ]
+}

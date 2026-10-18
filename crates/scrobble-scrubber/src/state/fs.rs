@@ -147,4 +147,15 @@ impl ScrubberState for FsScrubberState {
             contents.as_bytes(),
         )?)
     }
+
+    async fn append_resolution_events(
+        &self,
+        events: &[crate::identity::ResolutionEvent],
+    ) -> Result<()> {
+        self.append_jsonl("resolutions.jsonl", events)
+    }
+
+    async fn load_resolution_events(&self) -> Result<Vec<crate::identity::ResolutionEvent>> {
+        self.read_jsonl("resolutions.jsonl")
+    }
 }
