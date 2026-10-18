@@ -5069,6 +5069,7 @@ dependencies = [
  "lastfm-edit",
  "log",
  "regex",
+ "rusqlite",
  "scrobble-store",
  "serde",
  "serde_json",

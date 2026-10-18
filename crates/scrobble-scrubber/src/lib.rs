@@ -16,6 +16,7 @@ pub mod executor;
 pub mod feed;
 pub mod filters;
 pub mod handle;
+pub mod identity;
 pub mod ops;
 pub mod planner;
 pub mod policy;

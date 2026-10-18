@@ -1,0 +1,161 @@
+{
+  "count": 2,
+  "offset": 0,
+  "recordings": [
+    {
+      "id": "aca688be-742b-4c44-96b9-2278bdc483c3",
+      "score": 100,
+      "title": "Cocaine",
+      "length": 218747,
+      "artist-credit": [
+        {
+          "name": "Eric Clapton",
+          "artist": {
+            "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+            "name": "Eric Clapton"
+          }
+        }
+      ],
+      "isrcs": [
+        "NLF057790024"
+      ],
+      "releases": [
+        {
+          "id": "9980c8fa-0f58-4f17-8415-a11d620b8c76",
+          "title": "The Cream of Clapton",
+          "status": "Official",
+          "date": null,
+          "artist-credit": [
+            {
+              "name": "Eric Clapton",
+              "artist": {
+                "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+                "name": "Eric Clapton"
+              }
+            }
+          ],
+          "release-group": {
+            "id": "976d6745-0091-39f1-ae60-c142986485a5",
+            "title": "The Cream of Clapton",
+            "primary-type": "Album",
+            "secondary-types": [
+              "Compilation"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "40ae4c06-3799-413b-b879-101dec39ac44",
+      "score": 56,
+      "title": "Cocaine",
+      "disambiguation": "original studio mix",
+      "length": 216640,
+      "artist-credit": [
+        {
+          "name": "Eric Clapton",
+          "artist": {
+            "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+            "name": "Eric Clapton"
+          }
+        }
+      ],
+      "isrcs": [
+        "USRY20517111",
+        "NLF057790024",
+        "GBA077700020"
+      ],
+      "releases": [
+        {
+          "id": "9e3e1323-5800-4684-be1b-615e3ca57aab",
+          "title": "Favourite Rock Artist Series",
+          "status": "Bootleg",
+          "date": "",
+          "artist-credit": [
+            {
+              "name": "Eric Clapton",
+              "artist": {
+                "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+                "name": "Eric Clapton"
+              }
+            }
+          ],
+          "release-group": {
+            "id": "530532e7-3768-45d7-bdb1-be9e3092695b",
+            "title": "Favourite Rock Artist Series",
+            "primary-type": "Album",
+            "secondary-types": [
+              "Compilation"
+            ]
+          }
+        },
+        {
+          "id": "9d2971db-ffcd-4b52-bd04-d4ad894fdadf",
+          "title": "Slowhand",
+          "status": "Official",
+          "date": "",
+          "artist-credit": [
+            {
+              "name": "Eric Clapton",
+              "artist": {
+                "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+                "name": "Eric Clapton"
+              }
+            }
+          ],
+          "release-group": {
+            "id": "02c2b0c7-065d-38b4-8ac0-3391839f2418",
+            "title": "Slowhand",
+            "primary-type": "Album"
+          }
+        },
+        {
+          "id": "30cf9d7b-4d63-4c7f-9b42-8cedcced4354",
+          "title": "Soft Metal Ballads",
+          "status": "Official",
+          "date": "1991",
+          "artist-credit": [
+            {
+              "name": "Various Artists",
+              "artist": {
+                "id": "89ad4ac3-39f7-470e-963a-56509c546377",
+                "name": "Various Artists"
+              }
+            }
+          ],
+          "release-group": {
+            "id": "551fe25b-c600-4526-8d93-e69bb61a0baa",
+            "title": "Soft Metal Ballads",
+            "primary-type": "Album",
+            "secondary-types": [
+              "Compilation"
+            ]
+          }
+        },
+        {
+          "id": "c5945cdd-71b7-425a-8448-2f0422945e43",
+          "title": "The Cream of Clapton",
+          "status": "Official",
+          "date": null,
+          "artist-credit": [
+            {
+              "name": "Eric Clapton",
+              "artist": {
+                "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+                "name": "Eric Clapton"
+              }
+            }
+          ],
+          "release-group": {
+            "id": "976d6745-0091-39f1-ae60-c142986485a5",
+            "title": "The Cream of Clapton",
+            "primary-type": "Album",
+            "secondary-types": [
+              "Compilation"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

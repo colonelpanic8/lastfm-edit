@@ -1,0 +1,214 @@
+{
+  "release-count": 168,
+  "release-offset": 0,
+  "releases": [
+    {
+      "id": "01e7ce7d-8752-4887-990a-834d5c8e13d3",
+      "title": "The Cream of Eric Clapton",
+      "status": "Official",
+      "date": "1987-09",
+      "artist-credit": [
+        {
+          "name": "Eric Clapton",
+          "joinphrase": "",
+          "artist": {
+            "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+            "name": "Eric Clapton"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "80f0a368-c681-4315-9612-4d8b23d1b6c0",
+        "title": "The Cream of Eric Clapton",
+        "primary-type": "Album",
+        "secondary-types": [
+          "Compilation"
+        ],
+        "first-release-date": "1987-09",
+        "artist-credit": [
+          {
+            "name": "Eric Clapton",
+            "joinphrase": "",
+            "artist": {
+              "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+              "name": "Eric Clapton"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "04c64922-7a2f-4e0c-938c-76724a5298c1",
+      "title": "Slowhand",
+      "status": "Official",
+      "date": "1977",
+      "artist-credit": [
+        {
+          "name": "Eric Clapton",
+          "joinphrase": "",
+          "artist": {
+            "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+            "name": "Eric Clapton"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "02c2b0c7-065d-38b4-8ac0-3391839f2418",
+        "title": "Slowhand",
+        "primary-type": "Album",
+        "secondary-types": [],
+        "first-release-date": "1977",
+        "artist-credit": [
+          {
+            "name": "Eric Clapton",
+            "joinphrase": "",
+            "artist": {
+              "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+              "name": "Eric Clapton"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "1fe438b7-b127-4e7f-af0c-285049084671",
+      "title": "The Cream of Clapton",
+      "status": "Official",
+      "date": "1994",
+      "artist-credit": [
+        {
+          "name": "Eric Clapton",
+          "joinphrase": "",
+          "artist": {
+            "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+            "name": "Eric Clapton"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "976d6745-0091-39f1-ae60-c142986485a5",
+        "title": "The Cream of Clapton",
+        "primary-type": "Album",
+        "secondary-types": [
+          "Compilation"
+        ],
+        "first-release-date": "1994-03-29",
+        "artist-credit": [
+          {
+            "name": "Eric Clapton",
+            "joinphrase": "",
+            "artist": {
+              "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+              "name": "Eric Clapton"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "289c2f46-26e3-4f0a-99b6-69c23845f918",
+      "title": "Bad News Bears",
+      "status": "Official",
+      "date": "2005-07-26",
+      "artist-credit": [
+        {
+          "name": "Various Artists",
+          "joinphrase": "",
+          "artist": {
+            "id": "89ad4ac3-39f7-470e-963a-56509c546377",
+            "name": "Various Artists"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "f452a50f-96f8-3294-a023-af03c06b1203",
+        "title": "Bad News Bears",
+        "primary-type": "Album",
+        "secondary-types": [
+          "Soundtrack"
+        ],
+        "first-release-date": "2005-01-01",
+        "artist-credit": [
+          {
+            "name": "Various Artists",
+            "joinphrase": "",
+            "artist": {
+              "id": "89ad4ac3-39f7-470e-963a-56509c546377",
+              "name": "Various Artists"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "2da5e4e4-cee5-3ff3-9da5-3456d59b9eba",
+      "title": "Crossroads",
+      "status": "Official",
+      "date": "1996-11-04",
+      "artist-credit": [
+        {
+          "name": "Eric Clapton",
+          "joinphrase": "",
+          "artist": {
+            "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+            "name": "Eric Clapton"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "06ccf4fd-2777-39b6-a666-fc5dba3853d4",
+        "title": "Crossroads",
+        "primary-type": "Album",
+        "secondary-types": [
+          "Compilation"
+        ],
+        "first-release-date": "1988-04-18",
+        "artist-credit": [
+          {
+            "name": "Eric Clapton",
+            "joinphrase": "",
+            "artist": {
+              "id": "618b6900-0618-4f1e-b835-bccb17f84294",
+              "name": "Eric Clapton"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c0c238a9-e12c-4e54-8d45-951aff970121",
+      "title": "Stereoplay: The Best of Highlights II",
+      "status": "Official",
+      "date": "1986",
+      "artist-credit": [
+        {
+          "name": "Various Artists",
+          "joinphrase": "",
+          "artist": {
+            "id": "89ad4ac3-39f7-470e-963a-56509c546377",
+            "name": "Various Artists"
+          }
+        }
+      ],
+      "release-group": {
+        "id": "8af78a94-baf2-35a6-a952-732f0b0b5ecc",
+        "title": "Stereoplay: The Best of Highlights II",
+        "primary-type": "Album",
+        "secondary-types": [
+          "Compilation"
+        ],
+        "first-release-date": "1986",
+        "artist-credit": [
+          {
+            "name": "Various Artists",
+            "joinphrase": "",
+            "artist": {
+              "id": "89ad4ac3-39f7-470e-963a-56509c546377",
+              "name": "Various Artists"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
