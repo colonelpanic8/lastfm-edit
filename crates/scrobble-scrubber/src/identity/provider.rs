@@ -12,7 +12,7 @@ use lastfm_edit::Track;
 pub const IDENTITY_PROVIDER: &str = "musicbrainz_identity";
 
 /// Bump when [`derive_edit`] changes what it proposes, so resolved keys are re-planned.
-const DERIVE_VERSION: u32 = 2;
+const DERIVE_VERSION: u32 = 3;
 
 pub struct IdentityProvider {
     reader: ResolutionReader,

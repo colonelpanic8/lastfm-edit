@@ -104,11 +104,11 @@ impl ArtistCredit {
     }
 
     /// The credit up to its first featured artist: "Luis Fonsi" for "Luis Fonsi ft. Daddy
-    /// Yankee". Other joins ("&", "and", ",") stay.
-    pub fn main_artists(&self) -> String {
+    /// Yankee". Other joins ("&", "and", ",") stay. `spell` maps each credited name.
+    pub fn main_artists(&self, spell: impl Fn(&str) -> String) -> String {
         let mut out = String::new();
         for part in &self.parts {
-            out.push_str(&part.name);
+            out.push_str(&spell(&part.name));
             if is_featuring(&part.joinphrase) {
                 break;
             }

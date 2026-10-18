@@ -239,7 +239,8 @@ pub(crate) fn derive_edit(
             match kind {
                 AlbumMove::EditionToGroup => subject.album_artist.clone(),
                 AlbumMove::FromCompilation | AlbumMove::FromSingleOrEp => {
-                    credited_album_artist(canonical).or_else(|| subject.album_artist.clone())
+                    credited_album_artist(canonical, &subject.artist)
+                        .or_else(|| subject.album_artist.clone())
                 }
             },
         ),
@@ -340,8 +341,14 @@ fn in_users_spelling(users: &str, mb: &str) -> String {
     if fold(users) == fold(mb) { users } else { mb }.to_string()
 }
 
-fn credited_album_artist(canonical: &Canonical) -> Option<String> {
-    Some(canonical.group.credit.main_artists()).filter(|credit| !credit.trim().is_empty())
+/// The canonical credit's main artists, each name in `artist`'s spelling where it folds
+/// equal ("Jay\u{2010}Z & Alicia Keys" for a scrobble by "JAY-Z" credits "JAY-Z & Alicia Keys").
+fn credited_album_artist(canonical: &Canonical, artist: &str) -> Option<String> {
+    let credit = canonical
+        .group
+        .credit
+        .main_artists(|name| in_users_spelling(artist, name));
+    Some(in_users_spelling(artist, &credit)).filter(|credit| !credit.trim().is_empty())
 }
 
 /// The move `outcome` allows for a scrobble on `album`, before [`MovePolicy`].
@@ -459,7 +466,12 @@ fn approval(
     let move_safe = |kind: AlbumMove, canonical: &Canonical| {
         let kind_safe = match kind {
             AlbumMove::EditionToGroup => true,
-            AlbumMove::FromCompilation => credited_album_artist(canonical).is_some(),
+            AlbumMove::FromCompilation => !canonical
+                .group
+                .credit
+                .main_artists(str::to_string)
+                .trim()
+                .is_empty(),
             AlbumMove::FromSingleOrEp => false,
         };
         kind_safe
@@ -850,9 +862,10 @@ mod tests {
     }
 
     #[test]
-    fn moves_credit_the_album_to_its_main_artists_without_featured_ones() {
+    fn moves_credit_the_album_to_its_main_artists_in_the_users_spelling() {
         let cases = [
             (
+                "Luis Fonsi",
                 "Despacito",
                 credit(&[
                     ("luis-fonsi", "Luis Fonsi", " ft. "),
@@ -861,6 +874,7 @@ mod tests {
                 "Luis Fonsi",
             ),
             (
+                "Wiz Khalifa",
                 "See You Again",
                 credit(&[
                     ("wiz-khalifa", "Wiz Khalifa", " feat. "),
@@ -869,6 +883,7 @@ mod tests {
                 "Wiz Khalifa",
             ),
             (
+                "Simon & Garfunkel",
                 "The Sound of Silence",
                 credit(&[
                     ("paul-simon", "Simon", " & "),
@@ -876,10 +891,28 @@ mod tests {
                 ]),
                 "Simon & Garfunkel",
             ),
+            (
+                "JAY-Z",
+                "Empire State of Mind",
+                credit(&[
+                    ("jay-z", "Jay\u{2010}Z", " & "),
+                    ("alicia-keys", "Alicia Keys", ""),
+                ]),
+                "JAY-Z & Alicia Keys",
+            ),
+            (
+                "Simon and Garfunkel",
+                "Mrs. Robinson",
+                credit(&[
+                    ("paul-simon", "Simon", " & "),
+                    ("art-garfunkel", "Garfunkel", ""),
+                ]),
+                "Simon and Garfunkel",
+            ),
         ];
-        for (track, canonical_credit, expected) in cases {
+        for (artist, track, canonical_credit, expected) in cases {
             let subject = subject(
-                "Various",
+                artist,
                 track,
                 "Now That's What I Call Music!",
                 Some("Various Artists"),
