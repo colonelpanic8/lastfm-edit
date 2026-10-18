@@ -172,8 +172,8 @@ pub(crate) fn derive_edit(
         }
         change => change,
     };
-    let album_move =
-        album_move(subject, outcome).filter(|(kind, _)| policy.mode(*kind) != MoveMode::Off);
+    let album_move = album_move(subject.album.as_deref(), outcome)
+        .filter(|(kind, _)| policy.mode(*kind) != MoveMode::Off);
     if title_change == TitleChange::None && album_move.is_none() {
         return None;
     }
@@ -231,9 +231,13 @@ fn credited_album_artist(canonical: &Canonical) -> Option<String> {
     Some(canonical.group.credit.main_artists()).filter(|credit| !credit.trim().is_empty())
 }
 
-fn album_move<'a>(subject: &Subject, outcome: &'a Outcome) -> Option<(AlbumMove, &'a Canonical)> {
+/// The move `outcome` allows for a scrobble on `album`, before [`MovePolicy`].
+pub(crate) fn album_move<'a>(
+    album: Option<&str>,
+    outcome: &'a Outcome,
+) -> Option<(AlbumMove, &'a Canonical)> {
     let (Some(album), Some(scrobbled), Some(canonical)) =
-        (&subject.album, &outcome.scrobbled_group, &outcome.canonical)
+        (album, &outcome.scrobbled_group, &outcome.canonical)
     else {
         return None;
     };

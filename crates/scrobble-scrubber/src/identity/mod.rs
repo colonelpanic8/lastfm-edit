@@ -17,6 +17,7 @@ mod canonical;
 mod lane;
 mod llm;
 mod mb;
+mod naming;
 mod outcome;
 mod provider;
 mod research;
@@ -33,6 +34,7 @@ pub use book::{
 pub use canonical::{AlbumMove, Canonical, Rung};
 pub use lane::{IdentityLane, LaneEnded, LaneOptions, LaneReport};
 pub use mb::{ArtistCredit, ReleaseGroup, UserAgent};
+pub use naming::{NamingJudge, NamingJudgement, NamingQuestion, NamingVerdict};
 pub use outcome::{MoveMode, MovePolicy, Outcome, Proof, Target};
 pub use provider::{IdentityProvider, IDENTITY_PROVIDER};
 pub use resolve::ResolveLimits;

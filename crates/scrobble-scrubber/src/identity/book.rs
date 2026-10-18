@@ -3,6 +3,7 @@
 
 use super::adjudicate::{case_hash, Case, CaseHash, Choice, Confidence, Verdict};
 use super::mb::{RecordingId, ReleaseGroupId};
+use super::naming::{naming_question, NamingJudge, NamingJudgement, NamingQuestion, NamingVerdict};
 use super::outcome::{Chosen, Outcome, Proof, Target};
 use crate::state::ScrubberState;
 use crate::subject::ScrobbleKey;
@@ -65,6 +66,17 @@ pub enum ResolutionEventKind {
         confidence: Confidence,
         reason: String,
         by: String,
+        raw: String,
+    },
+    /// An answer to the naming question of every key whose outcome retitles its album to
+    /// `question`; the event's key is the one that raised it. Counts across resolver
+    /// versions.
+    NamingJudged {
+        question: NamingQuestion,
+        verdict: NamingVerdict,
+        reason: String,
+        by: NamingJudge,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
         raw: String,
     },
 }
@@ -168,10 +180,13 @@ pub struct Snapshot {
     pub changes: Vec<(u64, ScrobbleKey)>,
     /// Queue intents whose rejection the lane already recorded.
     pub consumed_rejections: HashSet<Uuid>,
-    /// Unix seconds of every `Adjudicated` event (daily LLM budget is derived from it).
+    /// Unix seconds of every LLM `Adjudicated` and `NamingJudged` event (daily LLM budget
+    /// is derived from it).
     pub adjudication_times: Vec<u64>,
     /// Unix seconds of every `Researched` event (the daily research budget).
     pub research_times: Vec<u64>,
+    /// The latest answer per naming question.
+    pub naming: HashMap<NamingQuestion, NamingJudgement>,
 }
 
 /// Fold an ordered event stream. Last status event per key wins among current-version
@@ -259,6 +274,30 @@ impl Snapshot {
                 }
                 return;
             }
+            ResolutionEventKind::NamingJudged {
+                question,
+                verdict,
+                reason,
+                by,
+                ..
+            } => {
+                if matches!(by, NamingJudge::Llm { .. }) {
+                    self.adjudication_times.push(event.at);
+                }
+                let asking = self.keys_asking(&question);
+                self.changes
+                    .extend(asking.into_iter().map(|key| (seq, key)));
+                self.naming.insert(
+                    question,
+                    NamingJudgement {
+                        verdict,
+                        reason,
+                        by,
+                        at: event.at,
+                    },
+                );
+                return;
+            }
             _ if !current => {
                 if entry.status == KeyStatus::Stale {
                     entry.at = event.at;
@@ -278,6 +317,24 @@ impl Snapshot {
         };
         entry.status = status;
         entry.at = event.at;
+    }
+
+    /// Keys with a plannable outcome that raises `question`, sorted.
+    fn keys_asking(&self, question: &NamingQuestion) -> Vec<ScrobbleKey> {
+        let mut keys: Vec<ScrobbleKey> = self
+            .keys
+            .iter()
+            .filter(|(key, entry)| {
+                key.artist == question.artist
+                    && entry.plannable().into_iter().any(|(outcome, _)| {
+                        naming_question(&key.artist, key.album.as_deref(), outcome).as_ref()
+                            == Some(question)
+                    })
+            })
+            .map(|(key, _)| key.clone())
+            .collect();
+        keys.sort();
+        keys
     }
 }
 
@@ -871,6 +928,99 @@ mod tests {
             assert_eq!(snapshot.research_times, vec![20], "{name}");
             assert_eq!(snapshot.changes.last(), Some(&(2, cocaine())), "{name}");
         }
+    }
+
+    fn lennon(track: &str, album: &str) -> ScrobbleKey {
+        key("John Lennon", track, album)
+    }
+
+    /// Settled on John Lennon/Plastic Ono Band, the release group `album` names.
+    fn on_plastic_ono_band(track: &str, album: &str) -> ResolutionEvent {
+        let group = group("8be83468", "John Lennon/Plastic Ono Band", Vec::new());
+        ResolutionEvent {
+            key: lennon(track, album),
+            at: 10,
+            resolver: RESOLVER_VERSION,
+            kind: ResolutionEventKind::Resolved {
+                outcome: Outcome {
+                    master: vec![RecordingId(track.into())],
+                    title: track.into(),
+                    scrobbled_group: Some(group.clone()),
+                    canonical: Some(Canonical {
+                        group,
+                        rung: Rung::PlainAlbum,
+                        single_first: false,
+                    }),
+                    proof: Proof::SameRecording,
+                },
+            },
+        }
+    }
+
+    fn plastic_ono_band() -> NamingQuestion {
+        NamingQuestion {
+            artist: "John Lennon".into(),
+            album: "Plastic Ono Band".into(),
+            title: "John Lennon/Plastic Ono Band".into(),
+        }
+    }
+
+    fn judged(at: u64, verdict: NamingVerdict, by: NamingJudge) -> ResolutionEvent {
+        ResolutionEvent {
+            key: lennon("Mother", "Plastic Ono Band"),
+            at,
+            resolver: RESOLVER_VERSION,
+            kind: ResolutionEventKind::NamingJudged {
+                question: plastic_ono_band(),
+                verdict,
+                reason: "the album is released as Plastic Ono Band".into(),
+                by,
+                raw: String::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn a_naming_verdict_changes_every_key_on_the_album() {
+        let llm = NamingJudge::Llm {
+            model: "claude:opus".into(),
+            prompt_version: 1,
+        };
+        let human = NamingJudge::Human {
+            intent: Uuid::from_u128(7),
+        };
+        let reader = ResolutionReader::from_events(vec![
+            on_plastic_ono_band("Mother", "Plastic Ono Band"),
+            on_plastic_ono_band("Love", "Plastic Ono Band"),
+            on_plastic_ono_band("Mother", "Plastic Ono Band (Remastered)"),
+            on_plastic_ono_band("Love", "John Lennon/Plastic Ono Band"),
+            resolved(10, RESOLVER_VERSION),
+            judged(20, NamingVerdict::MusicBrainz, llm),
+            judged(30, NamingVerdict::Keep, human.clone()),
+        ]);
+
+        assert_eq!(
+            reader.changes_since(5),
+            (
+                vec![
+                    lennon("Mother", "Plastic Ono Band"),
+                    lennon("Love", "Plastic Ono Band"),
+                    lennon("Mother", "Plastic Ono Band (Remastered)"),
+                ],
+                7
+            )
+        );
+        let snapshot = reader.snapshot();
+        assert_eq!(
+            snapshot.naming.get(&plastic_ono_band()),
+            Some(&NamingJudgement {
+                verdict: NamingVerdict::Keep,
+                reason: "the album is released as Plastic Ono Band".into(),
+                by: human,
+                at: 30,
+            })
+        );
+        assert_eq!(snapshot.adjudication_times, vec![20]);
     }
 
     #[test]

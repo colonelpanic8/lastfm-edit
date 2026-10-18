@@ -738,6 +738,7 @@ fn status_label(kind: &ResolutionEventKind) -> &'static str {
             outcome: Some(_), ..
         } => "researched",
         ResolutionEventKind::Researched { outcome: None, .. } => "research_unverified",
+        ResolutionEventKind::NamingJudged { .. } => "naming_judged",
     }
 }
 
