@@ -319,6 +319,29 @@ impl Snapshot {
         entry.at = event.at;
     }
 
+    /// The naming questions `key`'s plannable outcomes raise, with their answers.
+    pub fn naming_questions(
+        &self,
+        key: &ScrobbleKey,
+    ) -> Vec<(NamingQuestion, Option<&NamingJudgement>)> {
+        let Some(entry) = self.keys.get(key) else {
+            return Vec::new();
+        };
+        let mut questions: Vec<NamingQuestion> = entry
+            .plannable()
+            .into_iter()
+            .filter_map(|(outcome, _)| naming_question(&key.artist, key.album.as_deref(), outcome))
+            .collect();
+        questions.dedup();
+        questions
+            .into_iter()
+            .map(|question| {
+                let judgement = self.naming.get(&question);
+                (question, judgement)
+            })
+            .collect()
+    }
+
     /// Keys with a plannable outcome that raises `question`, sorted.
     fn keys_asking(&self, question: &NamingQuestion) -> Vec<ScrobbleKey> {
         let mut keys: Vec<ScrobbleKey> = self

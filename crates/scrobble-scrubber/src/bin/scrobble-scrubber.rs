@@ -933,6 +933,22 @@ async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
                     }
                     KeyStatus::Stale => println!("  stale (older resolver version)"),
                 }
+                for (question, judgement) in snapshot.naming_questions(key) {
+                    let asked = format!(
+                        "  naming: \"{}\" or MusicBrainz's \"{}\"",
+                        question.album, question.title
+                    );
+                    match judgement {
+                        Some(judgement) => println!(
+                            "{asked}: {:?} by {} at {}\n    {}",
+                            judgement.verdict,
+                            judgement.by.describe(),
+                            fmt_ts(judgement.at),
+                            judgement.reason
+                        ),
+                        None => println!("{asked}: not answered yet"),
+                    }
+                }
                 if let Some(note) = &entry.research {
                     let id = |id: Option<&str>| id.unwrap_or("none").to_string();
                     println!(
