@@ -185,36 +185,11 @@ impl RewriteRulesScrubActionProvider {
             }
 
             if rule.requires_musicbrainz_confirmation {
-                #[cfg(feature = "musicbrainz")]
-                {
-                    let confirmed = Self::verify_with_musicbrainz_using_rule_filters(
-                        &candidate,
-                        track,
-                        rule.musicbrainz_release_filters.as_ref(),
-                    )
-                    .await?;
-                    if !confirmed {
-                        log::info!(
-                            "Rewrite rule '{}' rejected by MusicBrainz confirmation for track '{} - {}' (album: {})",
-                            rule.name.as_deref().unwrap_or("Unnamed"),
-                            track.artist,
-                            track.name,
-                            track.album.as_deref().unwrap_or("none")
-                        );
-                        continue; // Skip this rule only
-                    }
-                }
-                #[cfg(not(feature = "musicbrainz"))]
-                {
-                    // Without the musicbrainz feature, a human replaces MusicBrainz:
-                    // the rule still applies but the result requires confirmation.
-                    log::debug!(
-                        "Rule '{}' wants MusicBrainz confirmation but the feature is disabled; \
-                         degrading to human confirmation",
-                        rule.name.as_deref().unwrap_or("Unnamed")
-                    );
-                    requires_confirmation_applied = true;
-                }
+                log::debug!(
+                    "Rule '{}' wants MusicBrainz confirmation; degrading to human confirmation",
+                    rule.name.as_deref().unwrap_or("Unnamed")
+                );
+                requires_confirmation_applied = true;
             }
 
             // Accept candidate
@@ -227,39 +202,6 @@ impl RewriteRulesScrubActionProvider {
             Ok(Some((edit, requires_confirmation_applied)))
         } else {
             Ok(None)
-        }
-    }
-
-    /// Verify that the candidate edit corresponds to a real MusicBrainz match using
-    /// rule-specific filters.
-    #[cfg(feature = "musicbrainz")]
-    async fn verify_with_musicbrainz_using_rule_filters(
-        candidate: &ScrobbleEdit,
-        track: &Track,
-        release_filters: Option<&crate::filters::ReleaseFilterConfig>,
-    ) -> Result<bool, ActionProviderError> {
-        let artist = candidate.artist_name.clone();
-        let title = candidate
-            .track_name
-            .clone()
-            .unwrap_or_else(|| track.name.clone());
-        let album = candidate.album_name.clone();
-
-        if let Some(filters) = release_filters {
-            crate::musicbrainz::MusicBrainzScrubActionProvider::verify_track_exists_with_filters(
-                &artist,
-                &title,
-                album.as_deref(),
-                filters,
-            )
-            .await
-            .map_err(|e| ActionProviderError(format!("MusicBrainz verification failed: {e}")))
-        } else {
-            let default_provider = crate::musicbrainz::MusicBrainzScrubActionProvider::new(0.8, 20);
-            default_provider
-                .verify_track_exists(&artist, &title, album.as_deref())
-                .await
-                .map_err(|e| ActionProviderError(format!("MusicBrainz verification failed: {e}")))
         }
     }
 }

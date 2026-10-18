@@ -4,7 +4,7 @@
 //! local mirror.
 //!
 //! Architecture: a fast, local **planner** turns scrobbles into durable *edit intents*
-//! (via a pluggable provider stack — regex rewrite rules, MusicBrainz, LLM); a paced
+//! (via a pluggable provider stack of regex rewrite rules); a paced
 //! **executor** drains the intent queue through the store's crash-safe
 //! [`MirroredEditor`](scrobble_store::MirroredEditor), owning all rate-limited last.fm
 //! write traffic. The two communicate only through durable state and broadcast events.
@@ -16,10 +16,6 @@ pub mod executor;
 pub mod feed;
 pub mod filters;
 pub mod handle;
-#[cfg(feature = "musicbrainz")]
-pub mod musicbrainz;
-#[cfg(feature = "openai")]
-pub mod openai;
 pub mod ops;
 pub mod planner;
 pub mod policy;
@@ -40,12 +36,6 @@ pub use executor::{Executor, ExecutorOptions};
 pub use feed::{FeedBatch, ScrubFeed};
 pub use filters::{ReleaseFilterConfig, ReleaseFilterType};
 pub use handle::{bridge_sync_events, ScrubberActor, ScrubberCommand, ScrubberHandle};
-#[cfg(feature = "musicbrainz")]
-pub use musicbrainz::{
-    CompilationToCanonicalProvider, MusicBrainzClient, MusicBrainzScrubActionProvider,
-};
-#[cfg(feature = "openai")]
-pub use openai::{OpenAIProviderConfig, OpenAIScrubActionProvider, DEFAULT_SYSTEM_PROMPT};
 pub use ops::{
     approve_intent, approve_pending_rule, reinstate_intent, reject_intent, reject_pending_rule,
 };
