@@ -322,6 +322,7 @@ fn describe_proof(proof: &Proof) -> String {
         ),
         Proof::SameWork => "same work, different recording, no shared ISRC".to_string(),
         Proof::TitleOnly => "title and artist match only, no album to anchor on".to_string(),
+        Proof::Researched { .. } => "found by LLM research, verified on MusicBrainz".to_string(),
     }
 }
 
@@ -397,6 +398,8 @@ pub enum AdjudicateError {
     Transport(String),
     #[error("llm rate limited")]
     RateLimited,
+    #[error("{0} cannot do web research")]
+    Unsupported(String),
 }
 
 #[cfg(test)]

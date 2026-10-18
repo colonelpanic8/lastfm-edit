@@ -2,14 +2,17 @@
 //! the only writer of the resolution log. A peer of the executor; planning never waits
 //! on it.
 
-use super::adjudicate::{Adjudication, Adjudicator, Case, Precedent, PROMPT_VERSION};
+use super::adjudicate::{
+    Adjudication, Adjudicator, Case, Choice, Precedent, Verdict, PROMPT_VERSION,
+};
 use super::book::{
     KeyStatus, ResolutionEvent, ResolutionEventKind, ResolutionReader, ResolutionWriter, Snapshot,
 };
 use super::mb::{MbError, MbLookup, MusicBrainz};
-use super::outcome::Target;
+use super::outcome::{Proof, Target};
 use super::provider::IDENTITY_PROVIDER;
-use super::resolve::{Resolution, ResolveLimits, Resolver};
+use super::research::{Prior, ResearchCase, Researcher};
+use super::resolve::{queries, Resolution, ResolveLimits, Resolver};
 use super::title::parse_title;
 use super::RESOLVER_VERSION;
 use crate::events::{ScrubberEvent, ScrubberEventBus};
@@ -28,6 +31,8 @@ pub struct LaneReport {
     pub resolved: u64,
     pub ambiguous: u64,
     pub adjudicated: u64,
+    /// LLM research answers recorded, verified or not.
+    pub researched: u64,
     pub not_found: u64,
     pub deferred: u64,
     pub rejections_recorded: u64,
@@ -75,6 +80,8 @@ const ERROR_BACKOFF: Duration = Duration::from_secs(3600);
 /// An unparseable response won't fix itself soon; retry after MB data changes.
 const PARSE_ERROR_BACKOFF: Duration = Duration::from_secs(7 * 24 * 3600);
 const DAY_SECS: u64 = 24 * 3600;
+/// A researched key isn't researched again for this long, whatever the answer.
+const RESEARCH_RETRY_SECS: u64 = 90 * DAY_SECS;
 const MAX_PRECEDENTS: usize = 5;
 
 pub(crate) trait LaneMb: MbLookup {
@@ -95,6 +102,7 @@ pub struct IdentityLane {
     writer: ResolutionWriter,
     mb: Arc<dyn LaneMb>,
     adjudicator: Option<Adjudicator>,
+    researcher: Option<Researcher>,
     events: ScrubberEventBus,
     options: LaneOptions,
     /// Held for the lane's lifetime so only one process writes the log and paces MB.
@@ -180,10 +188,16 @@ impl IdentityLane {
             writer,
             mb,
             adjudicator,
+            researcher: None,
             events: ScrubberEventBus::new(),
             options: LaneOptions::default(),
             _lock: None,
         }
+    }
+
+    pub(crate) fn with_researcher(mut self, researcher: Option<Researcher>) -> Self {
+        self.researcher = researcher;
+        self
     }
 
     pub(crate) fn holding(mut self, lock: std::fs::File) -> Self {
@@ -238,7 +252,8 @@ impl IdentityLane {
     /// Records new human rejections of identity proposals, then processes at most
     /// `max_keys` keys, each durable once processed. Keys whose title appears under several
     /// albums or carries noise go first, then by plays. `RATE_LIMIT_STREAK` consecutive
-    /// rate-limited keys end the round as `Deferred`.
+    /// rate-limited keys end the round as `Deferred`. Unless deferred or cancelled, it then
+    /// researches what stayed unsettled, within the daily research budget.
     pub async fn run_round(&mut self, max_keys: usize) -> crate::Result<LaneReport> {
         self.round(max_keys, None).await
     }
@@ -309,6 +324,13 @@ impl IdentityLane {
             }
         }
 
+        if !matches!(
+            round.report.ended,
+            LaneEnded::Deferred | LaneEnded::Cancelled
+        ) {
+            self.research(&library, &mut round.report, stop).await?;
+        }
+
         let (requests_after, hits_after) = self.mb.counters();
         round.report.mb_requests = requests_after - requests_before;
         round.report.cache_hits = hits_after - hits_before;
@@ -316,6 +338,98 @@ impl IdentityLane {
             report: round.report.clone(),
         });
         Ok(round.report)
+    }
+
+    /// An LLM failure stops research for the round and leaves the key for a later one. A
+    /// MusicBrainz error while verifying an answer also stops it, but the answer is still
+    /// recorded unverified, so the call counts against the budget and the key waits out
+    /// [`RESEARCH_RETRY_SECS`].
+    async fn research(
+        &mut self,
+        library: &Library,
+        report: &mut LaneReport,
+        stop: Option<&RunGeneration>,
+    ) -> crate::Result<()> {
+        let Some(researcher) = &self.researcher else {
+            return Ok(());
+        };
+        let now = unix_now();
+        let snapshot = self.writer.reader().snapshot();
+        let since = now.saturating_sub(DAY_SECS);
+        let used = snapshot
+            .research_times
+            .iter()
+            .filter(|at| **at > since)
+            .count();
+        let left = (researcher.daily_budget() as usize).saturating_sub(used);
+        let resolver = Resolver {
+            mb: self.mb.as_ref(),
+            limits: self.options.limits,
+        };
+        for case in research_cases(library, &snapshot, now)
+            .into_iter()
+            .take(left)
+        {
+            if stop.is_some_and(RunGeneration::is_cancelled) {
+                report.ended = LaneEnded::Cancelled;
+                break;
+            }
+            let research = match researcher.research(&case).await {
+                Ok(research) => research,
+                Err(err) => {
+                    log::warn!("identity lane: research of {} failed: {err}", case.key);
+                    break;
+                }
+            };
+            let (outcome, mb_failed) = match &research.recording {
+                Some(recording) => match resolver
+                    .verify_research(
+                        &case.key,
+                        recording,
+                        research.release_group.as_ref(),
+                        &research.by,
+                    )
+                    .await
+                {
+                    Ok(outcome) => (outcome, false),
+                    Err(err) => {
+                        log::warn!(
+                            "identity lane: verifying research for {} failed: {err}",
+                            case.key
+                        );
+                        (None, true)
+                    }
+                },
+                None => (None, false),
+            };
+            report.researched += 1;
+            let kind = ResolutionEventKind::Researched {
+                outcome,
+                recording: research.recording,
+                release_group: research.release_group,
+                confidence: research.confidence,
+                reason: research.reason,
+                by: research.by,
+                raw: research.raw,
+            };
+            let status = status_label(&kind);
+            self.writer
+                .append(vec![ResolutionEvent {
+                    key: case.key.clone(),
+                    at: unix_now(),
+                    resolver: RESOLVER_VERSION,
+                    kind,
+                }])
+                .await?;
+            self.events.emit(ScrubberEvent::IdentityKeyProcessed {
+                key: case.key,
+                status: status.to_string(),
+            });
+            if mb_failed {
+                break;
+            }
+        }
+        Ok(())
     }
 
     async fn record_rejections(&mut self, queue: &[EditIntent]) -> crate::Result<u64> {
@@ -522,6 +636,58 @@ impl IdentityLane {
     }
 }
 
+/// Live keys research may help with, most-played first.
+fn research_cases(library: &Library, snapshot: &Snapshot, now: u64) -> Vec<ResearchCase> {
+    let mut cases: Vec<ResearchCase> = library
+        .plays
+        .iter()
+        .filter_map(|(key, &plays)| {
+            let entry = snapshot.keys.get(key)?;
+            if entry
+                .research
+                .as_ref()
+                .is_some_and(|note| note.at + RESEARCH_RETRY_SECS > now)
+            {
+                return None;
+            }
+            let prior = match &entry.status {
+                KeyStatus::NotFound => Prior::NotFound {
+                    queries: queries(key),
+                },
+                KeyStatus::Open {
+                    case,
+                    verdict:
+                        Some(Verdict {
+                            choice: Choice::Unsure,
+                            reason,
+                            ..
+                        }),
+                    ..
+                } => Prior::Unsure {
+                    options: case.options.clone(),
+                    reason: reason.clone(),
+                },
+                KeyStatus::Settled { outcome }
+                    if outcome.proof == Proof::TitleOnly && key.album.is_some() =>
+                {
+                    Prior::Unanchored {
+                        outcome: Box::new(outcome.clone()),
+                    }
+                }
+                _ => return None,
+            };
+            Some(ResearchCase {
+                key: key.clone(),
+                plays,
+                siblings: library.siblings(key),
+                prior,
+            })
+        })
+        .collect();
+    cases.sort_by_key(|case| std::cmp::Reverse(case.plays));
+    cases
+}
+
 /// The most recent human decisions on identity proposals for this artist.
 fn precedents(queue: &[EditIntent], artist: &str) -> Vec<Precedent> {
     let mut decided: Vec<&EditIntent> = queue
@@ -559,6 +725,10 @@ fn status_label(kind: &ResolutionEventKind) -> &'static str {
         ResolutionEventKind::NotFound { .. } => "not_found",
         ResolutionEventKind::Deferred { .. } => "deferred",
         ResolutionEventKind::HumanRejected { .. } => "human_rejected",
+        ResolutionEventKind::Researched {
+            outcome: Some(_), ..
+        } => "researched",
+        ResolutionEventKind::Researched { outcome: None, .. } => "research_unverified",
     }
 }
 
@@ -572,10 +742,12 @@ fn unix_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::identity::adjudicate::{Choice, Confidence, Verdict};
+    use crate::identity::adjudicate::Confidence;
+    use crate::identity::book::fold;
     use crate::identity::llm::scripted::ScriptedBackend;
-    use crate::identity::llm::RawChoice;
-    use crate::identity::testing::FixtureMb;
+    use crate::identity::llm::{RawChoice, RawResearch};
+    use crate::identity::mb::{RecordingId, ReleaseGroupId};
+    use crate::identity::testing::{FixtureMb, WALTZ_FOR_DEBBY_TAKE_2};
     use crate::queue::{QueueEvent, QueueEventKind};
     use crate::rewrite::create_no_op_edit;
     use crate::state::MemoryScrubberState;
@@ -924,5 +1096,247 @@ mod tests {
         let report = h.lane.run_round(10).await.unwrap();
         assert_eq!(report.keys_attempted, 0);
         assert_eq!(backend.requests.lock().unwrap().len(), 1);
+    }
+
+    fn research_answer(recording: &str, release_group: &str) -> RawResearch {
+        RawResearch {
+            recording: Some(RecordingId(recording.into())),
+            release_group: Some(ReleaseGroupId(release_group.into())),
+            confidence: "medium".into(),
+            reason: "take 2 is the master take".into(),
+            text: String::new(),
+        }
+    }
+
+    fn researching(
+        mut h: Harness,
+        answers: Vec<RawResearch>,
+        daily_budget: u32,
+    ) -> (Harness, Arc<ScriptedBackend>) {
+        let backend = Arc::new(ScriptedBackend::default());
+        *backend.research_answers.lock().unwrap() = answers;
+        h.lane = h.lane.with_researcher(Some(Researcher::new(
+            Box::new(backend.clone()),
+            daily_budget,
+        )));
+        (h, backend)
+    }
+
+    #[tokio::test]
+    async fn research_takes_not_found_keys_most_played_first_within_the_daily_budget() {
+        let h = harness(
+            FixtureMb::default().waltz_for_debby(),
+            &[
+                ("A", "One", Some("X"), 5),
+                ("Bill Evans", "Waltz for Debby", Some("Waltz For Debby"), 9),
+                ("A", "Two", Some("X"), 3),
+            ],
+            None,
+        )
+        .await;
+        let (mut h, backend) = researching(
+            h,
+            vec![
+                research_answer(
+                    WALTZ_FOR_DEBBY_TAKE_2,
+                    "392e7fcf-5ae9-37f6-b8c9-57901cfbee1f",
+                ),
+                research_answer(
+                    "1d0b6fbe-3f4e-4e43-9b52-0d3a2c1e5f77",
+                    "392e7fcf-5ae9-37f6-b8c9-57901cfbee1f",
+                ),
+            ],
+            2,
+        );
+
+        let report = h.lane.run_round(10).await.unwrap();
+
+        assert_eq!((report.not_found, report.researched), (3, 2), "{report:?}");
+        assert_eq!(
+            log(&h.state).await,
+            vec![
+                row("Waltz for Debby", "Waltz For Debby", "not_found"),
+                row("One", "X", "not_found"),
+                row("Two", "X", "not_found"),
+                row("Waltz for Debby", "Waltz For Debby", "researched"),
+                row("One", "X", "research_unverified"),
+            ]
+        );
+        let evans = h
+            .lane
+            .reader()
+            .get(&ScrobbleKey {
+                artist: "Bill Evans".into(),
+                track: "Waltz for Debby".into(),
+                album: Some("Waltz For Debby".into()),
+            })
+            .unwrap();
+        let KeyStatus::Settled { outcome } = evans.status else {
+            panic!("expected a settled key, got {:?}", evans.status);
+        };
+        assert_eq!(
+            outcome.proof,
+            Proof::Researched {
+                by: "scripted".into()
+            }
+        );
+
+        let report = h.lane.run_round(10).await.unwrap();
+        assert_eq!(report.researched, 0);
+        assert_eq!(backend.research_requests.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn research_failure_ends_research_for_the_round_but_not_resolution() {
+        let h = harness(
+            FixtureMb::default().cocaine(),
+            &[
+                ("A", "One", Some("X"), 5),
+                ("A", "Two", Some("X"), 4),
+                ("Eric Clapton", "Cocaine", Some("The Cream of Clapton"), 3),
+            ],
+            None,
+        )
+        .await;
+        let (mut h, backend) = researching(h, Vec::new(), 20);
+
+        let report = h.lane.run_round(10).await.unwrap();
+
+        assert_eq!(
+            (report.resolved, report.not_found, report.researched),
+            (1, 2, 0)
+        );
+        assert_eq!(backend.research_requests.lock().unwrap().len(), 1);
+
+        backend
+            .research_answers
+            .lock()
+            .unwrap()
+            .push(research_answer(
+                "1d0b6fbe-3f4e-4e43-9b52-0d3a2c1e5f77",
+                "392e7fcf-5ae9-37f6-b8c9-57901cfbee1f",
+            ));
+        let report = h.lane.run_round(10).await.unwrap();
+        assert_eq!((report.keys_attempted, report.researched), (0, 1));
+        assert_eq!(backend.research_requests.lock().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn research_is_recorded_even_when_musicbrainz_cannot_verify_it() {
+        let mb = FixtureMb {
+            rate_limited: true,
+            ..FixtureMb::default()
+        };
+        let h = harness(
+            mb,
+            &[("A", "One", Some("X"), 5), ("A", "Two", Some("X"), 3)],
+            None,
+        )
+        .await;
+        let (mut h, backend) = researching(
+            h,
+            vec![
+                research_answer(
+                    "1d0b6fbe-3f4e-4e43-9b52-0d3a2c1e5f77",
+                    "392e7fcf-5ae9-37f6-b8c9-57901cfbee1f",
+                ),
+                research_answer(
+                    "8a3a8a4e-2c39-4d2f-9f0b-3e3c0c7c1a11",
+                    "392e7fcf-5ae9-37f6-b8c9-57901cfbee1f",
+                ),
+            ],
+            20,
+        );
+        let key = |track: &str| ScrobbleKey {
+            artist: "A".into(),
+            track: track.into(),
+            album: Some("X".into()),
+        };
+        let not_found = |track: &str| ResolutionEvent {
+            key: key(track),
+            at: unix_now(),
+            resolver: RESOLVER_VERSION,
+            kind: ResolutionEventKind::NotFound {
+                queries: Vec::new(),
+            },
+        };
+        h.lane
+            .writer
+            .append(vec![not_found("One"), not_found("Two")])
+            .await
+            .unwrap();
+
+        let report = h.lane.run_round(10).await.unwrap();
+
+        assert_eq!((report.keys_attempted, report.researched), (0, 1));
+        let note = h.lane.reader().get(&key("One")).unwrap().research.unwrap();
+        assert_eq!(
+            (note.recording, note.confidence, note.verified),
+            (
+                Some(RecordingId("1d0b6fbe-3f4e-4e43-9b52-0d3a2c1e5f77".into())),
+                Confidence::Medium,
+                false
+            )
+        );
+        assert_eq!(h.lane.reader().snapshot().research_times.len(), 1);
+
+        let report = h.lane.run_round(10).await.unwrap();
+
+        assert_eq!(report.researched, 1);
+        assert_eq!(
+            log(&h.state).await,
+            vec![
+                row("One", "X", "not_found"),
+                row("Two", "X", "not_found"),
+                row("One", "X", "research_unverified"),
+                row("Two", "X", "research_unverified"),
+            ]
+        );
+        assert_eq!(backend.research_requests.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn research_candidates_skip_keys_researched_in_the_last_90_days() {
+        let now = 200 * DAY_SECS;
+        let key = |track: &str| ScrobbleKey {
+            artist: "A".into(),
+            track: track.into(),
+            album: Some("X".into()),
+        };
+        let event = |track: &str, at: u64, kind: ResolutionEventKind| ResolutionEvent {
+            key: key(track),
+            at,
+            resolver: RESOLVER_VERSION,
+            kind,
+        };
+        let not_found = || ResolutionEventKind::NotFound {
+            queries: Vec::new(),
+        };
+        let unconfirmed = || ResolutionEventKind::Researched {
+            outcome: None,
+            recording: None,
+            release_group: None,
+            confidence: Confidence::Low,
+            reason: String::new(),
+            by: "scripted".into(),
+            raw: String::new(),
+        };
+        let snapshot = fold(vec![
+            event("Recent", DAY_SECS, not_found()),
+            event("Recent", now - 89 * DAY_SECS, unconfirmed()),
+            event("Old", DAY_SECS, not_found()),
+            event("Old", now - 91 * DAY_SECS, unconfirmed()),
+            event("Never", DAY_SECS, not_found()),
+        ]);
+        let library = Library {
+            plays: BTreeMap::from([(key("Recent"), 9), (key("Old"), 2), (key("Never"), 4)]),
+        };
+
+        let tracks: Vec<String> = research_cases(&library, &snapshot, now)
+            .into_iter()
+            .map(|case| case.key.track)
+            .collect();
+
+        assert_eq!(tracks, vec!["Never", "Old"]);
     }
 }

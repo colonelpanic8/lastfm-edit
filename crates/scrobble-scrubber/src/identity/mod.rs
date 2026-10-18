@@ -4,7 +4,8 @@
 //!
 //! Three parts with one owner each:
 //! - [`IdentityLane`]: a paced background task. The only caller of MusicBrainz and the
-//!   LLM, and the only writer of `resolutions.jsonl`.
+//!   LLM, and the only writer of `resolutions.jsonl`. As a last resort it lets an LLM
+//!   with web search name a MusicBrainz recording, which is verified before use.
 //! - [`ResolutionReader`]: the folded log, shared read-only.
 //! - [`IdentityProvider`]: a pure planning provider that derives edits from the log and
 //!   exposes a change feed so keys resolved after their time range was planned still get
@@ -18,6 +19,7 @@ mod llm;
 mod mb;
 mod outcome;
 mod provider;
+mod research;
 mod resolve;
 #[cfg(test)]
 mod testing;
@@ -25,7 +27,8 @@ mod title;
 
 pub use adjudicate::{Case, CaseOption, Choice, Confidence, OptionEvidence, OptionId, Verdict};
 pub use book::{
-    KeyEntry, KeyStatus, ResolutionEvent, ResolutionEventKind, ResolutionReader, StatusCounts,
+    KeyEntry, KeyStatus, ResearchNote, ResolutionEvent, ResolutionEventKind, ResolutionReader,
+    StatusCounts,
 };
 pub use canonical::{AlbumMove, Canonical, Rung};
 pub use lane::{IdentityLane, LaneEnded, LaneOptions, LaneReport};
@@ -88,6 +91,33 @@ pub const CLAUDE_CLI_COMMAND: &[&str] = &[
     "--no-session-persistence",
 ];
 
+/// `claude -p` with only web search and fetch, answering in the research schema. Runs on
+/// the CLI's own login.
+pub const CLAUDE_CLI_RESEARCH_COMMAND: &[&str] = &[
+    "claude",
+    "-p",
+    "--output-format",
+    "json",
+    "--json-schema",
+    "{schema}",
+    "--model",
+    "{model}",
+    "--effort",
+    "medium",
+    "--system-prompt",
+    "{system}",
+    "--tools",
+    "WebSearch",
+    "WebFetch",
+    "--allowedTools",
+    "WebSearch",
+    "WebFetch",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--no-session-persistence",
+];
+
 fn argv(template: &[&str]) -> Vec<String> {
     template.iter().map(|arg| arg.to_string()).collect()
 }
@@ -105,6 +135,10 @@ pub struct LlmConfig {
     pub model: String,
     pub daily_call_budget: u32,
     pub min_interval: Duration,
+    /// For [`LlmProvider::Command`]: argv for web research, with the same placeholders as
+    /// `command`. Empty disables research.
+    pub research_command: Vec<String>,
+    pub research_daily_budget: u32,
 }
 
 impl LlmConfig {
@@ -117,7 +151,10 @@ impl LlmConfig {
     /// - `openai`: chat completions; needs `SCRUBBER_LLM_MODEL`, key from
     ///   `SCRUBBER_LLM_API_KEY` or `OPENAI_API_KEY` unless `SCRUBBER_LLM_BASE_URL` is set.
     ///
-    /// `SCRUBBER_LLM_DAILY_BUDGET` caps calls per day (default 200).
+    /// `SCRUBBER_LLM_DAILY_BUDGET` caps calls per day (default 200). Research runs only
+    /// with a command backend: `claude-cli` defaults to [`CLAUDE_CLI_RESEARCH_COMMAND`],
+    /// `command` takes a JSON argv from `SCRUBBER_LLM_RESEARCH_COMMAND`, and
+    /// `SCRUBBER_LLM_RESEARCH_BUDGET` caps research calls per day (default 20).
     pub fn from_env() -> Option<Self> {
         let var = |name: &str| {
             std::env::var(name)
@@ -145,6 +182,7 @@ impl LlmConfig {
             None => default,
         };
         let daily_call_budget = budget("SCRUBBER_LLM_DAILY_BUDGET", 200);
+        let research_daily_budget = budget("SCRUBBER_LLM_RESEARCH_BUDGET", 20);
         let json_argv = |name: &str| match var(name) {
             Some(raw) => match serde_json::from_str::<Vec<String>>(&raw) {
                 Ok(argv) if !argv.is_empty() => Ok(Some(argv)),
@@ -167,10 +205,21 @@ impl LlmConfig {
                 }
                 Ok(None) => argv(CLAUDE_CLI_COMMAND),
             };
+            let research_command = match json_argv("SCRUBBER_LLM_RESEARCH_COMMAND") {
+                Ok(Some(argv)) => argv,
+                Err(err) => {
+                    log::warn!("{err}; research disabled");
+                    Vec::new()
+                }
+                Ok(None) if provider_name == "command" => Vec::new(),
+                Ok(None) => argv(CLAUDE_CLI_RESEARCH_COMMAND),
+            };
             return Some(Self {
                 command,
                 model: var("SCRUBBER_LLM_MODEL").unwrap_or_else(|| "opus".to_string()),
                 daily_call_budget,
+                research_command,
+                research_daily_budget,
                 ..Self::claude_cli()
             });
         }
@@ -202,10 +251,13 @@ impl LlmConfig {
             model,
             daily_call_budget,
             min_interval: Duration::from_secs(1),
+            research_command: Vec::new(),
+            research_daily_budget,
         })
     }
 
-    /// `claude -p` on Opus, on the CLI's own login: choices at low effort.
+    /// `claude -p` on Opus, on the CLI's own login: choices at low effort, research at
+    /// medium effort with web search.
     pub fn claude_cli() -> Self {
         Self {
             provider: LlmProvider::Command,
@@ -215,6 +267,8 @@ impl LlmConfig {
             model: "opus".to_string(),
             daily_call_budget: 200,
             min_interval: Duration::from_secs(1),
+            research_command: argv(CLAUDE_CLI_RESEARCH_COMMAND),
+            research_daily_budget: 20,
         }
     }
 }
@@ -282,6 +336,19 @@ impl Identity {
             let budget = llm.daily_call_budget;
             adjudicate::Adjudicator::new(llm::backend(self.config.http.clone(), llm), budget)
         });
+        let researcher = self
+            .config
+            .llm
+            .clone()
+            .filter(|llm| {
+                llm.provider == LlmProvider::Command
+                    && !llm.research_command.is_empty()
+                    && llm.research_daily_budget > 0
+            })
+            .map(|llm| {
+                let budget = llm.research_daily_budget;
+                research::Researcher::new(llm::backend(self.config.http.clone(), llm), budget)
+            });
         let writer = self.writer.take().expect("checked above");
         Ok(IdentityLane::new(
             store,
@@ -290,6 +357,7 @@ impl Identity {
             Arc::new(mb),
             adjudicator,
         )
+        .with_researcher(researcher)
         .holding(lock))
     }
 }

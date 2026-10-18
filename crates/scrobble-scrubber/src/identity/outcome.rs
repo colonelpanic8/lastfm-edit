@@ -89,6 +89,9 @@ pub enum Proof {
     /// No album to anchor on, or a search MusicBrainz truncated: title + artist only.
     /// Never auto.
     TitleOnly,
+    /// An LLM with web search named the recording; MusicBrainz confirmed it plausibly is
+    /// this scrobble. `by` is the model label. Never auto.
+    Researched { by: String },
 }
 
 impl Proof {
@@ -97,7 +100,7 @@ impl Proof {
         match self {
             Proof::SameRecording => true,
             Proof::SharedIsrc { len_delta_ms, .. } => *len_delta_ms <= AUTO_ISRC_LEN_TOLERANCE_MS,
-            Proof::SameWork | Proof::TitleOnly => false,
+            Proof::SameWork | Proof::TitleOnly | Proof::Researched { .. } => false,
         }
     }
 }
@@ -160,8 +163,13 @@ pub(crate) fn derive_edit(
     let parsed = parse_title(&subject.track);
     let title_change = match classify_title_change(&parsed, &outcome.title) {
         // Only a pick among MusicBrainz options may rewrite a title beyond packaging; a
-        // deterministic match may not drop "feat." credits or version notes.
-        TitleChange::Other if chosen == Chosen::Deterministic => TitleChange::None,
+        // deterministic or researched match may not drop "feat." credits or version notes.
+        TitleChange::Other
+            if chosen == Chosen::Deterministic
+                || matches!(outcome.proof, Proof::Researched { .. }) =>
+        {
+            TitleChange::None
+        }
         change => change,
     };
     let album_move =
@@ -277,6 +285,9 @@ fn rationale(
         ),
         Proof::SameWork => "Proof: same work, different recording".to_string(),
         Proof::TitleOnly => "Proof: title and artist match only".to_string(),
+        Proof::Researched { by } => {
+            format!("Proof: found by LLM research ({by}), verified on MusicBrainz")
+        }
     });
     if chosen == Chosen::Adjudicated {
         lines.push("Chosen among several MusicBrainz options".to_string());
@@ -848,6 +859,44 @@ mod tests {
                 Chosen::Deterministic,
                 vec![],
                 Some((target("Cocaine", "Slowhand", Some("Eric Clapton")), true)),
+            ),
+            (
+                "a researched outcome needs review even when settled",
+                cocaine.clone(),
+                Outcome {
+                    proof: Proof::Researched {
+                        by: "claude:opus".to_string(),
+                    },
+                    ..cocaine_outcome.clone()
+                },
+                Chosen::Deterministic,
+                vec![],
+                Some((target("Cocaine", "Slowhand", Some("Eric Clapton")), true)),
+            ),
+            (
+                "a researched match never rewrites a title beyond packaging",
+                subject(
+                    "Eric Clapton",
+                    "Cocaine (feat. J.J. Cale)",
+                    "The Cream of Clapton",
+                    None,
+                ),
+                Outcome {
+                    proof: Proof::Researched {
+                        by: "claude:opus".to_string(),
+                    },
+                    ..cocaine_outcome.clone()
+                },
+                Chosen::Adjudicated,
+                vec![],
+                Some((
+                    target(
+                        "Cocaine (feat. J.J. Cale)",
+                        "Slowhand",
+                        Some("Eric Clapton"),
+                    ),
+                    true,
+                )),
             ),
             (
                 "a rejected target is not proposed again",

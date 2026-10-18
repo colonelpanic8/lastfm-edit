@@ -1,8 +1,9 @@
 //! The event-sourced resolution log (`<scrubber>/resolutions.jsonl`): what the lane has
 //! concluded about each scrobble key.
 
-use super::adjudicate::{case_hash, Case, CaseHash, Choice, Verdict};
-use super::outcome::{Chosen, Outcome, Target};
+use super::adjudicate::{case_hash, Case, CaseHash, Choice, Confidence, Verdict};
+use super::mb::{RecordingId, ReleaseGroupId};
+use super::outcome::{Chosen, Outcome, Proof, Target};
 use crate::state::ScrubberState;
 use crate::subject::ScrobbleKey;
 use std::collections::{HashMap, HashSet};
@@ -55,6 +56,17 @@ pub enum ResolutionEventKind {
         intent: Uuid,
         target: Target,
     },
+    /// Audit record of one LLM research answer. `outcome` is what MusicBrainz confirmed
+    /// of it (it settles the key, for review); `None` leaves the status alone.
+    Researched {
+        outcome: Option<Outcome>,
+        recording: Option<RecordingId>,
+        release_group: Option<ReleaseGroupId>,
+        confidence: Confidence,
+        reason: String,
+        by: String,
+        raw: String,
+    },
 }
 
 /// Folded state of one key.
@@ -67,6 +79,21 @@ pub struct KeyEntry {
     pub seq: u64,
     /// When the status was last written (unix seconds).
     pub at: u64,
+    /// The latest current-version research answer for this key.
+    pub research: Option<ResearchNote>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResearchNote {
+    /// Unix seconds.
+    pub at: u64,
+    pub by: String,
+    pub confidence: Confidence,
+    pub reason: String,
+    pub recording: Option<RecordingId>,
+    pub release_group: Option<ReleaseGroupId>,
+    /// MusicBrainz confirmed the answer and it settled the key.
+    pub verified: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -91,7 +118,7 @@ impl KeyEntry {
     /// Outcomes the planner may propose, in preference order. The provider proposes the
     /// first one whose edit isn't rejected and isn't a no-op.
     ///
-    /// - Settled: its outcome; deterministic.
+    /// - Settled: its outcome; deterministic unless research found it.
     /// - Open + LLM picked an option: that option, then the rest (the human walk after a
     ///   rejection), all adjudicated.
     /// - Open + LLM said keep: nothing.
@@ -99,7 +126,13 @@ impl KeyEntry {
     /// - Open + awaiting the LLM: nothing yet.
     pub(crate) fn plannable(&self) -> Vec<(&Outcome, Chosen)> {
         let (case, awaiting_llm, verdict) = match &self.status {
-            KeyStatus::Settled { outcome } => return vec![(outcome, Chosen::Deterministic)],
+            KeyStatus::Settled { outcome } => {
+                let chosen = match outcome.proof {
+                    Proof::Researched { .. } => Chosen::Adjudicated,
+                    _ => Chosen::Deterministic,
+                };
+                return vec![(outcome, chosen)];
+            }
             KeyStatus::Open {
                 case,
                 awaiting_llm,
@@ -137,6 +170,8 @@ pub struct Snapshot {
     pub consumed_rejections: HashSet<Uuid>,
     /// Unix seconds of every `Adjudicated` event (daily LLM budget is derived from it).
     pub adjudication_times: Vec<u64>,
+    /// Unix seconds of every `Researched` event (the daily research budget).
+    pub research_times: Vec<u64>,
 }
 
 /// Fold an ordered event stream. Last status event per key wins among current-version
@@ -163,6 +198,7 @@ impl Snapshot {
                 rejected: Vec::new(),
                 seq,
                 at: event.at,
+                research: None,
             });
         entry.seq = seq;
         let current = event.resolver == super::RESOLVER_VERSION;
@@ -192,6 +228,34 @@ impl Snapshot {
                         "identity: verdict for {} matches no open case; ignored",
                         event.key
                     ),
+                }
+                return;
+            }
+            ResolutionEventKind::Researched {
+                outcome,
+                recording,
+                release_group,
+                confidence,
+                reason,
+                by,
+                ..
+            } => {
+                self.research_times.push(event.at);
+                if !current {
+                    return;
+                }
+                entry.research = Some(ResearchNote {
+                    at: event.at,
+                    by,
+                    confidence,
+                    reason,
+                    recording,
+                    release_group,
+                    verified: outcome.is_some(),
+                });
+                if let Some(outcome) = outcome {
+                    entry.status = KeyStatus::Settled { outcome };
+                    entry.at = event.at;
                 }
                 return;
             }
@@ -270,8 +334,8 @@ impl ResolutionReader {
     /// [`title::fold`](super::title::fold): `title` must equal the MB recording title and
     /// `album` the scrobbled or canonical release-group title. `None` (a field the
     /// rewrite leaves alone) always agrees. `None` overall unless the key is settled with
-    /// a [proven](super::outcome::Proof::is_proven) outcome: same-work and title-only
-    /// matches vouch for nothing.
+    /// a [proven](Proof::is_proven) outcome: same-work, title-only and researched matches
+    /// vouch for nothing.
     pub(crate) fn settled_agrees(
         &self,
         key: &ScrobbleKey,
@@ -376,12 +440,9 @@ pub(crate) async fn open(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::identity::adjudicate::{CaseOption, Confidence, OptionEvidence, OptionId};
+    use crate::identity::adjudicate::{CaseOption, OptionEvidence, OptionId};
     use crate::identity::canonical::Rung;
-    use crate::identity::mb::{
-        ArtistCredit, PrimaryType, RecordingId, ReleaseGroup, ReleaseGroupId, SecondaryType,
-    };
-    use crate::identity::outcome::Proof;
+    use crate::identity::mb::{ArtistCredit, PrimaryType, ReleaseGroup, SecondaryType};
     use crate::identity::Canonical;
     use crate::identity::RESOLVER_VERSION;
     use crate::state::MemoryScrubberState;
@@ -507,6 +568,7 @@ mod tests {
             rejected,
             seq,
             at,
+            research: None,
         }
     }
 
@@ -635,6 +697,18 @@ mod tests {
                 vec![("Slowhand", Chosen::Deterministic)],
             ),
             (
+                "settled by research",
+                KeyStatus::Settled {
+                    outcome: Outcome {
+                        proof: Proof::Researched {
+                            by: "claude:opus".into(),
+                        },
+                        ..outcome("d31d4528", "Slowhand")
+                    },
+                },
+                vec![("Slowhand", Chosen::Adjudicated)],
+            ),
+            (
                 "llm picked B",
                 open(true, Some(Choice::Option(OptionId('B')))),
                 vec![
@@ -727,6 +801,78 @@ mod tests {
         assert_eq!(reopened.get(&horses).map(|entry| entry.seq), Some(3));
     }
 
+    fn researched(at: u64, resolver: u32, outcome: Option<Outcome>) -> ResolutionEvent {
+        event(
+            at,
+            resolver,
+            ResolutionEventKind::Researched {
+                outcome,
+                recording: Some(RecordingId("40ae4c06-3799-413b-b879-101dec39ac44".into())),
+                release_group: None,
+                confidence: Confidence::Medium,
+                reason: "the Slowhand studio take".into(),
+                by: "claude:opus".into(),
+                raw: String::new(),
+            },
+        )
+    }
+
+    #[test]
+    fn research_settles_the_key_only_when_musicbrainz_confirmed_it() {
+        let found = Outcome {
+            proof: Proof::Researched {
+                by: "claude:opus".into(),
+            },
+            ..outcome("40ae4c06", "Slowhand")
+        };
+        let note = |at, verified| ResearchNote {
+            at,
+            by: "claude:opus".into(),
+            confidence: Confidence::Medium,
+            reason: "the Slowhand studio take".into(),
+            recording: Some(RecordingId("40ae4c06-3799-413b-b879-101dec39ac44".into())),
+            release_group: None,
+            verified,
+        };
+        let now = RESOLVER_VERSION;
+        let cases = [
+            (
+                "confirmed",
+                vec![not_found(10, now), researched(20, now, Some(found.clone()))],
+                KeyEntry {
+                    research: Some(note(20, true)),
+                    ..entry(
+                        KeyStatus::Settled {
+                            outcome: found.clone(),
+                        },
+                        vec![],
+                        2,
+                        20,
+                    )
+                },
+            ),
+            (
+                "not confirmed",
+                vec![not_found(10, now), researched(20, now, None)],
+                KeyEntry {
+                    research: Some(note(20, false)),
+                    ..entry(KeyStatus::NotFound, vec![], 2, 10)
+                },
+            ),
+            (
+                "older resolver version",
+                vec![not_found(10, now), researched(20, now - 1, Some(found))],
+                entry(KeyStatus::NotFound, vec![], 2, 10),
+            ),
+        ];
+        for (name, events, expected) in cases {
+            let snapshot = fold(events);
+            assert_eq!(snapshot.keys.get(&cocaine()), Some(&expected), "{name}");
+            assert_eq!(snapshot.research_times, vec![20], "{name}");
+            assert_eq!(snapshot.changes.last(), Some(&(2, cocaine())), "{name}");
+        }
+    }
+
     #[test]
     fn only_proven_settlements_confirm_rewrite_rules() {
         let isrc = |len_delta_ms| Proof::SharedIsrc {
@@ -740,6 +886,13 @@ mod tests {
             ("shared ISRC, 5.001 s apart", isrc(5_001), None),
             ("same work", Proof::SameWork, None),
             ("title only", Proof::TitleOnly, None),
+            (
+                "researched",
+                Proof::Researched {
+                    by: "claude:opus".into(),
+                },
+                None,
+            ),
         ];
         for (name, proof, expected) in cases {
             let settled = Outcome {
@@ -757,5 +910,22 @@ mod tests {
                 "{name}"
             );
         }
+
+        let researched_outcome = Outcome {
+            proof: Proof::Researched {
+                by: "claude:opus".into(),
+            },
+            ..outcome("40ae4c06", "Slowhand")
+        };
+        let reader = ResolutionReader::from_events(vec![researched(
+            20,
+            RESOLVER_VERSION,
+            Some(researched_outcome),
+        )]);
+        assert_eq!(
+            reader.settled_agrees(&cocaine(), Some("Cocaine"), Some("Slowhand")),
+            None,
+            "settled by a research answer"
+        );
     }
 }

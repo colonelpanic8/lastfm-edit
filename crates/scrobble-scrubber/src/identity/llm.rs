@@ -1,7 +1,9 @@
 //! Provider-agnostic LLM backends: multiple choice over native Anthropic Messages,
-//! OpenAI-compatible chat completions, or a harness CLI.
+//! OpenAI-compatible chat completions, or a harness CLI; web research only through a
+//! harness CLI.
 
 use super::adjudicate::AdjudicateError;
+use super::mb::{RecordingId, ReleaseGroupId};
 use super::{LlmConfig, LlmProvider};
 use http_client::http_types::{Body, Method, Request, StatusCode, Url};
 use serde_json::json;
@@ -29,6 +31,25 @@ pub(crate) struct RawChoice {
     pub text: String,
 }
 
+/// A web-research question answered with MusicBrainz identifiers in `schema`.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ResearchRequest {
+    pub system: String,
+    pub user: String,
+    pub schema: serde_json::Value,
+}
+
+/// Model output with its identifiers parsed: an id that isn't a UUID is `None`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct RawResearch {
+    pub recording: Option<RecordingId>,
+    pub release_group: Option<ReleaseGroupId>,
+    pub confidence: String,
+    pub reason: String,
+    /// Full response text, for audit.
+    pub text: String,
+}
+
 #[async_trait::async_trait]
 #[allow(
     clippy::double_must_use,
@@ -36,6 +57,9 @@ pub(crate) struct RawChoice {
 )]
 pub(crate) trait LlmBackend: Send + Sync {
     async fn choose(&self, request: ChoiceRequest) -> Result<RawChoice, AdjudicateError>;
+    async fn research(&self, _request: ResearchRequest) -> Result<RawResearch, AdjudicateError> {
+        Err(AdjudicateError::Unsupported(self.label()))
+    }
     /// "<provider>:<model>", recorded with every verdict.
     fn label(&self) -> String;
 }
@@ -242,6 +266,8 @@ pub(crate) struct CommandBackend {
     last_call: Mutex<Option<Instant>>,
     /// A harness that hangs (login prompt, network stall) must not wedge the lane.
     choose_timeout: Duration,
+    /// Research browses the web for several turns.
+    research_timeout: Duration,
 }
 
 impl CommandBackend {
@@ -250,6 +276,7 @@ impl CommandBackend {
             config,
             last_call: Mutex::new(None),
             choose_timeout: Duration::from_secs(180),
+            research_timeout: Duration::from_secs(600),
         }
     }
 
@@ -350,6 +377,38 @@ fn unwrap_envelope(stdout: String) -> Result<(String, String), AdjudicateError> 
     }
 }
 
+fn parse_research(answer: &str, text: String) -> RawResearch {
+    #[derive(serde::Deserialize)]
+    struct Answer {
+        #[serde(default)]
+        recording_mbid: String,
+        #[serde(default)]
+        release_group_mbid: String,
+        #[serde(default)]
+        confidence: String,
+        #[serde(default)]
+        reason: String,
+    }
+    let mbid = |raw: &str| {
+        uuid::Uuid::parse_str(raw.trim())
+            .ok()
+            .map(|id| id.hyphenated().to_string())
+    };
+    match serde_json::from_str::<Answer>(answer) {
+        Ok(answer) => RawResearch {
+            recording: mbid(&answer.recording_mbid).map(RecordingId),
+            release_group: mbid(&answer.release_group_mbid).map(ReleaseGroupId),
+            confidence: answer.confidence,
+            reason: answer.reason,
+            text,
+        },
+        Err(_) => RawResearch {
+            text,
+            ..RawResearch::default()
+        },
+    }
+}
+
 #[async_trait::async_trait]
 impl LlmBackend for CommandBackend {
     async fn choose(&self, request: ChoiceRequest) -> Result<RawChoice, AdjudicateError> {
@@ -361,6 +420,17 @@ impl LlmBackend for CommandBackend {
             text,
             ..parse_content(answer)
         })
+    }
+
+    async fn research(&self, request: ResearchRequest) -> Result<RawResearch, AdjudicateError> {
+        if self.config.research_command.is_empty() {
+            return Err(AdjudicateError::Unsupported(self.label()));
+        }
+        let schema = request.schema.to_string();
+        let argv = self.argv(&self.config.research_command, &schema, &request.system);
+        let stdout = self.run(argv, &request.user, self.research_timeout).await?;
+        let (answer, text) = unwrap_envelope(stdout)?;
+        Ok(parse_research(&answer, text))
     }
 
     fn label(&self) -> String {
@@ -485,7 +555,7 @@ impl LlmBackend for AnthropicMessages {
 
 #[cfg(test)]
 pub(crate) mod scripted {
-    use super::{ChoiceRequest, LlmBackend, RawChoice};
+    use super::{ChoiceRequest, LlmBackend, RawChoice, RawResearch, ResearchRequest};
     use crate::identity::adjudicate::AdjudicateError;
     use std::sync::{Arc, Mutex};
 
@@ -494,6 +564,8 @@ pub(crate) mod scripted {
     pub(crate) struct ScriptedBackend {
         pub answers: Mutex<Vec<RawChoice>>,
         pub requests: Mutex<Vec<ChoiceRequest>>,
+        pub research_answers: Mutex<Vec<RawResearch>>,
+        pub research_requests: Mutex<Vec<ResearchRequest>>,
     }
 
     fn next<T>(script: &Mutex<Vec<T>>) -> Result<T, AdjudicateError> {
@@ -511,6 +583,11 @@ pub(crate) mod scripted {
             next(&self.answers)
         }
 
+        async fn research(&self, request: ResearchRequest) -> Result<RawResearch, AdjudicateError> {
+            self.research_requests.lock().unwrap().push(request);
+            next(&self.research_answers)
+        }
+
         fn label(&self) -> String {
             "scripted".into()
         }
@@ -521,6 +598,10 @@ pub(crate) mod scripted {
     impl LlmBackend for Arc<ScriptedBackend> {
         async fn choose(&self, request: ChoiceRequest) -> Result<RawChoice, AdjudicateError> {
             self.as_ref().choose(request).await
+        }
+
+        async fn research(&self, request: ResearchRequest) -> Result<RawResearch, AdjudicateError> {
+            self.as_ref().research(request).await
         }
 
         fn label(&self) -> String {
@@ -584,6 +665,8 @@ mod tests {
             model: "gpt-4o-mini".into(),
             daily_call_budget: 200,
             min_interval: Duration::from_secs(1),
+            research_command: Vec::new(),
+            research_daily_budget: 0,
         };
         (http.clone(), OpenAiCompat::new(http, config))
     }
@@ -738,6 +821,8 @@ mod tests {
             model: "claude-opus-5-5".into(),
             daily_call_budget: 200,
             min_interval: Duration::from_secs(1),
+            research_command: Vec::new(),
+            research_daily_budget: 0,
         };
         (http.clone(), AnthropicMessages::new(http, config))
     }
@@ -884,5 +969,123 @@ mod tests {
                 "{argv:?}: {error:?}"
             );
         }
+    }
+
+    fn research_request() -> ResearchRequest {
+        ResearchRequest {
+            system: "research prompt".into(),
+            user: "case text".into(),
+            schema: json!({"type": "object"}),
+        }
+    }
+
+    fn researcher(argv: &[&str]) -> CommandBackend {
+        CommandBackend::new(LlmConfig {
+            research_command: argv.iter().map(|arg| arg.to_string()).collect(),
+            min_interval: Duration::ZERO,
+            ..LlmConfig::claude_cli()
+        })
+    }
+
+    #[tokio::test]
+    async fn command_research_unwraps_claude_structured_output_and_validates_ids() {
+        let envelope = |recording: &str, release_group: &str| {
+            format!(
+                r#"printf '%s' '{{"type":"result","subtype":"success","is_error":false,"num_turns":4,"result":"","structured_output":{{"recording_mbid":"{recording}","release_group_mbid":"{release_group}","confidence":"medium","reason":"take 2 is the master take"}}}}'"#
+            )
+        };
+        let cases = [
+            (
+                envelope(
+                    "D31D4528-14CF-48D9-960D-6A07EAE19760",
+                    "392e7fcf-5ae9-37f6-b8c9-57901cfbee1f",
+                ),
+                Some("d31d4528-14cf-48d9-960d-6a07eae19760"),
+                Some("392e7fcf-5ae9-37f6-b8c9-57901cfbee1f"),
+            ),
+            (
+                envelope("d31d4528-14cf-48d9-960d-6a07eae1976", "392e7fcf"),
+                None,
+                None,
+            ),
+            (
+                envelope("", "https://musicbrainz.org/release-group/392e7fcf"),
+                None,
+                None,
+            ),
+        ];
+        for (script, recording, release_group) in cases {
+            let raw = researcher(&["sh", "-c", &script])
+                .research(research_request())
+                .await
+                .unwrap();
+            assert_eq!(
+                (
+                    raw.recording.map(|id| id.0),
+                    raw.release_group.map(|id| id.0),
+                    raw.confidence.as_str(),
+                    raw.reason.as_str(),
+                ),
+                (
+                    recording.map(String::from),
+                    release_group.map(String::from),
+                    "medium",
+                    "take 2 is the master take",
+                ),
+                "{script}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn command_research_substitutes_its_own_schema_and_prompt() {
+        let backend = researcher(&[
+            "sh",
+            "-c",
+            r#"printf '%s|%s' "$0" "$1""#,
+            "{system}",
+            "{schema}",
+        ]);
+
+        let raw = backend.research(research_request()).await.unwrap();
+
+        assert_eq!(raw.text, r#"research prompt|{"type":"object"}"#);
+        assert_eq!(raw.recording, None);
+    }
+
+    #[tokio::test]
+    async fn command_research_times_out() {
+        let backend = CommandBackend {
+            research_timeout: Duration::from_millis(100),
+            ..researcher(&["sh", "-c", "sleep 30"])
+        };
+
+        let started = Instant::now();
+        let error = backend.research(research_request()).await.unwrap_err();
+
+        assert_eq!(error.to_string(), "llm transport: sh timed out");
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[tokio::test]
+    async fn backends_without_a_research_command_refuse_research() {
+        let (_http, anthropic) = anthropic(200, "{}");
+        let no_command = researcher(&[]);
+        assert_eq!(
+            anthropic
+                .research(research_request())
+                .await
+                .unwrap_err()
+                .to_string(),
+            "anthropic:claude-opus-5-5 cannot do web research"
+        );
+        assert_eq!(
+            no_command
+                .research(research_request())
+                .await
+                .unwrap_err()
+                .to_string(),
+            "claude:opus cannot do web research"
+        );
     }
 }

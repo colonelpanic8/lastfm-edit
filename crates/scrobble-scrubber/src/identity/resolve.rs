@@ -3,7 +3,7 @@
 use super::adjudicate::OptionEvidence;
 use super::canonical::{choose_canonical, Canonical, Rung};
 use super::mb::{
-    ArtistCredit, Isrc, MbError, MbLookup, PrimaryType, RecordingDetail, RecordingHit,
+    ArtistCredit, Isrc, MbError, MbLookup, PrimaryType, RecordingDetail, RecordingHit, RecordingId,
     RecordingQuery, ReleaseGroup, ReleaseGroupId, ReleaseRef, SecondaryType,
 };
 use super::outcome::{Outcome, Proof};
@@ -119,6 +119,62 @@ impl Resolver<'_> {
             }
         }
         Ok(search)
+    }
+
+    /// Checks an LLM research answer against MusicBrainz and builds the outcome the
+    /// resolver would have built for that recording, with a [`Proof::Researched`] proof.
+    /// `None` unless the recording exists and plausibly is the scrobble: fold-equal base
+    /// title, an artist credit that leniently matches, consistent version markers.
+    /// `release_group` only chooses among the recording's official release groups named
+    /// like the scrobbled album; one it isn't on, or named otherwise, is ignored.
+    pub async fn verify_research(
+        &self,
+        key: &ScrobbleKey,
+        recording: &RecordingId,
+        release_group: Option<&ReleaseGroupId>,
+        by: &str,
+    ) -> Result<Option<Outcome>, MbError> {
+        let Some(detail) = found(self.mb.recording(recording).await)? else {
+            return Ok(None);
+        };
+        let parsed = parse_title(&key.track);
+        if !title_matches(&parsed, &detail.title) || !artist_plausible(&key.artist, &detail.credit)
+        {
+            return Ok(None);
+        }
+        let (releases, _) = self
+            .mb
+            .recording_releases(&detail.id, self.limits.max_releases)
+            .await?;
+        let scrobbled = key.album.as_deref().and_then(|album| {
+            let named: Vec<ReleaseRef> = releases
+                .iter()
+                .filter(|r| Some(&r.group.id) == release_group)
+                .cloned()
+                .collect();
+            scrobbled_group(&named, album).or_else(|| scrobbled_group(&releases, album))
+        });
+        let hit = RecordingHit {
+            id: detail.id,
+            score: 100,
+            title: detail.title,
+            disambiguation: detail.disambiguation,
+            length_ms: detail.length_ms,
+            credit: detail.credit,
+            snippet_releases: releases,
+        };
+        if !markers_consistent(&parsed, &hit, scrobbled.as_ref()) {
+            return Ok(None);
+        }
+        let Some(candidate) = self.candidates(hit, scrobbled).await?.into_iter().next() else {
+            return Ok(None);
+        };
+        let mut outcome = candidate.outcome;
+        if candidate.capped {
+            outcome.canonical = None;
+        }
+        outcome.proof = Proof::Researched { by: by.to_string() };
+        Ok(Some(outcome))
     }
 
     /// Hits that could be this scrobble, each with the release group its album matched.
@@ -336,6 +392,14 @@ fn ladder(key: &ScrobbleKey, parsed: &ParsedTitle) -> Vec<RecordingQuery> {
     ladder
 }
 
+/// The Lucene queries [`Resolver::resolve`] tries for `key`, in order.
+pub(crate) fn queries(key: &ScrobbleKey) -> Vec<String> {
+    ladder(key, &parse_title(&key.track))
+        .iter()
+        .map(RecordingQuery::lucene)
+        .collect()
+}
+
 fn title_matches(parsed: &ParsedTitle, hit_title: &str) -> bool {
     let base = fold(&parsed.base);
     base == fold(hit_title)
@@ -387,6 +451,17 @@ fn artist_matches(artist: &str, credit: &ArtistCredit) -> bool {
             ]
             .iter()
             .any(|joiner| tail.starts_with(joiner))
+        })
+}
+
+/// Research names one recording, so its credit only has to be close: [`artist_matches`],
+/// or a credited name that extends the scrobbled artist by whole words, or the reverse.
+fn artist_plausible(artist: &str, credit: &ArtistCredit) -> bool {
+    let folded = fold(artist);
+    artist_matches(artist, credit)
+        || credit.parts.iter().any(|part| {
+            let name = fold(&part.name);
+            name.starts_with(&format!("{folded} ")) || folded.starts_with(&format!("{name} "))
         })
 }
 
@@ -629,6 +704,7 @@ fn proof_rank(proof: &Proof) -> u8 {
         Proof::SharedIsrc { .. } => 1,
         Proof::SameWork => 2,
         Proof::TitleOnly => 3,
+        Proof::Researched { .. } => 4,
     }
 }
 
@@ -1445,6 +1521,106 @@ mod tests {
                 artist_matches(artist, &one(credited)),
                 expected,
                 "{artist} vs {credited}"
+            );
+        }
+    }
+
+    async fn verify(
+        mb: &FixtureMb,
+        recording: &str,
+        release_group: Option<&str>,
+    ) -> Option<Outcome> {
+        Resolver {
+            mb,
+            limits: ResolveLimits::default(),
+        }
+        .verify_research(
+            &waltz_for_debby(),
+            &rid(recording),
+            release_group.map(|id| ReleaseGroupId(id.into())).as_ref(),
+            "claude:opus",
+        )
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn verified_research_settles_waltz_for_debby_on_the_live_album_without_an_edit() {
+        let mb = FixtureMb::default().waltz_for_debby();
+
+        let outcome = verify(
+            &mb,
+            WALTZ_FOR_DEBBY_TAKE_2,
+            Some("392e7fcf-5ae9-37f6-b8c9-57901cfbee1f"),
+        )
+        .await;
+
+        let expected = Outcome {
+            master: vec![rid(WALTZ_FOR_DEBBY_TAKE_2)],
+            title: "Waltz for Debby".into(),
+            scrobbled_group: Some(waltz_for_debby_live()),
+            canonical: None,
+            proof: Proof::Researched {
+                by: "claude:opus".into(),
+            },
+        };
+        assert_eq!(outcome, Some(expected.clone()));
+        let subject = Subject {
+            artist: "Bill Evans".into(),
+            track: "Waltz for Debby".into(),
+            album: Some("Waltz For Debby".into()),
+            album_artist: None,
+        };
+        assert_eq!(
+            derive_edit(
+                &subject,
+                &expected,
+                Chosen::Adjudicated,
+                &[],
+                &MovePolicy::default(),
+            ),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn research_answers_that_are_not_this_scrobble_fail_verification() {
+        let my_foolish_heart = "8a3a8a4e-2c39-4d2f-9f0b-3e3c0c7c1a11";
+        let zetterlund = "0f4e2b8b-6a4c-4b8e-8f6a-2a3b8d6c9e21";
+        let mb = FixtureMb::default()
+            .waltz_for_debby()
+            .with_recording(detail(
+                my_foolish_heart,
+                "My Foolish Heart",
+                "",
+                296_000,
+                evans_trio_with_lafaro_and_motian(),
+                &[],
+                vec![],
+            ))
+            .with_releases(my_foolish_heart, vec![rel(&waltz_for_debby_live())])
+            .with_recording(detail(
+                zetterlund,
+                "Waltz for Debby",
+                "",
+                165_000,
+                credit(&[("monica-zetterlund", "Monica Zetterlund", "")]),
+                &[],
+                vec![],
+            ));
+        let cases = [
+            (
+                "unknown to MusicBrainz",
+                "1d0b6fbe-3f4e-4e43-9b52-0d3a2c1e5f77",
+            ),
+            ("another song on the album", my_foolish_heart),
+            ("another artist's recording", zetterlund),
+        ];
+        for (name, recording) in cases {
+            assert_eq!(
+                verify(&mb, recording, Some("392e7fcf-5ae9-37f6-b8c9-57901cfbee1f")).await,
+                None,
+                "{name}"
             );
         }
     }
