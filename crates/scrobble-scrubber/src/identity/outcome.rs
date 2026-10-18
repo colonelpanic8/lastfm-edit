@@ -6,7 +6,9 @@ use super::mb::{RecordingId, ReleaseGroup};
 use super::naming::{
     classify_edition_fix, EditionFix, NamingJudgement, NamingQuestion, NamingVerdict,
 };
-use super::title::{classify_title_change, fold, parse_title, strip_edition, TitleChange};
+use super::title::{
+    classify_title_change, fold, parse_title, strip_edition, ParsedTitle, TitleChange,
+};
 use crate::rewrite::create_no_op_edit;
 use crate::subject::Subject;
 use lastfm_edit::ScrobbleEdit;
@@ -123,6 +125,9 @@ pub(crate) struct Derived {
     pub proposal: Option<Proposal>,
     /// Unanswered naming questions part of the edit waits on; the lane asks them.
     pub waiting: Vec<NamingQuestion>,
+    /// A naming verdict or wait shaped the edit, so the walk ends at this outcome even
+    /// without a proposal.
+    named: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -161,7 +166,8 @@ pub(crate) enum Chosen {
 /// Who answers a retitle's naming question before anyone has.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RetitleJudge {
-    /// The lane asks the LLM; a deterministic retitle waits for its answer.
+    /// The lane asks the LLM; a deterministic album retitle or an adjudicated track
+    /// retitle waits for its answer.
     Llm,
     /// No LLM is configured: retitles go to review.
     Reviewer,
@@ -172,6 +178,27 @@ pub enum RetitleJudge {
 pub(crate) struct Naming<'a> {
     pub verdicts: &'a HashMap<NamingQuestion, NamingJudgement>,
     pub judge: RetitleJudge,
+}
+
+/// What a proposal does to the title.
+enum TitlePart<'a> {
+    Unchanged,
+    /// Packaging junk goes; the rest folds equal to the MB recording title.
+    Packaging,
+    /// To the MB recording title, as the verdict `naming` allowed.
+    Retitle {
+        naming: &'a NamingJudgement,
+    },
+    /// A retitle no verdict allowed: a person decides.
+    RetitleForReview {
+        naming: Option<&'a NamingJudgement>,
+    },
+    /// The user's title stays over MB's; only packaging junk goes.
+    KeepTitle {
+        naming: &'a NamingJudgement,
+    },
+    /// A retitle waiting for the lane to ask its question: the title stays.
+    Waiting(NamingQuestion),
 }
 
 /// What a proposal does to the album.
@@ -194,6 +221,11 @@ enum AlbumPart<'a> {
         canonical: &'a Canonical,
         naming: &'a NamingJudgement,
     },
+    /// The user's title, which has no edition suffix, stays over the group's.
+    Kept {
+        canonical: &'a Canonical,
+        naming: &'a NamingJudgement,
+    },
     /// An edition retitle waiting for the lane to ask its question: the album stays.
     Waiting(NamingQuestion),
 }
@@ -204,8 +236,8 @@ enum AlbumPart<'a> {
 /// Title and album keep the user's spelling when, with the packaging or edition suffix
 /// removed, it folds equal to the MB text. Moves off a compilation, single or EP set the
 /// album artist to the canonical credit (the executor otherwise keeps "Various Artists");
-/// an edition fix leaves it alone. An edition fix that retitles the album follows its
-/// naming verdict.
+/// an edition fix leaves it alone. An edition fix that retitles the album, and a title
+/// change beyond packaging, follow their naming verdicts.
 pub(crate) fn derive_edit(
     subject: &Subject,
     outcome: &Outcome,
@@ -215,24 +247,15 @@ pub(crate) fn derive_edit(
     naming: Naming<'_>,
 ) -> Derived {
     let parsed = parse_title(&subject.track);
-    let title_change = match classify_title_change(&parsed, &outcome.title) {
-        // Only a pick among MusicBrainz options may rewrite a title beyond packaging; a
-        // deterministic or researched match may not drop "feat." credits or version notes.
-        TitleChange::Other
-            if chosen == Chosen::Deterministic
-                || matches!(outcome.proof, Proof::Researched { .. }) =>
-        {
-            TitleChange::None
-        }
-        change => change,
-    };
+    let title_part = title_part(subject, outcome, chosen, naming);
     let album = album_part(subject, outcome, chosen, policy, naming);
 
-    let title = match title_change {
-        TitleChange::None => subject.track.clone(),
-        TitleChange::PackagingOnly | TitleChange::Other => {
+    let title = match &title_part {
+        TitlePart::Unchanged | TitlePart::Waiting(_) => subject.track.clone(),
+        TitlePart::Packaging | TitlePart::Retitle { .. } | TitlePart::RetitleForReview { .. } => {
             in_users_spelling(&parsed.base, &outcome.title)
         }
+        TitlePart::KeepTitle { .. } => without_packaging(&parsed),
     };
     let moved = |canonical: &Canonical| {
         subject
@@ -241,7 +264,7 @@ pub(crate) fn derive_edit(
             .map(|scrobbled| in_users_spelling(&strip_edition(scrobbled), &canonical.group.title))
     };
     let (album_name, album_artist) = match &album {
-        AlbumPart::Unchanged | AlbumPart::Waiting(_) => {
+        AlbumPart::Unchanged | AlbumPart::Kept { .. } | AlbumPart::Waiting(_) => {
             (subject.album.clone(), subject.album_artist.clone())
         }
         AlbumPart::Move {
@@ -279,21 +302,28 @@ pub(crate) fn derive_edit(
         edit.album_artist_name = target.album_artist.clone();
         Proposal {
             edit,
-            approval: approval(chosen, &outcome.proof, title_change, &album, policy),
-            rationale: rationale(subject, outcome, chosen, title_change, &album),
+            approval: approval(chosen, &outcome.proof, &title_part, &album, policy),
+            rationale: rationale(subject, outcome, chosen, &title_part, &album),
             target,
         }
     });
-    let waiting = match album {
-        AlbumPart::Waiting(question) => vec![question],
-        _ => Vec::new(),
-    };
-    Derived { proposal, waiting }
+    let named = title_part.named() || album.named();
+    let waiting = [title_part.waiting(), album.waiting()]
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect();
+    Derived {
+        proposal,
+        waiting,
+        named,
+    }
 }
 
 /// The provider's walk over a key's plannable outcomes, in preference order: the first
-/// that proposes an edit, or failing that the first that waits on a naming question. A
-/// rejected or no-op outcome passes to the next (the human walk).
+/// that proposes an edit or whose edit a naming verdict or wait shaped. A rejected or
+/// no-op outcome passes to the next (the human walk); a verdict about this outcome's
+/// titles says nothing about the next one's.
 pub(crate) fn derive_first<'a>(
     subject: &Subject,
     plannable: Vec<(&'a Outcome, Chosen)>,
@@ -301,17 +331,99 @@ pub(crate) fn derive_first<'a>(
     policy: &MovePolicy,
     naming: Naming<'_>,
 ) -> Option<(&'a Outcome, Derived)> {
-    let mut waiting = None;
-    for (outcome, chosen) in plannable {
+    plannable.into_iter().find_map(|(outcome, chosen)| {
         let derived = derive_edit(subject, outcome, chosen, rejected, policy, naming);
-        if derived.proposal.is_some() {
-            return Some((outcome, derived));
+        (derived.proposal.is_some() || derived.named).then_some((outcome, derived))
+    })
+}
+
+/// What `outcome` does to `track`. Only a pick among MusicBrainz options may change a
+/// title beyond packaging; a deterministic or researched match may not drop "feat."
+/// credits or version notes.
+pub(crate) fn title_change(track: &str, outcome: &Outcome, chosen: Chosen) -> TitleChange {
+    match classify_title_change(&parse_title(track), &outcome.title) {
+        TitleChange::Other
+            if chosen == Chosen::Deterministic
+                || matches!(outcome.proof, Proof::Researched { .. }) =>
+        {
+            TitleChange::None
         }
-        if waiting.is_none() && !derived.waiting.is_empty() {
-            waiting = Some((outcome, derived));
+        change => change,
+    }
+}
+
+fn title_part<'a>(
+    subject: &Subject,
+    outcome: &Outcome,
+    chosen: Chosen,
+    naming: Naming<'a>,
+) -> TitlePart<'a> {
+    match title_change(&subject.track, outcome, chosen) {
+        TitleChange::None => TitlePart::Unchanged,
+        TitleChange::PackagingOnly => TitlePart::Packaging,
+        TitleChange::Other => {
+            let question = NamingQuestion::track(&subject.artist, &subject.track, &outcome.title);
+            match naming.verdicts.get(&question) {
+                Some(judgement) => match judgement.verdict {
+                    NamingVerdict::MusicBrainz => TitlePart::Retitle { naming: judgement },
+                    NamingVerdict::Keep => TitlePart::KeepTitle { naming: judgement },
+                    NamingVerdict::Unsure => TitlePart::RetitleForReview {
+                        naming: Some(judgement),
+                    },
+                },
+                None if naming.judge == RetitleJudge::Llm => TitlePart::Waiting(question),
+                None => TitlePart::RetitleForReview { naming: None },
+            }
         }
     }
-    waiting
+}
+
+/// The user's title without its packaging junk, when that is all its suffixes are.
+fn without_packaging(parsed: &ParsedTitle) -> String {
+    let packaging_only =
+        !parsed.packaging.is_empty() && parsed.identity.is_empty() && parsed.credits.is_empty();
+    if packaging_only {
+        &parsed.base
+    } else {
+        &parsed.raw
+    }
+    .to_string()
+}
+
+impl TitlePart<'_> {
+    fn named(&self) -> bool {
+        match self {
+            TitlePart::Unchanged | TitlePart::Packaging => false,
+            TitlePart::RetitleForReview { naming } => naming.is_some(),
+            TitlePart::Retitle { .. } | TitlePart::KeepTitle { .. } | TitlePart::Waiting(_) => true,
+        }
+    }
+
+    fn waiting(&self) -> Option<&NamingQuestion> {
+        match self {
+            TitlePart::Waiting(question) => Some(question),
+            _ => None,
+        }
+    }
+}
+
+impl AlbumPart<'_> {
+    fn named(&self) -> bool {
+        match self {
+            AlbumPart::Unchanged => false,
+            AlbumPart::Move { naming, .. } | AlbumPart::RetitleForReview { naming, .. } => {
+                naming.is_some()
+            }
+            AlbumPart::KeepTitle { .. } | AlbumPart::Kept { .. } | AlbumPart::Waiting(_) => true,
+        }
+    }
+
+    fn waiting(&self) -> Option<&NamingQuestion> {
+        match self {
+            AlbumPart::Waiting(question) => Some(question),
+            _ => None,
+        }
+    }
 }
 
 fn album_part<'a>(
@@ -349,13 +461,18 @@ fn album_part<'a>(
                 canonical,
                 naming: Some(judgement),
             },
-            NamingVerdict::Keep if question.album != subject.album.as_deref().unwrap_or("") => {
+            NamingVerdict::Keep
+                if question.users_title != subject.album.as_deref().unwrap_or("") =>
+            {
                 AlbumPart::KeepTitle {
                     canonical,
                     naming: judgement,
                 }
             }
-            NamingVerdict::Keep => AlbumPart::Unchanged,
+            NamingVerdict::Keep => AlbumPart::Kept {
+                canonical,
+                naming: judgement,
+            },
             NamingVerdict::Unsure => AlbumPart::RetitleForReview {
                 canonical,
                 naming: Some(judgement),
@@ -408,20 +525,48 @@ fn rationale(
     subject: &Subject,
     outcome: &Outcome,
     chosen: Chosen,
-    title: TitleChange,
+    title: &TitlePart,
     album: &AlbumPart,
 ) -> String {
     let mut lines = Vec::new();
+    let retitled = || {
+        format!(
+            "Title: \"{}\" -> \"{}\" (MusicBrainz title)",
+            subject.track, outcome.title
+        )
+    };
     match title {
-        TitleChange::None => {}
-        TitleChange::PackagingOnly => lines.push(format!(
+        TitlePart::Unchanged | TitlePart::Waiting(_) => {}
+        TitlePart::Packaging => lines.push(format!(
             "Title: \"{}\" -> \"{}\" (packaging stripped)",
             subject.track, outcome.title
         )),
-        TitleChange::Other => lines.push(format!(
-            "Title: \"{}\" -> \"{}\" (MusicBrainz title)",
-            subject.track, outcome.title
-        )),
+        TitlePart::Retitle { naming } => {
+            lines.push(retitled());
+            lines.push(naming_line(naming));
+        }
+        TitlePart::RetitleForReview { naming } => {
+            lines.push(retitled());
+            lines.push(naming.map_or_else(
+                || "Naming: the title changes beyond packaging; for review".to_string(),
+                naming_line,
+            ));
+        }
+        TitlePart::KeepTitle { naming } => {
+            let kept = without_packaging(&parse_title(&subject.track));
+            lines.push(if kept == subject.track {
+                format!(
+                    "Title: \"{kept}\" kept (MusicBrainz titles it \"{}\")",
+                    outcome.title
+                )
+            } else {
+                format!(
+                    "Title: \"{}\" -> \"{kept}\" (packaging stripped; MusicBrainz titles it \"{}\")",
+                    subject.track, outcome.title
+                )
+            });
+            lines.push(naming_line(naming));
+        }
     }
     let from = outcome
         .scrobbled_group
@@ -461,6 +606,14 @@ fn rationale(
             ));
             lines.push(naming_line(naming));
         }
+        AlbumPart::Kept { canonical, naming } => {
+            lines.push(format!(
+                "Album: \"{}\" kept (MusicBrainz titles it \"{}\")",
+                subject.album.as_deref().unwrap_or_default(),
+                canonical.group.title
+            ));
+            lines.push(naming_line(naming));
+        }
     }
     lines.push(match &outcome.proof {
         Proof::SameRecording => "Proof: the same MusicBrainz recording".to_string(),
@@ -496,7 +649,7 @@ fn naming_line(judgement: &NamingJudgement) -> String {
 fn approval(
     chosen: Chosen,
     proof: &Proof,
-    title: TitleChange,
+    title: &TitlePart,
     album: &AlbumPart,
     policy: &MovePolicy,
 ) -> Approval {
@@ -517,14 +670,14 @@ fn approval(
             && !canonical.single_first
     };
     let album_safe = match album {
-        AlbumPart::Unchanged | AlbumPart::Waiting(_) => true,
+        AlbumPart::Unchanged | AlbumPart::Kept { .. } | AlbumPart::Waiting(_) => true,
         AlbumPart::Move {
             kind, canonical, ..
         } => move_safe(*kind, canonical),
         AlbumPart::KeepTitle { canonical, .. } => move_safe(AlbumMove::EditionToGroup, canonical),
         AlbumPart::RetitleForReview { .. } => false,
     };
-    let title_safe = matches!(title, TitleChange::None | TitleChange::PackagingOnly);
+    let title_safe = !matches!(title, TitlePart::RetitleForReview { .. });
     if chosen == Chosen::Deterministic && proof.is_proven() && album_safe && title_safe {
         Approval::Auto(AutoProof(()))
     } else {
@@ -746,11 +899,11 @@ mod tests {
             "1970-12-11",
             credit(&[("john-lennon", "John Lennon", "")]),
         );
-        let question = NamingQuestion {
-            artist: "John Lennon".into(),
-            album: "Plastic Ono Band".into(),
-            title: "John Lennon/Plastic Ono Band".into(),
-        };
+        let question = NamingQuestion::album(
+            "John Lennon",
+            "Plastic Ono Band",
+            "John Lennon/Plastic Ono Band",
+        );
         let judged = |verdict| {
             HashMap::from([(
                 question.clone(),
@@ -881,6 +1034,367 @@ mod tests {
              Naming: use MusicBrainz's title (claude:opus): Restores the official title.\n\
              Proof: the same MusicBrainz recording"
         );
+    }
+
+    /// Picked among options: the release group `album` names, and the recording's title.
+    fn picked(track: &str, album: &str, live: bool, year: &str) -> Outcome {
+        let secondary: &[SecondaryType] = if live { &[SecondaryType::Live] } else { &[] };
+        let group = group(
+            album,
+            album,
+            PrimaryType::Album,
+            secondary,
+            year,
+            credit(&[]),
+        );
+        outcome(
+            track,
+            group.clone(),
+            plain_album(group),
+            Proof::SameRecording,
+        )
+    }
+
+    fn judged(
+        question: NamingQuestion,
+        verdict: NamingVerdict,
+    ) -> HashMap<NamingQuestion, NamingJudgement> {
+        HashMap::from([(
+            question,
+            NamingJudgement {
+                verdict,
+                reason: "Live recordings keep their marker.".into(),
+                by: NamingJudge::Llm {
+                    model: "claude:opus".into(),
+                    prompt_version: 1,
+                },
+                at: 1,
+            },
+        )])
+    }
+
+    #[test]
+    fn track_retitles_follow_the_titles_naming_verdict() {
+        let rolling_stone = (
+            subject(
+                "Jimi Hendrix",
+                "Like A Rolling Stone (Live)",
+                "The Jimi Hendrix Experience (disc 1)",
+                None,
+            ),
+            picked(
+                "Like a Rolling Stone (live at the Monterey International Pop Festival, Los Angeles, CA, June 18, 1967)",
+                "The Jimi Hendrix Experience",
+                false,
+                "2000-09-12",
+            ),
+        );
+        let valerie = (
+            subject(
+                "Amy Winehouse",
+                "Valerie - Live At BBC Radio 1 Live Lounge, London / 2007",
+                "Back to Black (Deluxe Edition)",
+                None,
+            ),
+            picked(
+                "Valerie (live at Jo Whiley)",
+                "Back to Black",
+                false,
+                "2006-10-27",
+            ),
+        );
+        let who_loves_the_sun = (
+            subject(
+                "The Velvet Underground",
+                "Who Loves The Sun",
+                "Loaded: Re-Loaded 45th Anniversary Edition",
+                None,
+            ),
+            picked(
+                "Who Loves the Sun (2012 remaster)",
+                "Loaded: Re-Loaded",
+                false,
+                "2015-10-30",
+            ),
+        );
+        let mack_the_knife = (
+            subject(
+                "Ella Fitzgerald",
+                "Mack the Knife [Live]",
+                "Ella in Berlin: Mack the Knife",
+                None,
+            ),
+            picked(
+                "Mack the Knife",
+                "Ella in Berlin: Mack the Knife",
+                true,
+                "1960",
+            ),
+        );
+        let sugar_plum = (
+            subject(
+                "Bill Evans",
+                "Sugar Plum - Live",
+                "On a Monday Evening",
+                None,
+            ),
+            picked("Sugar Plum", "On a Monday Evening", true, "2017-03-03"),
+        );
+        let target = |title: &str, album: &str| Some((target(title, album, None), true));
+
+        use NamingVerdict::{Keep, MusicBrainz, Unsure};
+        use RetitleJudge::{Llm, Reviewer};
+        type Case<'a> = (
+            &'a (Subject, Outcome),
+            Option<NamingVerdict>,
+            RetitleJudge,
+            Option<(Target, bool)>,
+        );
+        let monterey = "Like a Rolling Stone (live at the Monterey International Pop Festival, Los Angeles, CA, June 18, 1967)";
+        let cases: Vec<Case> = vec![
+            (
+                &rolling_stone,
+                Some(MusicBrainz),
+                Llm,
+                target(monterey, "The Jimi Hendrix Experience"),
+            ),
+            (
+                &rolling_stone,
+                Some(Keep),
+                Llm,
+                target("Like A Rolling Stone (Live)", "The Jimi Hendrix Experience"),
+            ),
+            (
+                &rolling_stone,
+                Some(Unsure),
+                Llm,
+                target(monterey, "The Jimi Hendrix Experience"),
+            ),
+            (
+                &rolling_stone,
+                None,
+                Reviewer,
+                target(monterey, "The Jimi Hendrix Experience"),
+            ),
+            (
+                &rolling_stone,
+                None,
+                Llm,
+                target("Like A Rolling Stone (Live)", "The Jimi Hendrix Experience"),
+            ),
+            (
+                &valerie,
+                Some(MusicBrainz),
+                Llm,
+                target("Valerie (live at Jo Whiley)", "Back to Black"),
+            ),
+            (
+                &valerie,
+                Some(Keep),
+                Llm,
+                target(
+                    "Valerie - Live At BBC Radio 1 Live Lounge, London / 2007",
+                    "Back to Black",
+                ),
+            ),
+            (
+                &valerie,
+                Some(Unsure),
+                Llm,
+                target("Valerie (live at Jo Whiley)", "Back to Black"),
+            ),
+            (
+                &valerie,
+                None,
+                Reviewer,
+                target("Valerie (live at Jo Whiley)", "Back to Black"),
+            ),
+            (
+                &valerie,
+                None,
+                Llm,
+                target(
+                    "Valerie - Live At BBC Radio 1 Live Lounge, London / 2007",
+                    "Back to Black",
+                ),
+            ),
+            (
+                &who_loves_the_sun,
+                Some(MusicBrainz),
+                Llm,
+                target("Who Loves the Sun (2012 remaster)", "Loaded: Re-Loaded"),
+            ),
+            (
+                &who_loves_the_sun,
+                Some(Keep),
+                Llm,
+                target("Who Loves The Sun", "Loaded: Re-Loaded"),
+            ),
+            (
+                &who_loves_the_sun,
+                Some(Unsure),
+                Llm,
+                target("Who Loves the Sun (2012 remaster)", "Loaded: Re-Loaded"),
+            ),
+            (
+                &who_loves_the_sun,
+                None,
+                Reviewer,
+                target("Who Loves the Sun (2012 remaster)", "Loaded: Re-Loaded"),
+            ),
+            (
+                &who_loves_the_sun,
+                None,
+                Llm,
+                target("Who Loves The Sun", "Loaded: Re-Loaded"),
+            ),
+            (
+                &mack_the_knife,
+                Some(MusicBrainz),
+                Llm,
+                target("Mack the Knife", "Ella in Berlin: Mack the Knife"),
+            ),
+            (&mack_the_knife, Some(Keep), Llm, None),
+            (
+                &mack_the_knife,
+                Some(Unsure),
+                Llm,
+                target("Mack the Knife", "Ella in Berlin: Mack the Knife"),
+            ),
+            (
+                &mack_the_knife,
+                None,
+                Reviewer,
+                target("Mack the Knife", "Ella in Berlin: Mack the Knife"),
+            ),
+            (&mack_the_knife, None, Llm, None),
+            (
+                &sugar_plum,
+                Some(MusicBrainz),
+                Llm,
+                target("Sugar Plum", "On a Monday Evening"),
+            ),
+            (&sugar_plum, Some(Keep), Llm, None),
+            (
+                &sugar_plum,
+                Some(Unsure),
+                Llm,
+                target("Sugar Plum", "On a Monday Evening"),
+            ),
+            (
+                &sugar_plum,
+                None,
+                Reviewer,
+                target("Sugar Plum", "On a Monday Evening"),
+            ),
+            (&sugar_plum, None, Llm, None),
+        ];
+        for ((subject, outcome), verdict, judge, expected) in cases {
+            let question = NamingQuestion::track(&subject.artist, &subject.track, &outcome.title);
+            let verdicts = verdict.map_or_else(HashMap::new, |verdict| judged(question, verdict));
+            let actual = derive_edit(
+                subject,
+                outcome,
+                Chosen::Adjudicated,
+                &[],
+                &MovePolicy::default(),
+                Naming {
+                    verdicts: &verdicts,
+                    judge,
+                },
+            )
+            .proposal
+            .map(|p| (p.target, p.approval.requires_confirmation()));
+            assert_eq!(
+                actual, expected,
+                "{} with {verdict:?}, {judge:?}",
+                subject.track
+            );
+        }
+
+        let (subject, outcome) = &valerie;
+        let verdicts = judged(
+            NamingQuestion::track(&subject.artist, &subject.track, &outcome.title),
+            Keep,
+        );
+        let proposal = derive_edit(
+            subject,
+            outcome,
+            Chosen::Adjudicated,
+            &[],
+            &MovePolicy::default(),
+            Naming {
+                verdicts: &verdicts,
+                judge: Llm,
+            },
+        )
+        .proposal
+        .unwrap();
+        assert_eq!(
+            proposal.rationale,
+            "Title: \"Valerie - Live At BBC Radio 1 Live Lounge, London / 2007\" kept (MusicBrainz titles it \"Valerie (live at Jo Whiley)\")\n\
+             Naming: keep your title (claude:opus): Live recordings keep their marker.\n\
+             Album: Back to Black (Album, 2006) -> Back to Black (Album, 2006) (edition title of the same release group)\n\
+             Proof: the same MusicBrainz recording\n\
+             Chosen among several MusicBrainz options"
+        );
+    }
+
+    #[test]
+    fn a_track_naming_verdict_ends_the_walk_at_the_option_it_judged() {
+        let subject = subject(
+            "Ella Fitzgerald",
+            "Mack the Knife [Live]",
+            "Ella in Berlin: Mack the Knife",
+            None,
+        );
+        let berlin = picked(
+            "Mack the Knife",
+            "Ella in Berlin: Mack the Knife",
+            true,
+            "1960",
+        );
+        let other = picked(
+            "Mack the Knife (live, 1960-02-13: Deutschlandhalle, Berlin)",
+            "Ella in Berlin: Mack the Knife",
+            true,
+            "1960",
+        );
+        let berlin_question =
+            NamingQuestion::track("Ella Fitzgerald", "Mack the Knife [Live]", "Mack the Knife");
+        let keep = judged(berlin_question.clone(), NamingVerdict::Keep);
+        let none = HashMap::new();
+        let cases = [
+            ("kept", &keep, (berlin.title.clone(), None, vec![])),
+            (
+                "waiting",
+                &none,
+                (berlin.title.clone(), None, vec![berlin_question]),
+            ),
+        ];
+        for (name, verdicts, expected) in cases {
+            let actual = derive_first(
+                &subject,
+                vec![
+                    (&berlin, Chosen::Adjudicated),
+                    (&other, Chosen::Adjudicated),
+                ],
+                &[],
+                &MovePolicy::default(),
+                Naming {
+                    verdicts,
+                    judge: RetitleJudge::Llm,
+                },
+            )
+            .map(|(outcome, derived)| {
+                (
+                    outcome.title.clone(),
+                    derived.proposal.map(|p| p.target),
+                    derived.waiting,
+                )
+            });
+            assert_eq!(actual, Some(expected), "{name}");
+        }
     }
 
     #[test]

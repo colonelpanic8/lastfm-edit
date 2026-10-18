@@ -34,7 +34,7 @@ pub use book::{
 pub use canonical::{AlbumMove, Canonical, Rung};
 pub use lane::{IdentityLane, LaneEnded, LaneOptions, LaneReport};
 pub use mb::{ArtistCredit, ReleaseGroup, UserAgent};
-pub use naming::{NamingJudge, NamingJudgement, NamingQuestion, NamingVerdict};
+pub use naming::{NamingJudge, NamingJudgement, NamingKind, NamingQuestion, NamingVerdict};
 pub use outcome::{MoveMode, MovePolicy, Outcome, Proof, RetitleJudge, Target};
 pub use provider::{IdentityProvider, IDENTITY_PROVIDER};
 pub use resolve::ResolveLimits;
@@ -788,11 +788,11 @@ mod naming_tests {
                 at: 2,
                 resolver: RESOLVER_VERSION,
                 kind: ResolutionEventKind::NamingJudged {
-                    question: NamingQuestion {
-                        artist: "John Lennon".into(),
-                        album: "Plastic Ono Band".into(),
-                        title: "John Lennon/Plastic Ono Band".into(),
-                    },
+                    question: NamingQuestion::album(
+                        "John Lennon",
+                        "Plastic Ono Band",
+                        "John Lennon/Plastic Ono Band",
+                    ),
                     verdict: NamingVerdict::MusicBrainz,
                     reason: "The official title.".into(),
                     by: NamingJudge::Llm {

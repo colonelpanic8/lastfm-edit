@@ -4,7 +4,7 @@
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use clap::{Parser, Subcommand};
 use scrobble_scrubber::identity::{
-    Identity, IdentityConfig, KeyStatus, LlmConfig, MovePolicy, Outcome, UserAgent,
+    Identity, IdentityConfig, KeyStatus, LlmConfig, MovePolicy, NamingKind, Outcome, UserAgent,
 };
 use scrobble_scrubber::{
     approve_intent, approve_pending_rule, load_comprehensive_default_rules, reject_intent,
@@ -934,9 +934,13 @@ async fn identity_cmd(ctx: &Context, action: &IdentityCommand) -> Result<()> {
                     KeyStatus::Stale => println!("  stale (older resolver version)"),
                 }
                 for (question, judgement) in snapshot.naming_questions(key) {
+                    let kind = match question.kind {
+                        NamingKind::Album => "album",
+                        NamingKind::Track => "track",
+                    };
                     let asked = format!(
-                        "  naming: \"{}\" or MusicBrainz's \"{}\"",
-                        question.album, question.title
+                        "  naming ({kind}): \"{}\" or MusicBrainz's \"{}\"",
+                        question.users_title, question.title
                     );
                     match judgement {
                         Some(judgement) => println!(

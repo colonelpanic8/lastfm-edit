@@ -1,15 +1,20 @@
-//! Naming questions: whether an edition fix may also retitle the album. A release group's
-//! title can differ from the user's by more than an edition suffix, as a restored
+//! Naming questions: whether a fix may also retitle the album or the track. A release
+//! group's title can differ from the user's by more than an edition suffix, as a restored
 //! diacritic ("Béla Fleck and the Flecktones") or a MusicBrainz convention ("John
-//! Lennon/Plastic Ono Band"). One answer per album covers every track on it.
+//! Lennon/Plastic Ono Band"); one answer per album covers every track on it. A recording
+//! picked among options can carry MusicBrainz's own annotations ("Who Loves the Sun (2012
+//! remaster)") or lack the user's version marker ("Mack the Knife" for "Mack the Knife
+//! [Live]"); one answer per track title covers every album it was played on.
 
 use super::adjudicate::{truncate_bytes, AdjudicateError, MAX_RAW_BYTES, MAX_REASON_CHARS};
 use super::book::Snapshot;
 use super::canonical::AlbumMove;
 use super::llm::{ChoiceRequest, LlmBackend};
 use super::mb::ReleaseGroup;
-use super::outcome::{album_move, derive_first, MovePolicy, Naming, Outcome, RetitleJudge};
-use super::title::{fold, strip_edition};
+use super::outcome::{
+    album_move, derive_first, title_change, Chosen, MovePolicy, Naming, Outcome, RetitleJudge,
+};
+use super::title::{fold, strip_edition, TitleChange};
 use crate::subject::{ScrobbleKey, Subject};
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -35,18 +40,84 @@ both titles are equally valid, choose \"keep\";
 Reply with JSON only: {\"choice\": \"keep\" | \"musicbrainz\" | \"unsure\", \"confidence\": \
 \"high\" | \"medium\" | \"low\", \"reason\": \"<one sentence>\"}";
 
+pub(crate) const TRACK_NAMING_PROMPT: &str = "\
+You help keep a music listening history (last.fm scrobbles) tidy. A scrobbled track was matched \
+to a MusicBrainz recording whose title differs from the user's title by more than packaging such \
+as \"- Remastered 2009\". Decide which title the user's scrobbles should carry.
+
+Prefer the title as the track was officially released and as last.fm and streaming services \
+show it. MusicBrainz recording titles can carry text that belongs to MusicBrainz rather than to \
+any release: disambiguation, and session, venue, date or remaster notes (\"(live at the Fillmore \
+East, March 7, 1970)\", \"(2012 remaster)\"). Never adopt such text. The user's title can carry \
+a version marker (live, remix, demo, acoustic) that tells a genuinely different recording apart \
+from the studio original; never drop one unless the MusicBrainz title says the same thing. \
+Choose:
+- \"musicbrainz\" when the MusicBrainz title is the released title and the user's is a variant of \
+it, such as a misspelling, missing diacritics or different capitalization, and adopting it adds \
+no annotation and drops no version marker;
+- \"keep\" when the MusicBrainz title adds an annotation as above, drops a version marker the \
+user's title has, or is otherwise no better than the user's. When both titles are equally valid, \
+choose \"keep\";
+- \"unsure\" when you cannot tell. A person reviews unsure answers.
+
+Reply with JSON only: {\"choice\": \"keep\" | \"musicbrainz\" | \"unsure\", \"confidence\": \
+\"high\" | \"medium\" | \"low\", \"reason\": \"<one sentence>\"}";
+
 const MAX_TRACKS: usize = 8;
 
-/// One album's question: the user's title against the release group's.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum NamingKind {
+    #[default]
+    Album,
+    Track,
+}
+
+/// One album's or track title's question: the user's title against MusicBrainz's.
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 pub struct NamingQuestion {
+    /// The default and the `album` alias read verdicts logged before track questions.
+    #[serde(default)]
+    pub kind: NamingKind,
     pub artist: String,
-    /// The user's album title without its edition suffix.
-    pub album: String,
-    /// The MusicBrainz release group's title.
+    /// The user's album title without its edition suffix, or the track title as scrobbled.
+    #[serde(alias = "album")]
+    pub users_title: String,
+    /// The MusicBrainz release group's or recording's title.
     pub title: String,
+}
+
+impl NamingQuestion {
+    pub fn album(artist: &str, users_title: &str, title: &str) -> Self {
+        Self::new(NamingKind::Album, artist, users_title, title)
+    }
+
+    pub fn track(artist: &str, users_title: &str, title: &str) -> Self {
+        Self::new(NamingKind::Track, artist, users_title, title)
+    }
+
+    fn new(kind: NamingKind, artist: &str, users_title: &str, title: &str) -> Self {
+        Self {
+            kind,
+            artist: artist.to_string(),
+            users_title: users_title.to_string(),
+            title: title.to_string(),
+        }
+    }
 }
 
 /// What an edition fix does to the album title.
@@ -63,26 +134,33 @@ pub(crate) fn classify_edition_fix(artist: &str, album: &str, group_title: &str)
     if fold(&base) == fold(group_title) {
         return EditionFix::SuffixOnly;
     }
-    EditionFix::Retitle(NamingQuestion {
-        artist: artist.to_string(),
-        album: base,
-        title: group_title.to_string(),
-    })
+    EditionFix::Retitle(NamingQuestion::album(artist, &base, group_title))
 }
 
-/// The question a scrobble on `album` raises under `outcome`, if its album fix retitles.
-pub(crate) fn naming_question(
-    artist: &str,
-    album: Option<&str>,
+/// The questions `key` raises under `outcome` whatever the move policy: its album's, if
+/// the edition fix retitles it, and its track's, if the title changes beyond packaging.
+pub(crate) fn naming_questions(
+    key: &ScrobbleKey,
     outcome: &Outcome,
-) -> Option<NamingQuestion> {
-    let (AlbumMove::EditionToGroup, canonical) = album_move(album, outcome)? else {
-        return None;
+    chosen: Chosen,
+) -> Vec<NamingQuestion> {
+    let album = key.album.as_deref();
+    let album_question = match album_move(album, outcome) {
+        Some((AlbumMove::EditionToGroup, canonical)) => {
+            match classify_edition_fix(
+                &key.artist,
+                album.unwrap_or_default(),
+                &canonical.group.title,
+            ) {
+                EditionFix::SuffixOnly => None,
+                EditionFix::Retitle(question) => Some(question),
+            }
+        }
+        _ => None,
     };
-    match classify_edition_fix(artist, album?, &canonical.group.title) {
-        EditionFix::SuffixOnly => None,
-        EditionFix::Retitle(question) => Some(question),
-    }
+    let track_question = (title_change(&key.track, outcome, chosen) == TitleChange::Other)
+        .then(|| NamingQuestion::track(&key.artist, &key.track, &outcome.title));
+    album_question.into_iter().chain(track_question).collect()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -102,7 +180,7 @@ pub enum NamingVerdict {
 pub enum NamingJudge {
     /// `model` is the backend label.
     Llm { model: String, prompt_version: u32 },
-    /// A person rejected identity intent `intent`, which retitled the album.
+    /// A person rejected identity intent `intent`, which made the retitle.
     Human { intent: Uuid },
 }
 
@@ -129,10 +207,11 @@ pub struct NamingJudgement {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct NamingCase {
     pub question: NamingQuestion,
-    pub group: ReleaseGroup,
+    /// The canonical release group for an album; the scrobbled one, if any, for a track.
+    pub group: Option<ReleaseGroup>,
     /// The user's album strings that raise the question.
     pub albums: Vec<String>,
-    /// Tracks the user played on it, most-played first.
+    /// Tracks the user played on the album, most-played first; none for a track.
     pub tracks: Vec<String>,
     pub plays: u32,
 }
@@ -153,7 +232,11 @@ pub(crate) async fn judge(
 ) -> Result<NamingAnswer, AdjudicateError> {
     let raw = backend
         .choose(ChoiceRequest {
-            system: NAMING_PROMPT.to_string(),
+            system: match case.question.kind {
+                NamingKind::Album => NAMING_PROMPT,
+                NamingKind::Track => TRACK_NAMING_PROMPT,
+            }
+            .to_string(),
             user: render_case(case),
             allowed: ["keep", "musicbrainz", "unsure"].map(String::from).to_vec(),
         })
@@ -183,24 +266,32 @@ fn render_case(case: &NamingCase) -> String {
             .join(", ")
     };
     let question = &case.question;
+    let (heading, albums) = match question.kind {
+        NamingKind::Album => ("Album", "the user's album strings"),
+        NamingKind::Track => ("Track", "albums the user played it on"),
+    };
     let mut out = String::new();
-    let _ = writeln!(out, "Album");
+    let _ = writeln!(out, "{heading}");
     let _ = writeln!(out, "  artist: \"{}\"", question.artist);
-    let _ = writeln!(out, "  the user's title: \"{}\"", question.album);
+    let _ = writeln!(out, "  the user's title: \"{}\"", question.users_title);
     let _ = writeln!(out, "  MusicBrainz title: \"{}\"", question.title);
-    let _ = writeln!(
-        out,
-        "  MusicBrainz release group: {}, credited to \"{}\"",
-        case.group.describe(),
-        case.group.credit.display()
-    );
-    let _ = writeln!(out, "  the user's album strings: {}", quoted(&case.albums));
-    let _ = writeln!(out, "  tracks played: {}", quoted(&case.tracks));
+    if let Some(group) = &case.group {
+        let _ = writeln!(
+            out,
+            "  MusicBrainz release group: {}, credited to \"{}\"",
+            group.describe(),
+            group.credit.display()
+        );
+    }
+    let _ = writeln!(out, "  {albums}: {}", quoted(&case.albums));
+    if question.kind == NamingKind::Album {
+        let _ = writeln!(out, "  tracks played: {}", quoted(&case.tracks));
+    }
     let _ = writeln!(out, "  plays: {}", case.plays);
     let _ = write!(
         out,
         "\nAnswer keep to use \"{}\", musicbrainz to use \"{}\", or unsure.",
-        question.album, question.title
+        question.users_title, question.title
     );
     out
 }
@@ -213,15 +304,15 @@ pub(crate) fn naming_cases<'a>(
     snapshot: &Snapshot,
     policy: &MovePolicy,
 ) -> Vec<(ScrobbleKey, NamingCase)> {
-    struct Album<'a> {
-        group: &'a ReleaseGroup,
+    struct Asked<'a> {
+        group: Option<&'a ReleaseGroup>,
         keys: Vec<(u32, &'a ScrobbleKey)>,
     }
     let naming = Naming {
         verdicts: &snapshot.naming,
         judge: RetitleJudge::Llm,
     };
-    let mut albums: BTreeMap<NamingQuestion, Album> = BTreeMap::new();
+    let mut asked: BTreeMap<NamingQuestion, Asked> = BTreeMap::new();
     for (key, key_plays) in plays {
         let Some(entry) = snapshot.keys.get(key) else {
             continue;
@@ -237,45 +328,50 @@ pub(crate) fn naming_cases<'a>(
         else {
             continue;
         };
-        let Some(canonical) = &outcome.canonical else {
-            continue;
-        };
+        let canonical = outcome.canonical.as_ref().map(|canonical| &canonical.group);
         for question in derived.waiting {
-            albums
+            let group = match question.kind {
+                NamingKind::Album => canonical,
+                NamingKind::Track => outcome.scrobbled_group.as_ref().or(canonical),
+            };
+            asked
                 .entry(question)
-                .or_insert_with(|| Album {
-                    group: &canonical.group,
+                .or_insert_with(|| Asked {
+                    group,
                     keys: Vec::new(),
                 })
                 .keys
                 .push((key_plays, key));
         }
     }
-    let mut cases: Vec<(ScrobbleKey, NamingCase)> = albums
+    let mut cases: Vec<(ScrobbleKey, NamingCase)> = asked
         .into_iter()
-        .map(|(question, mut album)| {
-            album
+        .map(|(question, mut asked)| {
+            asked
                 .keys
                 .sort_by(|(a_plays, a), (b_plays, b)| b_plays.cmp(a_plays).then(a.cmp(b)));
             let mut albums: Vec<String> = Vec::new();
             let mut tracks: Vec<String> = Vec::new();
-            for (_, key) in &album.keys {
+            for (_, key) in &asked.keys {
                 let scrobbled = key.album.clone().unwrap_or_default();
                 if !albums.contains(&scrobbled) {
                     albums.push(scrobbled);
                 }
-                if !tracks.contains(&key.track) && tracks.len() < MAX_TRACKS {
+                if question.kind == NamingKind::Album
+                    && !tracks.contains(&key.track)
+                    && tracks.len() < MAX_TRACKS
+                {
                     tracks.push(key.track.clone());
                 }
             }
             let case = NamingCase {
                 question,
-                group: album.group.clone(),
+                group: asked.group.cloned(),
                 albums,
                 tracks,
-                plays: album.keys.iter().map(|(plays, _)| plays).sum(),
+                plays: asked.keys.iter().map(|(plays, _)| plays).sum(),
             };
-            (album.keys[0].1.clone(), case)
+            (asked.keys[0].1.clone(), case)
         })
         .collect();
     cases.sort_by(|(_, a), (_, b)| b.plays.cmp(&a.plays).then(a.question.cmp(&b.question)));
@@ -292,19 +388,19 @@ mod tests {
     #[tokio::test]
     async fn answers_outside_keep_and_musicbrainz_are_unsure() {
         let case = NamingCase {
-            question: NamingQuestion {
-                artist: "John Lennon".into(),
-                album: "Plastic Ono Band".into(),
-                title: "John Lennon/Plastic Ono Band".into(),
-            },
-            group: group(
+            question: NamingQuestion::album(
+                "John Lennon",
+                "Plastic Ono Band",
+                "John Lennon/Plastic Ono Band",
+            ),
+            group: Some(group(
                 "8be83468-4917-390d-82b6-d890f058cd22",
                 "John Lennon/Plastic Ono Band",
                 super::super::mb::PrimaryType::Album,
                 &[],
                 1970,
                 credit(&[("4d5447d7", "John Lennon", "")]),
-            ),
+            )),
             albums: vec!["Plastic Ono Band".into()],
             tracks: vec!["Mother".into()],
             plays: 5,
@@ -335,11 +431,7 @@ mod tests {
     #[test]
     fn edition_fixes_that_change_more_than_the_suffix_are_retitles() {
         let question = |artist: &str, album: &str, title: &str| {
-            EditionFix::Retitle(NamingQuestion {
-                artist: artist.into(),
-                album: album.into(),
-                title: title.into(),
-            })
+            EditionFix::Retitle(NamingQuestion::album(artist, album, title))
         };
         let cases = [
             (

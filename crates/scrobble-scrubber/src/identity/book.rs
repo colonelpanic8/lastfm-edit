@@ -3,7 +3,9 @@
 
 use super::adjudicate::{case_hash, Case, CaseHash, Choice, Confidence, Verdict};
 use super::mb::{RecordingId, ReleaseGroupId};
-use super::naming::{naming_question, NamingJudge, NamingJudgement, NamingQuestion, NamingVerdict};
+use super::naming::{
+    naming_questions, NamingJudge, NamingJudgement, NamingQuestion, NamingVerdict,
+};
 use super::outcome::{Chosen, Outcome, Proof, Target};
 use crate::state::ScrubberState;
 use crate::subject::ScrobbleKey;
@@ -68,9 +70,9 @@ pub enum ResolutionEventKind {
         by: String,
         raw: String,
     },
-    /// An answer to the naming question of every key whose outcome retitles its album to
-    /// `question`; the event's key is the one that raised it. Counts across resolver
-    /// versions.
+    /// An answer to the naming question of every key whose outcome retitles its album or
+    /// track as `question` says; the event's key is the one that raised it. Counts across
+    /// resolver versions.
     NamingJudged {
         question: NamingQuestion,
         verdict: NamingVerdict,
@@ -330,8 +332,9 @@ impl Snapshot {
         let mut questions: Vec<NamingQuestion> = entry
             .plannable()
             .into_iter()
-            .filter_map(|(outcome, _)| naming_question(&key.artist, key.album.as_deref(), outcome))
+            .flat_map(|(outcome, chosen)| naming_questions(key, outcome, chosen))
             .collect();
+        questions.sort();
         questions.dedup();
         questions
             .into_iter()
@@ -349,9 +352,8 @@ impl Snapshot {
             .iter()
             .filter(|(key, entry)| {
                 key.artist == question.artist
-                    && entry.plannable().into_iter().any(|(outcome, _)| {
-                        naming_question(&key.artist, key.album.as_deref(), outcome).as_ref()
-                            == Some(question)
+                    && entry.plannable().into_iter().any(|(outcome, chosen)| {
+                        naming_questions(key, outcome, chosen).contains(question)
                     })
             })
             .map(|(key, _)| key.clone())
@@ -981,11 +983,11 @@ mod tests {
     }
 
     fn plastic_ono_band() -> NamingQuestion {
-        NamingQuestion {
-            artist: "John Lennon".into(),
-            album: "Plastic Ono Band".into(),
-            title: "John Lennon/Plastic Ono Band".into(),
-        }
+        NamingQuestion::album(
+            "John Lennon",
+            "Plastic Ono Band",
+            "John Lennon/Plastic Ono Band",
+        )
     }
 
     fn judged(at: u64, verdict: NamingVerdict, by: NamingJudge) -> ResolutionEvent {

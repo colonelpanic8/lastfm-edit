@@ -10,7 +10,8 @@ use super::book::{
 };
 use super::mb::{MbError, MbLookup, MusicBrainz};
 use super::naming::{
-    self, naming_question, NamingJudge, NamingQuestion, NamingVerdict, NAMING_PROMPT_VERSION,
+    self, naming_questions, NamingJudge, NamingKind, NamingQuestion, NamingVerdict,
+    NAMING_PROMPT_VERSION,
 };
 use super::outcome::{MovePolicy, Proof, Target};
 use super::provider::IDENTITY_PROVIDER;
@@ -389,7 +390,7 @@ impl IdentityLane {
                 Err(err) => {
                     log::warn!(
                         "identity lane: naming question for {} failed: {err}",
-                        case.question.album
+                        case.question.users_title
                     );
                     round.llm_down = true;
                     break;
@@ -548,21 +549,20 @@ impl IdentityLane {
                     album_artist: intent.proposed.album_artist_name.clone(),
                 },
             }));
-            let Some(question) = rejected_retitle(&snapshot, intent) else {
-                continue;
-            };
-            let already_kept = snapshot
-                .naming
-                .get(&question)
-                .is_some_and(|judgement| judgement.verdict == NamingVerdict::Keep);
-            if kept.insert(question.clone()) && !already_kept {
-                events.push(event(ResolutionEventKind::NamingJudged {
-                    question,
-                    verdict: NamingVerdict::Keep,
-                    reason: "A person rejected the retitle in review.".to_string(),
-                    by: NamingJudge::Human { intent: intent.id },
-                    raw: String::new(),
-                }));
+            for question in rejected_retitles(&snapshot, intent) {
+                let already_kept = snapshot
+                    .naming
+                    .get(&question)
+                    .is_some_and(|judgement| judgement.verdict == NamingVerdict::Keep);
+                if kept.insert(question.clone()) && !already_kept {
+                    events.push(event(ResolutionEventKind::NamingJudged {
+                        question,
+                        verdict: NamingVerdict::Keep,
+                        reason: "A person rejected the retitle in review.".to_string(),
+                        by: NamingJudge::Human { intent: intent.id },
+                        raw: String::new(),
+                    }));
+                }
             }
         }
         self.writer.append(events).await?;
@@ -794,17 +794,28 @@ fn research_cases(library: &Library, snapshot: &Snapshot, now: u64) -> Vec<Resea
     cases
 }
 
-/// The naming question whose retitle `intent` proposed for its album.
-fn rejected_retitle(snapshot: &Snapshot, intent: &EditIntent) -> Option<NamingQuestion> {
+/// The naming questions whose retitles `intent` proposed for its album and track.
+fn rejected_retitles(snapshot: &Snapshot, intent: &EditIntent) -> Vec<NamingQuestion> {
     let key = intent.subject.key();
-    let proposed = fold(intent.proposed.album_name.as_deref()?);
-    snapshot
-        .keys
-        .get(&key)?
+    let Some(entry) = snapshot.keys.get(&key) else {
+        return Vec::new();
+    };
+    let proposed = |kind| {
+        let proposed = match kind {
+            NamingKind::Album => intent.proposed.album_name.as_deref(),
+            NamingKind::Track => intent.proposed.track_name.as_deref(),
+        };
+        proposed.map(fold)
+    };
+    let mut questions: Vec<NamingQuestion> = entry
         .plannable()
         .into_iter()
-        .filter_map(|(outcome, _)| naming_question(&key.artist, key.album.as_deref(), outcome))
-        .find(|question| fold(&question.title) == proposed)
+        .flat_map(|(outcome, chosen)| naming_questions(&key, outcome, chosen))
+        .filter(|question| proposed(question.kind) == Some(fold(&question.title)))
+        .collect();
+    questions.sort();
+    questions.dedup();
+    questions
 }
 
 /// The most recent human decisions on identity proposals for this artist.
@@ -871,9 +882,9 @@ mod tests {
     use crate::identity::llm::scripted::ScriptedBackend;
     use crate::identity::llm::ChoiceRequest;
     use crate::identity::llm::{RawChoice, RawResearch};
-    use crate::identity::mb::{PrimaryType, ReleaseGroup};
+    use crate::identity::mb::{PrimaryType, ReleaseGroup, SecondaryType};
     use crate::identity::mb::{RecordingId, ReleaseGroupId};
-    use crate::identity::naming::NAMING_PROMPT;
+    use crate::identity::naming::{NAMING_PROMPT, TRACK_NAMING_PROMPT};
     use crate::identity::outcome::{MoveMode, Outcome};
     use crate::identity::testing::{credit, group, FixtureMb, WALTZ_FOR_DEBBY_TAKE_2};
     use crate::queue::{QueueEvent, QueueEventKind};
@@ -1408,11 +1419,11 @@ Answer keep to use "Plastic Ono Band", musicbrainz to use "John Lennon/Plastic O
             reader.changes_since(3),
             (vec![lennon("Mother"), lennon("Love")], 4)
         );
-        let question = NamingQuestion {
-            artist: "John Lennon".into(),
-            album: "Plastic Ono Band".into(),
-            title: "John Lennon/Plastic Ono Band".into(),
-        };
+        let question = NamingQuestion::album(
+            "John Lennon",
+            "Plastic Ono Band",
+            "John Lennon/Plastic Ono Band",
+        );
         let judgement = reader.snapshot().naming.get(&question).cloned().unwrap();
         assert_eq!(
             (judgement.verdict, judgement.reason, judgement.by),
@@ -1466,11 +1477,11 @@ Answer keep to use "Plastic Ono Band", musicbrainz to use "John Lennon/Plastic O
             None,
         )
         .await;
-        let question = NamingQuestion {
-            artist: "John Lennon".into(),
-            album: "Plastic Ono Band".into(),
-            title: "John Lennon/Plastic Ono Band".into(),
-        };
+        let question = NamingQuestion::album(
+            "John Lennon",
+            "Plastic Ono Band",
+            "John Lennon/Plastic Ono Band",
+        );
         h.lane
             .writer
             .append(vec![
@@ -1575,6 +1586,213 @@ Answer keep to use "Plastic Ono Band", musicbrainz to use "John Lennon/Plastic O
             (NamingVerdict::Keep, NamingJudge::Human { intent: id })
         );
         assert_eq!(proposed_albums().await, Vec::<String>::new());
+    }
+
+    fn mack_the_knife() -> ScrobbleKey {
+        ScrobbleKey {
+            artist: "Ella Fitzgerald".into(),
+            track: "Mack the Knife [Live]".into(),
+            album: Some("Ella in Berlin: Mack the Knife".into()),
+        }
+    }
+
+    /// Two live recordings; the LLM picked "Mack the Knife", which drops the live marker.
+    fn picked_mack_the_knife() -> Vec<ResolutionEvent> {
+        let berlin = group(
+            "2e8d0d4c-1b0b-3a0e-8d55-0e4a5c2b4c7b",
+            "Ella in Berlin: Mack the Knife",
+            PrimaryType::Album,
+            &[SecondaryType::Live],
+            1960,
+            credit(&[(
+                "54799c0e-eb45-4eea-996d-c4d71a63c499",
+                "Ella Fitzgerald",
+                "",
+            )]),
+        );
+        let recording = |title: &str| Outcome {
+            master: vec![RecordingId(title.into())],
+            title: title.into(),
+            scrobbled_group: Some(berlin.clone()),
+            canonical: Some(Canonical {
+                group: berlin.clone(),
+                rung: Rung::PlainAlbum,
+                single_first: false,
+            }),
+            proof: Proof::SameRecording,
+        };
+        let case = Case::new(
+            mack_the_knife(),
+            4,
+            Vec::new(),
+            vec![
+                (recording("Mack the Knife"), Default::default()),
+                (
+                    recording("Mack the Knife (live, 1960-02-13: Deutschlandhalle, Berlin)"),
+                    Default::default(),
+                ),
+            ],
+        );
+        let event = |kind| ResolutionEvent {
+            key: mack_the_knife(),
+            at: unix_now(),
+            resolver: RESOLVER_VERSION,
+            kind,
+        };
+        vec![
+            event(ResolutionEventKind::Adjudicated {
+                case_hash: crate::identity::adjudicate::case_hash(&case),
+                verdict: Verdict {
+                    choice: Choice::Option(crate::identity::adjudicate::OptionId('A')),
+                    confidence: Confidence::High,
+                    reason: "The Berlin recording.".into(),
+                    invalid: false,
+                },
+                by: "scripted".into(),
+                prompt_version: PROMPT_VERSION,
+                raw: String::new(),
+            }),
+            event(ResolutionEventKind::Ambiguous {
+                case,
+                awaiting_llm: false,
+            }),
+        ]
+        .into_iter()
+        .rev()
+        .collect()
+    }
+
+    #[tokio::test]
+    async fn the_picked_options_track_retitle_is_asked_once() {
+        let backend = Arc::new(ScriptedBackend::default());
+        backend.answers.lock().unwrap().push(RawChoice {
+            choice: "keep".into(),
+            confidence: "high".into(),
+            reason: "MusicBrainz drops the live marker.".into(),
+            text: r#"{"choice":"keep"}"#.into(),
+        });
+        let mut h = harness(
+            FixtureMb::default(),
+            &[(
+                "Ella Fitzgerald",
+                "Mack the Knife [Live]",
+                Some("Ella in Berlin: Mack the Knife"),
+                4,
+            )],
+            Some(Adjudicator::new(Box::new(backend.clone()), 10)),
+        )
+        .await;
+        h.lane.writer.append(picked_mack_the_knife()).await.unwrap();
+
+        let report = h.lane.run_round(10).await.unwrap();
+
+        assert_eq!(report.naming_judged, 1, "{report:?}");
+        assert_eq!(
+            backend.requests.lock().unwrap().as_slice(),
+            [ChoiceRequest {
+                system: TRACK_NAMING_PROMPT.into(),
+                user: r#"Track
+  artist: "Ella Fitzgerald"
+  the user's title: "Mack the Knife [Live]"
+  MusicBrainz title: "Mack the Knife"
+  MusicBrainz release group: Ella in Berlin: Mack the Knife (Album + Live, 1960), credited to "Ella Fitzgerald"
+  albums the user played it on: "Ella in Berlin: Mack the Knife"
+  plays: 4
+
+Answer keep to use "Mack the Knife [Live]", musicbrainz to use "Mack the Knife", or unsure."#
+                    .into(),
+                allowed: vec!["keep".into(), "musicbrainz".into(), "unsure".into()],
+            }]
+        );
+        let reader = h.lane.reader();
+        assert_eq!(reader.changes_since(2), (vec![mack_the_knife()], 3));
+        let question =
+            NamingQuestion::track("Ella Fitzgerald", "Mack the Knife [Live]", "Mack the Knife");
+        let judgement = reader.snapshot().naming[&question].clone();
+        assert_eq!(
+            (judgement.verdict, judgement.reason),
+            (
+                NamingVerdict::Keep,
+                "MusicBrainz drops the live marker.".to_string()
+            )
+        );
+
+        h.lane.run_round(10).await.unwrap();
+        assert_eq!(backend.requests.lock().unwrap().len(), 1, "answered once");
+    }
+
+    #[tokio::test]
+    async fn rejecting_a_track_retitle_keeps_the_users_title() {
+        let mut h = harness(
+            FixtureMb::default(),
+            &[(
+                "Ella Fitzgerald",
+                "Mack the Knife [Live]",
+                Some("Ella in Berlin: Mack the Knife"),
+                4,
+            )],
+            None,
+        )
+        .await;
+        h.lane.writer.append(picked_mack_the_knife()).await.unwrap();
+        let subject = Subject {
+            artist: "Ella Fitzgerald".into(),
+            track: "Mack the Knife [Live]".into(),
+            album: Some("Ella in Berlin: Mack the Knife".into()),
+            album_artist: None,
+        };
+        let mut edit = create_no_op_edit(&subject.representative_track(0, None));
+        edit.track_name = Some("Mack the Knife".into());
+        let id = Uuid::new_v4();
+        h.state
+            .append_queue_events(&[
+                QueueEvent {
+                    id,
+                    at: 1,
+                    kind: QueueEventKind::Created {
+                        subject,
+                        proposed: Box::new(edit),
+                        provider: IDENTITY_PROVIDER.into(),
+                        requires_approval: true,
+                        rationale: None,
+                        sources: Default::default(),
+                    },
+                },
+                QueueEvent {
+                    id,
+                    at: 2,
+                    kind: QueueEventKind::Rejected {
+                        dismiss_subject: false,
+                    },
+                },
+            ])
+            .await
+            .unwrap();
+
+        h.lane.run_round(10).await.unwrap();
+
+        assert_eq!(
+            log(&h.state).await[2..],
+            [
+                row(
+                    "Mack the Knife [Live]",
+                    "Ella in Berlin: Mack the Knife",
+                    "human_rejected"
+                ),
+                row(
+                    "Mack the Knife [Live]",
+                    "Ella in Berlin: Mack the Knife",
+                    "naming_judged"
+                ),
+            ]
+        );
+        let question =
+            NamingQuestion::track("Ella Fitzgerald", "Mack the Knife [Live]", "Mack the Knife");
+        let judgement = h.lane.reader().snapshot().naming[&question].clone();
+        assert_eq!(
+            (judgement.verdict, judgement.by),
+            (NamingVerdict::Keep, NamingJudge::Human { intent: id })
+        );
     }
 
     fn research_answer(recording: &str, release_group: &str) -> RawResearch {
