@@ -192,8 +192,10 @@ impl RewriteRulesScrubActionProvider {
         }
     }
 
-    /// Confirm `requires_musicbrainz_confirmation` rules against resolved identities
-    /// instead of degrading them to human confirmation.
+    /// Check `requires_musicbrainz_confirmation` rules against resolved identities. Until
+    /// a key settles with proof its gated rules go to human review; the identity log's
+    /// change feed then re-plans it, so a confirmation auto-applies and a contradiction
+    /// drops the rule.
     #[must_use]
     pub fn with_identity(mut self, reader: crate::identity::ResolutionReader) -> Self {
         self.identity = Some(reader);
@@ -345,6 +347,11 @@ impl ScrubActionProvider for RewriteRulesScrubActionProvider {
             rules: rules.to_vec(),
             identity: self.identity.clone(),
         }))
+    }
+
+    fn changes_since(&self, cursor: u64) -> Option<ChangeBatch> {
+        let (keys, next_cursor) = self.identity.as_ref()?.changes_since(cursor);
+        Some(ChangeBatch { keys, next_cursor })
     }
 }
 

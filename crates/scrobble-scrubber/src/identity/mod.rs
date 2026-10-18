@@ -631,34 +631,44 @@ mod gated_rule_tests {
             reason: crate::planner::SUPERSEDED.into(),
         };
         let mut got = Vec::new();
-        for album in [FULL, "Be Here Now"] {
-            let (store, state) = library().await;
-            let (mut writer, reader) = book::open(state.clone()).await.unwrap();
-            let planner = planner(&store, &state, Some(reader));
-            planner
-                .plan(&ScrubFeed::Incremental { window: None })
-                .await
-                .unwrap();
+        for with_musicbrainz in [false, true] {
+            for album in [FULL, "Be Here Now"] {
+                let (store, state) = library().await;
+                let (mut writer, reader) = book::open(state.clone()).await.unwrap();
+                let mut planner = planner(&store, &state, Some(reader.clone()));
+                if with_musicbrainz {
+                    planner =
+                        planner.with_provider(IdentityProvider::new(reader, MovePolicy::default()));
+                }
+                planner
+                    .plan(&ScrubFeed::Incremental { window: None })
+                    .await
+                    .unwrap();
 
-            writer.append(vec![settled_on(album)]).await.unwrap();
-            planner
-                .plan(&ScrubFeed::Incremental { window: None })
-                .await
-                .unwrap();
-            got.push(queue(&state).await);
+                writer.append(vec![settled_on(album)]).await.unwrap();
+                planner
+                    .plan(&ScrubFeed::Incremental { window: None })
+                    .await
+                    .unwrap();
+                got.push((with_musicbrainz, queue(&state).await));
+            }
         }
 
+        let confirmed = vec![
+            (superseded(), FULL.to_string()),
+            (IntentState::Ready, FULL.to_string()),
+        ];
+        let contradicted = vec![
+            (superseded(), FULL.to_string()),
+            (IntentState::Ready, UNGATED.to_string()),
+        ];
         assert_eq!(
             got,
             vec![
-                vec![
-                    (superseded(), FULL.to_string()),
-                    (IntentState::Ready, FULL.to_string()),
-                ],
-                vec![
-                    (superseded(), FULL.to_string()),
-                    (IntentState::Ready, UNGATED.to_string()),
-                ],
+                (false, confirmed.clone()),
+                (false, contradicted.clone()),
+                (true, confirmed),
+                (true, contradicted),
             ]
         );
     }
