@@ -15,3 +15,4 @@ Rust crate for programmatic access to last.fm's scrobble editing functionality
 * Remember that 'variables can be used directly in the `format!` string'
 * Make sure to run `cargo fmt --all` after finishing making changes
 * Make sure to fix any clippy issues `cargo clippy --all-targets --all-features -- -D warnings` after making changes
+* Keep tests in separate files from implementation. Put unit tests in neighboring `*_tests.rs` files, wired with `#[cfg(test)]` and `#[path = "<module>_tests.rs"] mod tests;`, and integration tests in each crate's `tests/` directory. Put binary unit-test files under `src/bin/tests/` so Cargo does not treat them as binaries.
