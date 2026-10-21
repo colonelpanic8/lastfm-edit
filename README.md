@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
 ```toml
 [dependencies]
-lastfm-edit = "7.0.1"
+lastfm-edit = "8.0.0"
 http-client = { version = "^6.6.3", package = "http-client-2", features = ["curl_client"] }
 tokio = { version = "1.0", features = ["full"] }
 ```

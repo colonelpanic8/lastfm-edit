@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## lastfm-edit 8.0.0 (2026-10-21)
+
+- Return structured track-page failures with the track, artist, URL, and a typed
+  `ScrobblePageError` source (`LoggedOut`, `MissingChartlist`, or `MissingEditForms`).
+  Callers of `get_scrobble_edit_variations` should match `LastFmError::ScrobblePage`
+  instead of inspecting `Auth` or `Parse` strings for these page-content failures.
+  HTTP authentication failures can still return `LastFmError::Auth`.
+- Remove the automatic HTML dump to a fixed `/tmp` path and the duplicate warning.
+- Emit scrobble-discovery diagnostics with structured key/value fields.
+- Treat session expiry during pagination as an error instead of returning partial results.
+
 ## Scrobble Scrubber 0.2.0 (2026-10-18)
 
 - Replace queued human decisions with immediate async handle methods. Decisions return

@@ -821,6 +821,17 @@ impl EditResponse {
 // ERROR TYPES
 // ================================================================================================
 
+/// Why a track page could not provide scrobble edit forms.
+#[derive(Error, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrobblePageError {
+    #[error("session expired or logged out")]
+    LoggedOut,
+    #[error("no chartlist table found")]
+    MissingChartlist,
+    #[error("no scrobble edit forms found")]
+    MissingEditForms,
+}
+
 /// Error types for Last.fm operations.
 ///
 /// This enum covers all possible errors that can occur when interacting with Last.fm,
@@ -860,6 +871,16 @@ pub enum LastFmError {
     /// returns unexpected data formats.
     #[error("Failed to parse response: {0}")]
     Parse(String),
+
+    /// Track-page discovery failed, with the requested metadata and last attempted URL.
+    #[error("Cannot load scrobble forms for '{track_name}' by '{artist_name}' at {url}: {source}")]
+    ScrobblePage {
+        track_name: String,
+        artist_name: String,
+        url: String,
+        #[source]
+        source: ScrobblePageError,
+    },
 
     /// Rate limiting from Last.fm.
     ///

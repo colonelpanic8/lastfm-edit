@@ -35,7 +35,7 @@ pub use types::{
     ClientEventWatcher, DelayReason, EditResponse, ExactScrobbleEdit, LastFmEditSession,
     LastFmError, OperationalDelayConfig, RateLimitBehavior, RateLimitConfig, RateLimitState,
     RateLimitStateWatcher, RateLimitType, RequestInfo, RetryConfig, RetryResult, ScrobbleEdit,
-    SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
+    ScrobblePageError, SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
 };
 
 // Type aliases for iterators with the concrete client type

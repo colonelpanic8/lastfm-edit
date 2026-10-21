@@ -527,8 +527,9 @@ pub trait LastFmEditClient: LastFmBaseClient {
     ///
     /// # Errors
     ///
-    /// Returns [`LastFmError::Parse`](crate::LastFmError::Parse) if no scrobble edit forms
-    /// can be found for the track.
+    /// Returns [`LastFmError::ScrobblePage`](crate::LastFmError::ScrobblePage) if the page
+    /// is logged out or scrobble edit forms cannot be found. Its source distinguishes
+    /// authentication failures, missing chartlists, and missing forms.
     async fn get_scrobble_edit_variations(
         &self,
         track_name: &str,

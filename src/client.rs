@@ -7,8 +7,8 @@ use crate::retry;
 use crate::types::{
     AlbumPage, ArtistPage, ClientConfig, ClientEvent, ClientEventReceiver, DelayReason,
     EditResponse, ExactScrobbleEdit, LastFmEditSession, LastFmError, RateLimitBehavior,
-    RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, SharedEventBroadcaster,
-    SingleEditResponse, Track, TrackPage,
+    RateLimitConfig, RateLimitType, RequestInfo, RetryConfig, ScrobbleEdit, ScrobblePageError,
+    SharedEventBroadcaster, SingleEditResponse, Track, TrackPage,
 };
 use crate::Result;
 use crate::{cancel, CancellationState};
@@ -952,7 +952,7 @@ impl LastFmEditClientImpl {
         track_name: &str,
         artist_name: &str,
     ) -> Result<Vec<ExactScrobbleEdit>> {
-        log::debug!("Loading edit form values for '{track_name}' by '{artist_name}'");
+        log::debug!(track_name, artist_name; "Loading scrobble edit variations");
 
         let noredirect_track_url_root = {
             let session = self.session.lock().unwrap();
@@ -976,7 +976,6 @@ impl LastFmEditClientImpl {
             )
         };
 
-        let mut all_scrobble_edits = Vec::new();
         let max_pages = 5;
 
         let build_track_page_url = |root: &str, page: u32, ajax_param: Option<&str>| -> String {
@@ -1007,97 +1006,66 @@ impl LastFmEditClientImpl {
             (&redirect_track_url_root, Some("ajax=1")),
         ];
 
-        let mut base_track_url_root = None::<String>;
-        let mut base_track_url_ajax_param = None::<String>;
-        let mut document = None::<Html>;
-        let mut unique_albums = None::<std::collections::HashSet<(String, String)>>;
-        let mut page_edits = None::<Vec<ExactScrobbleEdit>>;
-        let mut last_tried_url = None::<String>;
-        let mut last_tried_html = None::<String>;
+        let mut first_page = None;
+        let mut last_url = noredirect_track_url_root.clone();
+        let mut last_failure = ScrobblePageError::MissingChartlist;
 
         for (root, ajax_param) in candidates {
             let url = build_track_page_url(root, 1, ajax_param);
-            log::debug!("Fetching track page: {url}");
+            log::debug!(url = url.as_str(); "Fetching track page");
 
             let mut response = self.get(&url).await?;
             let html = response
                 .body_string()
                 .await
-                .map_err(|e| crate::LastFmError::Http(e.to_string()))?;
-            last_tried_url = Some(url.clone());
-            last_tried_html = Some(html.clone());
+                .map_err(|e| LastFmError::Http(e.to_string()))?;
             let parsed = Html::parse_document(&html);
-
-            let mut attempt_unique_albums = std::collections::HashSet::new();
-            match self.extract_scrobble_edits_from_page(
+            let mut unique_albums = std::collections::HashSet::new();
+            let failure = match self.extract_scrobble_edits_from_page(
                 &parsed,
                 track_name,
                 artist_name,
-                &mut attempt_unique_albums,
+                &mut unique_albums,
             ) {
                 Ok(edits) if !edits.is_empty() => {
-                    base_track_url_root = Some((*root).to_string());
-                    base_track_url_ajax_param = ajax_param.map(|s| s.to_string());
-                    document = Some(parsed);
-                    unique_albums = Some(attempt_unique_albums);
-                    page_edits = Some(edits);
+                    first_page = Some((root, ajax_param, parsed, unique_albums, edits));
                     break;
                 }
-                Ok(_) => {
-                    // Chartlist exists, but no edit forms were extractable. Try the next candidate
-                    // (e.g. ajax=true variant) before giving up.
-                }
-                Err(crate::LastFmError::Parse(msg))
-                    if msg == "No chartlist table found on track page" =>
-                {
-                    // Try next candidate.
-                }
-                Err(e) => return Err(e),
-            }
+                Ok(_) => ScrobblePageError::MissingEditForms,
+                Err(error) => error,
+            };
+            last_failure = if page_indicates_logged_out(&html) {
+                ScrobblePageError::LoggedOut
+            } else {
+                failure
+            };
+            last_url = url;
         }
 
-        let base_track_url_root = base_track_url_root.ok_or_else(|| {
-            // Try to leave breadcrumbs for debugging Last.fm page-shape changes.
-            if let (Some(url), Some(html)) = (&last_tried_url, &last_tried_html) {
-                let _ = std::fs::write("/tmp/lastfm-edit-track-page-no-forms.html", html);
-                log::warn!(
-                    "Failed to locate scrobble edit forms for '{track_name}' by '{artist_name}'. Last URL tried: {url}. Wrote HTML to /tmp/lastfm-edit-track-page-no-forms.html"
-                );
-                if page_indicates_logged_out(html) {
-                    return crate::LastFmError::Auth(format!(
-                        "session expired or logged out: track page for '{track_name}' by '{artist_name}' shows a login link and no edit forms"
-                    ));
-                }
-            }
-
-            crate::LastFmError::Parse(format!(
-                "No scrobble forms found for track '{track_name}' by '{artist_name}'"
-            ))
+        let (
+            base_track_url_root,
+            base_track_url_ajax_param,
+            document,
+            mut unique_albums,
+            mut all_scrobble_edits,
+        ) = first_page.ok_or_else(|| LastFmError::ScrobblePage {
+            track_name: track_name.to_owned(),
+            artist_name: artist_name.to_owned(),
+            url: last_url,
+            source: last_failure,
         })?;
-        let document = document.ok_or_else(|| {
-            crate::LastFmError::Parse("No chartlist table found on track page".to_string())
-        })?;
-        let mut unique_albums = unique_albums.unwrap_or_default();
 
-        all_scrobble_edits.extend(page_edits.unwrap_or_default());
-
-        log::debug!(
-            "Page 1: found {} unique album variations",
-            all_scrobble_edits.len()
-        );
+        log::debug!(page = 1, variations = all_scrobble_edits.len(); "Loaded album variations");
 
         let pagination_selector = Selector::parse(".pagination .pagination-next").unwrap();
         let mut has_next_page = document.select(&pagination_selector).next().is_some();
         let mut page = 2;
 
         while has_next_page && page <= max_pages {
-            let page_url = build_track_page_url(
-                &base_track_url_root,
-                page,
-                base_track_url_ajax_param.as_deref(),
-            );
+            let page_url =
+                build_track_page_url(base_track_url_root, page, base_track_url_ajax_param);
 
-            log::debug!("Fetching page {page} for additional album variations");
+            log::debug!(page, url = page_url.as_str(); "Fetching additional album variations");
 
             let mut response = self.get(&page_url).await?;
             let html = response
@@ -1107,12 +1075,32 @@ impl LastFmEditClientImpl {
 
             let document = Html::parse_document(&html);
 
-            let page_edits = self.extract_scrobble_edits_from_page(
-                &document,
-                track_name,
-                artist_name,
-                &mut unique_albums,
-            )?;
+            let page_edits = self
+                .extract_scrobble_edits_from_page(
+                    &document,
+                    track_name,
+                    artist_name,
+                    &mut unique_albums,
+                )
+                .map_err(|source| LastFmError::ScrobblePage {
+                    track_name: track_name.to_owned(),
+                    artist_name: artist_name.to_owned(),
+                    url: page_url.clone(),
+                    source: if page_indicates_logged_out(&html) {
+                        ScrobblePageError::LoggedOut
+                    } else {
+                        source
+                    },
+                })?;
+
+            if page_edits.is_empty() && page_indicates_logged_out(&html) {
+                return Err(LastFmError::ScrobblePage {
+                    track_name: track_name.to_owned(),
+                    artist_name: artist_name.to_owned(),
+                    url: page_url,
+                    source: ScrobblePageError::LoggedOut,
+                });
+            }
 
             let initial_count = all_scrobble_edits.len();
             all_scrobble_edits.extend(page_edits);
@@ -1120,29 +1108,12 @@ impl LastFmEditClientImpl {
 
             has_next_page = document.select(&pagination_selector).next().is_some();
 
-            log::debug!(
-                "Page {page}: found {} total unique albums ({})",
-                all_scrobble_edits.len(),
-                if found_new_unique_albums {
-                    "new albums found"
-                } else {
-                    "no new unique albums"
-                }
-            );
+            log::debug!(page, variations = all_scrobble_edits.len(), found_new_unique_albums; "Loaded album variations");
 
             page += 1;
         }
 
-        if all_scrobble_edits.is_empty() {
-            return Err(crate::LastFmError::Parse(format!(
-                "No scrobble forms found for track '{track_name}' by '{artist_name}'"
-            )));
-        }
-
-        log::debug!(
-            "Final result: found {} unique album variations for '{track_name}' by '{artist_name}'",
-            all_scrobble_edits.len(),
-        );
+        log::debug!(track_name, artist_name, variations = all_scrobble_edits.len(); "Loaded scrobble edit variations");
 
         Ok(all_scrobble_edits)
     }
@@ -1153,12 +1124,13 @@ impl LastFmEditClientImpl {
         expected_track: &str,
         expected_artist: &str,
         unique_albums: &mut std::collections::HashSet<(String, String)>,
-    ) -> Result<Vec<ExactScrobbleEdit>> {
+    ) -> std::result::Result<Vec<ExactScrobbleEdit>, ScrobblePageError> {
         let table_selector =
             Selector::parse("table.chartlist:not(.chartlist__placeholder)").unwrap();
-        let table = document.select(&table_selector).next().ok_or_else(|| {
-            crate::LastFmError::Parse("No chartlist table found on track page".to_string())
-        })?;
+        let table = document
+            .select(&table_selector)
+            .next()
+            .ok_or(ScrobblePageError::MissingChartlist)?;
 
         let row_selector = Selector::parse("tr").unwrap();
         let mut scrobble_edits: Vec<ExactScrobbleEdit> = table
