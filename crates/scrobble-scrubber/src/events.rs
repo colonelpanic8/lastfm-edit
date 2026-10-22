@@ -42,6 +42,9 @@ pub enum ExecEnded {
     Cancelled,
     /// The per-pass edit budget ran out with work remaining.
     BudgetExhausted,
+    /// Instance after instance failed with no success between them, which smells
+    /// systemic; the pass stopped, leaving the rest queued.
+    FailureStreak,
 }
 
 /// Summary of one execution pass.

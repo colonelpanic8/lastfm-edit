@@ -76,6 +76,7 @@ pub fn WorkQueue() -> Element {
                     ExecEnded::Deferred => "Last.fm is still rate limiting requests. Remaining edits stay queued for a later run.",
                     ExecEnded::Cancelled => "Stopped. Completed edits are saved and unfinished edits stay queued.",
                     ExecEnded::Completed => "This run has finished. Check any reported failures below.",
+                    ExecEnded::FailureStreak => "Many edits failed in a row, so the run stopped. Check the failures below; remaining edits stay queued.",
                 };
                 (
                     if report.instances_failed > 0 || report.ended == ExecEnded::Busy {

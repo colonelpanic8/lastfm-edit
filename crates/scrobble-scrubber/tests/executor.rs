@@ -1033,3 +1033,65 @@ async fn missing_scrobble_page_does_not_block_other_scrobbles(
     assert!(steps.contains(&scrobble_scrubber::EditStep::ReadingDetails));
     assert!(steps.contains(&scrobble_scrubber::EditStep::Sending));
 }
+
+#[tokio::test]
+async fn unprovable_pending_operation_fails_its_instance_without_blocking_the_rest() {
+    use scrobble_store::{EditEventKind, EditLogEvent, EditOp};
+    let store = Arc::new(MemoryStorage::new());
+    store
+        .append_scrobbles(&[record(100), record(200)])
+        .await
+        .unwrap();
+    let state = Arc::new(MemoryScrubberState::new());
+    let intent_id = queue_ready_intent(state.as_ref()).await;
+    let editor = MirroredEditor::new(store.clone(), MockLastFmEditClient::new());
+    let mut edit = editor.prepare_edit(&record(100).id).await.unwrap();
+    edit.track_name = CLEAN.into();
+    store
+        .append_edit_events(&[EditLogEvent {
+            edit_id: format!("scrubber:{intent_id}:{}", record(100).id),
+            at: 2,
+            kind: EditEventKind::Queued {
+                op: EditOp::Edit(Box::new(edit)),
+                target_ids: vec![record(100).id],
+            },
+        }])
+        .await
+        .unwrap();
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_edit_scrobble_single()
+        .times(1)
+        .returning(|edit, _| Ok(success(edit)));
+    // Upstream shows neither the original nor the edited track at that second.
+    let exec = executor(store, state.clone(), client, zero_delay()).with_recovery_source(Arc::new(
+        RecoverySource {
+            track: "Somebody Else",
+            fail: false,
+        },
+    ));
+    let report = exec.run_once().await.unwrap();
+    assert_eq!(report.instances_failed, 1);
+    assert_eq!(report.instances_applied, 1);
+    let queue = state.load_queue().await.unwrap();
+    assert_eq!(queue[0].failed_count(), 1);
+    assert_eq!(queue[0].done_count(), 1);
+}
+
+#[tokio::test]
+async fn a_run_of_failures_stops_the_pass_before_burning_the_queue() {
+    let store = Arc::new(MemoryStorage::new());
+    let records: Vec<_> = (1..=15).map(|i| record(i * 100)).collect();
+    store.append_scrobbles(&records).await.unwrap();
+    let state = Arc::new(MemoryScrubberState::new());
+    queue_ready_intent(state.as_ref()).await;
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_edit_scrobble_single()
+        .times(10)
+        .returning(|_, _| Err(lastfm_edit::LastFmError::Parse("unexpected page".into())));
+    let exec = executor(store, state.clone(), client, zero_delay());
+    let report = exec.run_once().await.unwrap();
+    assert_eq!(report.ended, ExecEnded::FailureStreak);
+    assert_eq!(report.instances_failed, 10);
+}
