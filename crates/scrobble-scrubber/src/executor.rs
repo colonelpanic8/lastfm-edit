@@ -194,6 +194,7 @@ impl<C: LastFmEditClient> Executor<C> {
         self.events.emit(ScrubberEvent::ExecAcquired);
         let mut report = ExecReport::default();
         let mut attempts_used: u32 = 0;
+        let mut failure_streak: u32 = 0;
         let mut rate_limit = PassRateLimit::default();
 
         let queue = self.state.load_queue().await?;
@@ -219,6 +220,7 @@ impl<C: LastFmEditClient> Executor<C> {
                         max_edits,
                         &mut report,
                         &mut attempts_used,
+                        &mut failure_streak,
                         &mut rate_limit,
                     ),
                 )
@@ -234,6 +236,10 @@ impl<C: LastFmEditClient> Executor<C> {
                 // The budget ran out mid-intent; no more work can happen this pass.
                 Ok(Some(PassControl::BudgetExhausted)) => {
                     report.ended = ExecEnded::BudgetExhausted;
+                    break;
+                }
+                Ok(Some(PassControl::FailureStreak)) => {
+                    report.ended = ExecEnded::FailureStreak;
                     break;
                 }
                 // Cancellation ends the pass cleanly for the same reason.
@@ -298,6 +304,7 @@ impl<C: LastFmEditClient> Executor<C> {
         max_edits: Option<u32>,
         report: &mut ExecReport,
         attempts_used: &mut u32,
+        failure_streak: &mut u32,
         rate_limit: &mut PassRateLimit,
     ) -> Result<PassControl> {
         self.events.emit(ScrubberEvent::IntentStarted {
@@ -376,6 +383,7 @@ impl<C: LastFmEditClient> Executor<C> {
                     // Progress was made: reset the rate-limit backoff so the next block
                     // starts from the base pause again.
                     rate_limit.succeeded();
+                    *failure_streak = 0;
                     progress.insert(
                         instance.clone(),
                         InstanceStatus::Applied {
@@ -430,6 +438,10 @@ impl<C: LastFmEditClient> Executor<C> {
                         instance: instance.clone(),
                         error,
                     });
+                    *failure_streak += 1;
+                    if *failure_streak >= MAX_CONSECUTIVE_FAILURES {
+                        return Ok(PassControl::FailureStreak);
+                    }
                 }
                 InstanceOutcome::Deferred => {
                     // Rate-limited past the pass's pause budget: not attempted, no
@@ -594,14 +606,7 @@ impl<C: LastFmEditClient> Executor<C> {
                     });
                 }
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
-                Err(StoreError::LastFm(
-                    err @ lastfm_edit::LastFmError::ScrobblePage {
-                        source:
-                            lastfm_edit::ScrobblePageError::MissingEditForms
-                            | lastfm_edit::ScrobblePageError::MissingChartlist,
-                        ..
-                    },
-                )) => {
+                Err(err) if is_instance_local(&err) => {
                     return Ok(InstanceOutcome::Failed {
                         error: err.to_string(),
                     });
@@ -731,6 +736,24 @@ fn execution_error(error: StoreError) -> ScrubberError {
     }
 }
 
+/// Whether an error concerns only the scrobble being edited. Anything else (auth,
+/// network, local storage) would fail every instance, so it ends the pass instead.
+fn is_instance_local(error: &StoreError) -> bool {
+    use lastfm_edit::{LastFmError, ScrobblePageError};
+    match error {
+        StoreError::RecoveryRequired(_) => true,
+        StoreError::LastFm(LastFmError::Parse(_) | LastFmError::EditFailed(_)) => true,
+        StoreError::LastFm(LastFmError::ScrobblePage { source, .. }) => {
+            *source != ScrobblePageError::LoggedOut
+        }
+        _ => false,
+    }
+}
+
+/// Consecutive instance failures, with no success between them, that end a pass: a
+/// systemic failure that looks instance-local must not burn the whole queue's attempts.
+const MAX_CONSECUTIVE_FAILURES: u32 = 10;
+
 fn budget_exhausted(max_edits: Option<u32>, attempts_used: u32) -> bool {
     max_edits.is_some_and(|cap| attempts_used >= cap)
 }
@@ -807,6 +830,8 @@ enum PassControl {
     /// The edit budget ran out mid-intent: stop the pass (distinct from `Defer` so the
     /// report can say why).
     BudgetExhausted,
+    /// Too many instances failed in a row: stop before burning more attempts.
+    FailureStreak,
 }
 
 /// Result of waiting on the client's rate-limit watch state.

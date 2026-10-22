@@ -1255,13 +1255,16 @@ async fn render_events(mut rx: scrobble_scrubber::ScrubberEventReceiver) {
                         paused_until = None;
                         status_line("resumed");
                     }
+                    ScrubberEvent::ExecFailed { .. } => paused_until = None,
                     ScrubberEvent::ExecCompleted { report } => {
+                        paused_until = None;
                         let ended = match report.ended {
                             ExecEnded::Completed => "completed",
                             ExecEnded::Busy => "busy (another executor is running)",
                             ExecEnded::Deferred => "deferred (rate limited)",
                             ExecEnded::Cancelled => "cancelled",
                             ExecEnded::BudgetExhausted => "budget exhausted",
+                            ExecEnded::FailureStreak => "too many consecutive failures",
                         };
                         eprintln!(
                             "\rpass ended: {ended} ({} applied, {} failed)",
@@ -1280,7 +1283,11 @@ async fn render_events(mut rx: scrobble_scrubber::ScrubberEventReceiver) {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs();
-                    status_line(&format!("rate-limited, resuming in {}s…", until.saturating_sub(now)));
+                    if until > now {
+                        status_line(&format!("rate-limited, resuming in {}s…", until - now));
+                    } else {
+                        paused_until = None;
+                    }
                 }
             }
         }

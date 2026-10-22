@@ -526,6 +526,7 @@ pub fn ended_label(ended: &ExecEnded) -> &'static str {
         }
         ExecEnded::Cancelled => "cancelled",
         ExecEnded::BudgetExhausted => "edit limit reached",
+        ExecEnded::FailureStreak => "stopped after many edits failed in a row",
     }
 }
 
