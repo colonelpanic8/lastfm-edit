@@ -95,8 +95,7 @@ in {
   config = lib.mkIf cfg.enable {
     systemd.user.services.scrobble-scrubber = {
       Unit = {
-        Description =
-          "scrobble-scrubber last.fm scrobble metadata cleanup daemon";
+        Description = "scrobble-scrubber last.fm scrobble metadata cleanup daemon";
         Documentation = ["https://github.com/colonelpanic8/lastfm-edit"];
       };
 
@@ -111,6 +110,7 @@ in {
         );
         Restart = "on-failure";
         RestartSec = 30;
+        KillSignal = "SIGINT";
         EnvironmentFile = lib.optional (cfg.environmentFile != null) "-${cfg.environmentFile}";
         Environment =
           ["RUST_LOG=${cfg.logLevel}"]

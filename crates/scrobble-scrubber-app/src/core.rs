@@ -93,6 +93,7 @@ pub struct AppCore {
     pub backend: mpsc::Sender<BackendCommand>,
     pub username: String,
     pub store_root: PathBuf,
+    pub runner_id: Uuid,
     /// False when LASTFM_EDIT_API_KEY is unset; sync controls disabled.
     pub sync_available: bool,
     pub rules_empty: bool,
@@ -723,7 +724,17 @@ async fn build(
     .non_blocking();
     let session = client.get_session();
 
-    let bus = ScrubberEventBus::new();
+    let runner = Arc::new(
+        scrobble_scrubber::RunnerRegistration::register(
+            &store_root,
+            scrobble_scrubber::RunnerKind::Desktop,
+        )
+        .map_err(|error| {
+            StartupError::Other(format!("could not register running instance: {error}"))
+        })?,
+    );
+    let runner_id = runner.id();
+    let bus = ScrubberEventBus::new().with_runner(runner);
     let planner = Planner::new(
         store.clone() as Arc<dyn Storage>,
         state.clone() as Arc<dyn ScrubberState>,
@@ -784,6 +795,7 @@ async fn build(
             backend: command_tx,
             username,
             store_root,
+            runner_id,
             sync_available: sync.is_some(),
             rules_empty,
             rules_hash: active_rules_hash,

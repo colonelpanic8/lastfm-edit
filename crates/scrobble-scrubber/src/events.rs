@@ -57,6 +57,23 @@ pub struct ExecReport {
     pub ended: ExecEnded,
 }
 
+/// The current step for an individual scrobble edit.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditStep {
+    ReadingDetails,
+    Recovering,
+    Sending,
+    Pacing { until: u64 },
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecFailureKind {
+    Authentication,
+    Network,
+    #[default]
+    Other,
+}
+
 /// Events broadcast by the scrubber's components.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ScrubberEvent {
@@ -111,6 +128,18 @@ pub enum ScrubberEvent {
 
     // ---- executor ---------------------------------------------------------------
     ExecStarted,
+    /// The store's exclusive execution lease has been acquired.
+    ExecAcquired,
+    IntentStarted {
+        id: Uuid,
+        subject: Subject,
+    },
+    EditProgress {
+        intent: Uuid,
+        subject: Subject,
+        instance: ScrobbleId,
+        step: EditStep,
+    },
     IntentExpanded {
         id: Uuid,
         subject: Subject,
@@ -138,6 +167,11 @@ pub enum ScrubberEvent {
     ExecutorResumed,
     ExecCompleted {
         report: ExecReport,
+    },
+    ExecFailed {
+        error: String,
+        #[serde(default)]
+        kind: ExecFailureKind,
     },
 
     // ---- identity lane ----------------------------------------------------------
@@ -176,12 +210,18 @@ pub type ScrubberEventReceiver = broadcast::Receiver<ScrubberEvent>;
 #[derive(Clone, Debug)]
 pub struct ScrubberEventBus {
     tx: broadcast::Sender<ScrubberEvent>,
+    runner: Option<std::sync::Arc<crate::RunnerRegistration>>,
 }
 
 impl ScrubberEventBus {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(4096);
-        Self { tx }
+        Self { tx, runner: None }
+    }
+
+    pub fn with_runner(mut self, runner: std::sync::Arc<crate::RunnerRegistration>) -> Self {
+        self.runner = Some(runner);
+        self
     }
 
     pub fn subscribe(&self) -> ScrubberEventReceiver {
@@ -190,6 +230,11 @@ impl ScrubberEventBus {
 
     /// Emit an event; delivery is best-effort (no subscribers is not an error).
     pub fn emit(&self, event: ScrubberEvent) {
+        if let Some(runner) = &self.runner {
+            if let Err(error) = runner.observe(&event) {
+                log::warn!("could not publish runner status: {error}");
+            }
+        }
         let _ = self.tx.send(event);
     }
 }

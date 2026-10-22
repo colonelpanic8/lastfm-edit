@@ -60,7 +60,7 @@ fn applied(intent: uuid::Uuid) -> ScrubberEvent {
 fn progress(state: &UiState) -> &PassProgress {
     match &state.pass {
         PassState::Running(progress) | PassState::Paused { progress, .. } => progress,
-        PassState::Idle => panic!("expected an in-flight pass, got Idle"),
+        other => panic!("expected an in-flight pass, got {other:?}"),
     }
 }
 
@@ -264,4 +264,201 @@ fn log_is_bounded() {
         );
     }
     assert_eq!(state.log.len(), LOG_CAP);
+}
+
+#[test]
+fn execution_failure_stops_controls_and_keeps_progress() {
+    let mut state = UiState::default();
+    let id = Uuid::new_v4();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(&mut state, &applied(id));
+    reduce(
+        &mut state,
+        &ScrubberEvent::ExecFailed {
+            error: "Last.fm session expired".into(),
+            kind: ExecFailureKind::Authentication,
+        },
+    );
+    assert!(!state.pass.is_active());
+    match &state.pass {
+        PassState::Failed {
+            progress,
+            error,
+            kind,
+        } => {
+            assert_eq!(progress.applied, 1);
+            assert_eq!(error, "Last.fm session expired");
+            assert_eq!(*kind, ExecFailureKind::Authentication);
+        }
+        other => panic!("expected a visible execution failure, got {other:?}"),
+    }
+    let log_len = state.log.len();
+    reduce(
+        &mut state,
+        &ScrubberEvent::Error {
+            error: "Last.fm session expired".into(),
+        },
+    );
+    assert_eq!(
+        state.log.len(),
+        log_len,
+        "the actor's repeated error must not create another alert"
+    );
+    assert!(state.error.is_none());
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    assert!(state.pass.is_active());
+    assert_eq!(progress(&state).applied, 0);
+}
+
+#[test]
+fn execution_shows_track_before_expansion_and_each_network_step() {
+    let mut state = UiState::default();
+    let id = Uuid::new_v4();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(
+        &mut state,
+        &ScrubberEvent::IntentStarted {
+            id,
+            subject: subject(),
+        },
+    );
+    assert_eq!(
+        progress(&state).current.as_ref().unwrap().subject,
+        subject().to_string()
+    );
+    for step in [
+        EditStep::ReadingDetails,
+        EditStep::Recovering,
+        EditStep::Sending,
+    ] {
+        reduce(
+            &mut state,
+            &ScrubberEvent::EditProgress {
+                intent: id,
+                subject: subject(),
+                instance: instance(),
+                step: step.clone(),
+            },
+        );
+        let current = progress(&state).current_edit.as_ref().unwrap();
+        assert_eq!(current.instance, instance());
+        assert_eq!(current.step, step);
+        assert!(state.execution_updated_at.is_some());
+    }
+}
+
+#[test]
+fn edit_limit_is_optional_and_invalid_values_never_mean_unlimited() {
+    assert_eq!(parse_edit_limit(""), Ok(None));
+    assert_eq!(parse_edit_limit("  "), Ok(None));
+    assert_eq!(parse_edit_limit(" 20 "), Ok(Some(20)));
+    for invalid in ["0", "-1", "1.5", "4294967296", "twenty"] {
+        assert!(parse_edit_limit(invalid).is_err(), "accepted {invalid}");
+    }
+    assert_eq!(
+        ended_label(&ExecEnded::BudgetExhausted),
+        "edit limit reached"
+    );
+}
+
+#[test]
+fn pacing_countdown_explains_the_wait() {
+    let step = EditStep::Pacing { until: 102 };
+    assert_eq!(
+        edit_step_label(&step, 100),
+        "Waiting 2s before the next edit"
+    );
+    assert_eq!(
+        edit_step_label(&step, 103),
+        "Waiting 0s before the next edit"
+    );
+}
+
+#[test]
+fn individual_failures_remain_visible_after_completion_and_clear_on_retry() {
+    let mut state = UiState::default();
+    let id = Uuid::new_v4();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(
+        &mut state,
+        &ScrubberEvent::EditFailed {
+            intent: id,
+            subject: subject(),
+            instance: instance(),
+            error: "Last.fm did not return an edit form".into(),
+        },
+    );
+    let failure = state.last_edit_failure.as_ref().unwrap();
+    assert_eq!(failure.subject, subject().to_string());
+    assert_eq!(failure.instance, instance());
+    assert!(state.log.back().unwrap().is_error);
+    reduce(&mut state, &applied(id));
+    assert!(!state.log.back().unwrap().is_error);
+    state.execution_stop_requested = true;
+    reduce(
+        &mut state,
+        &ScrubberEvent::ExecCompleted {
+            report: ExecReport {
+                instances_failed: 1,
+                instances_applied: 1,
+                ..Default::default()
+            },
+        },
+    );
+    assert!(state.last_edit_failure.is_some());
+    assert!(!state.execution_stop_requested);
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    assert!(state.last_edit_failure.is_none());
+}
+
+#[test]
+fn unexpected_backend_shutdown_stops_the_run_and_preserves_completed_edits() {
+    let mut state = UiState::default();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(&mut state, &applied(Uuid::new_v4()));
+    state.execution_stop_requested = true;
+    reduce(
+        &mut state,
+        &ScrubberEvent::Stopped {
+            reason: "actor shut down".into(),
+        },
+    );
+    assert!(!state.pass.is_active());
+    assert!(!state.execution_stop_requested);
+    match &state.pass {
+        PassState::Failed {
+            progress, error, ..
+        } => {
+            assert_eq!(progress.applied, 1);
+            assert!(error.contains("Reopen the app"));
+        }
+        other => panic!("unexpected run state: {other:?}"),
+    }
+}
+
+#[test]
+fn another_runner_disables_local_execution_but_an_idle_process_does_not() {
+    let own_id = Uuid::new_v4();
+    let mut snapshot = RunnerSnapshot {
+        instances: Vec::new(),
+    };
+    assert!(!snapshot.owned_elsewhere(own_id));
+    snapshot.instances.push(scrobble_scrubber::RunnerStatus {
+        id: own_id,
+        pid: 1,
+        kind: scrobble_scrubber::RunnerKind::Desktop,
+        started_at: 1,
+        updated_at: 1,
+        activity: scrobble_scrubber::RunnerActivity::Editing,
+        subject: None,
+        step: None,
+        applied: 0,
+        failed: 0,
+        last_error: None,
+    });
+    assert!(!snapshot.owned_elsewhere(own_id));
+    snapshot.instances[0].id = Uuid::new_v4();
+    assert!(snapshot.owned_elsewhere(own_id));
+    snapshot.instances[0].activity = scrobble_scrubber::RunnerActivity::Idle;
+    assert!(!snapshot.owned_elsewhere(own_id));
 }

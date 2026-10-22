@@ -60,6 +60,44 @@ pub fn Shell() -> Element {
     });
     let core = use_context::<CoreSignal>();
     let core_snapshot = core.read().clone();
+    let mut ui = use_context::<UiSignal>();
+    let mut runners: crate::RunnerSignal = use_signal(|| None);
+    use_context_provider(|| runners);
+    use_future(move || async move {
+        loop {
+            let core = core.read().clone();
+            if let Some(Ok(core)) = core {
+                let root = core.store_root.clone();
+                let own_id = core.runner_id;
+                let snapshot = crate::background::run_off_ui_thread(async move {
+                    let instances = scrobble_scrubber::running_instances(&root)
+                        .map_err(|error| error.to_string())?;
+                    Ok(crate::model::RunnerSnapshot { instances })
+                })
+                .await;
+                let previous = runners.peek().clone();
+                if let (Some(Ok(previous)), Ok(current)) = (&previous, &snapshot) {
+                    let before: Vec<_> = previous
+                        .instances
+                        .iter()
+                        .filter(|runner| runner.id != own_id)
+                        .collect();
+                    let after: Vec<_> = current
+                        .instances
+                        .iter()
+                        .filter(|runner| runner.id != own_id)
+                        .collect();
+                    if before != after {
+                        ui.with_mut(|state| state.queue_epoch += 1);
+                    }
+                }
+                if previous.as_ref() != Some(&snapshot) {
+                    runners.set(Some(snapshot));
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    });
 
     match &core_snapshot {
         None => rsx! {
@@ -80,6 +118,10 @@ pub fn Shell() -> Element {
             div { class: "shell",
                 Nav { active }
                 main { class: "content",
+                        crate::components::ErrorNotice {}
+                        if active() != ActiveView::WorkQueue {
+                            crate::components::ExecutionNotice {}
+                        }
                         match active() {
                             ActiveView::Dashboard => rsx! { dashboard::Dashboard {} },
                             ActiveView::Library => rsx! { library::Library {} },

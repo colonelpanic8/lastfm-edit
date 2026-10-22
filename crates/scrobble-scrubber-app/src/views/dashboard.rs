@@ -1,6 +1,6 @@
 //! Dashboard: status, stats, controls, activity log.
 
-use crate::components::ActivityLog;
+use crate::components::{ActivityLog, RunningInstances};
 use crate::model::{fmt_ts, CycleInfo, CyclePhase, PassState, PlanStatus, SyncStatus};
 use crate::{CoreSignal, UiSignal};
 use dioxus::prelude::*;
@@ -133,6 +133,7 @@ pub fn Dashboard() -> Element {
     };
     let (exec_pill_class, exec_pill) = match &ui_read.pass {
         PassState::Idle => ("", "executor idle".to_string()),
+        PassState::Failed { .. } => ("danger", "Execution stopped".into()),
         PassState::Running(progress) => (
             "accent",
             format!(
@@ -266,9 +267,6 @@ pub fn Dashboard() -> Element {
                     }
                 }
             }
-            if let Some(error) = &ui_read.error {
-                div { class: "banner danger", "{error}" }
-            }
             div { class: "grid",
                 div { class: "stat",
                     div { class: "label", "latest scrobble" }
@@ -392,6 +390,7 @@ pub fn Dashboard() -> Element {
                     }
                 }
             }
+            RunningInstances {}
             ActivityLog {}
         }
     }

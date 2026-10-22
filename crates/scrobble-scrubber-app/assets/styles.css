@@ -484,6 +484,35 @@ input[type="password"] {
 
 .pass-panel {
   border-color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.execution-notice {
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+
+.execution-notice p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.execution-notice summary {
+  cursor: pointer;
+}
+
+.execution-notice pre {
+  white-space: pre-wrap;
+  user-select: text;
+  font-size: 12px;
+}
+
+.log-error {
+  color: var(--danger);
+}
+
+.log-row {
+  overflow-wrap: anywhere;
 }
 
 .headline-count {
@@ -892,4 +921,29 @@ input.history-search {
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.runner {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.runner-activity {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.runner summary {
+  cursor: pointer;
+}
+
+.runner-error {
+  color: var(--danger);
+}
+
+.runner-error pre {
+  white-space: pre-wrap;
+  user-select: text;
 }

@@ -16,7 +16,8 @@
 
 use crate::error::{Result, ScrubberError};
 use crate::events::{
-    ExecEnded, ExecReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver,
+    EditStep, ExecEnded, ExecFailureKind, ExecReport, ScrubberEvent, ScrubberEventBus,
+    ScrubberEventReceiver,
 };
 use crate::queue::{EditIntent, InstanceStatus, IntentState, QueueEvent, QueueEventKind};
 use crate::state::ScrubberState;
@@ -160,8 +161,21 @@ impl<C: LastFmEditClient> Executor<C> {
             Ok(report) => self.events.emit(ScrubberEvent::ExecCompleted {
                 report: report.clone(),
             }),
-            Err(err) => self.events.emit(ScrubberEvent::Error {
+            Err(err) => self.events.emit(ScrubberEvent::ExecFailed {
                 error: err.to_string(),
+                kind: match err {
+                    ScrubberError::Store(StoreError::LastFm(
+                        lastfm_edit::LastFmError::Auth(_)
+                        | lastfm_edit::LastFmError::ScrobblePage {
+                            source: lastfm_edit::ScrobblePageError::LoggedOut,
+                            ..
+                        },
+                    )) => ExecFailureKind::Authentication,
+                    ScrubberError::Store(StoreError::LastFm(lastfm_edit::LastFmError::Http(_))) => {
+                        ExecFailureKind::Network
+                    }
+                    _ => ExecFailureKind::Other,
+                },
             }),
         }
         result
@@ -177,6 +191,7 @@ impl<C: LastFmEditClient> Executor<C> {
         // A fresh pass starts un-cancelled; the flag only interrupts the pass it was
         // flipped during.
         self.cancelled.store(false, Ordering::Relaxed);
+        self.events.emit(ScrubberEvent::ExecAcquired);
         let mut report = ExecReport::default();
         let mut attempts_used: u32 = 0;
         let mut rate_limit = PassRateLimit::default();
@@ -285,6 +300,10 @@ impl<C: LastFmEditClient> Executor<C> {
         attempts_used: &mut u32,
         rate_limit: &mut PassRateLimit,
     ) -> Result<PassControl> {
+        self.events.emit(ScrubberEvent::IntentStarted {
+            id: intent.id,
+            subject: intent.subject.clone(),
+        });
         // Re-expand against the live store — NOT the planning-time snapshot.
         let mut live = self.live_instances(&intent).await?;
         for id in intent.instances.keys() {
@@ -435,7 +454,16 @@ impl<C: LastFmEditClient> Executor<C> {
                 }
             }
 
-            tokio::time::sleep(self.options.inter_edit_delay).await;
+            if !self.options.inter_edit_delay.is_zero() {
+                self.emit_edit_progress(
+                    &intent,
+                    instance,
+                    EditStep::Pacing {
+                        until: Self::now() + self.options.inter_edit_delay.as_secs().max(1),
+                    },
+                );
+                tokio::time::sleep(self.options.inter_edit_delay).await;
+            }
         }
 
         // Completion: every *currently live* instance applied?
@@ -503,6 +531,7 @@ impl<C: LastFmEditClient> Executor<C> {
             }
 
             let operation_id = format!("scrubber:{}:{instance}", intent.id);
+            self.emit_edit_progress(intent, instance, EditStep::ReadingDetails);
             let outcome = async {
                 let log = self.store.load_edit_log().await?;
                 let existing = log.iter().find(|e| e.edit_id == operation_id).or_else(|| {
@@ -515,6 +544,7 @@ impl<C: LastFmEditClient> Executor<C> {
                     })
                 });
                 if let Some(entry) = existing {
+                    self.emit_edit_progress(intent, instance, EditStep::Recovering);
                     let source = self.recovery_source.as_deref().ok_or_else(|| {
                         StoreError::RecoveryRequired("executor has no recovery source".into())
                     })?;
@@ -534,6 +564,7 @@ impl<C: LastFmEditClient> Executor<C> {
                     return Err(StoreError::Cancelled);
                 }
                 let exact = overlay_proposal(prepared, &intent.proposed);
+                self.emit_edit_progress(intent, instance, EditStep::Sending);
                 self.editor.apply_edit_with_id(&operation_id, exact).await
             }
             .await;
@@ -563,9 +594,30 @@ impl<C: LastFmEditClient> Executor<C> {
                     });
                 }
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
+                Err(StoreError::LastFm(
+                    err @ lastfm_edit::LastFmError::ScrobblePage {
+                        source:
+                            lastfm_edit::ScrobblePageError::MissingEditForms
+                            | lastfm_edit::ScrobblePageError::MissingChartlist,
+                        ..
+                    },
+                )) => {
+                    return Ok(InstanceOutcome::Failed {
+                        error: err.to_string(),
+                    });
+                }
                 Err(err) => return Err(execution_error(err)),
             }
         }
+    }
+
+    fn emit_edit_progress(&self, intent: &EditIntent, instance: &ScrobbleId, step: EditStep) {
+        self.events.emit(ScrubberEvent::EditProgress {
+            intent: intent.id,
+            subject: intent.subject.clone(),
+            instance: instance.clone(),
+            step,
+        });
     }
 
     /// The pass is deferring on a rate limit it won't wait out; surface the pause (the

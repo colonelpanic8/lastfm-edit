@@ -19,6 +19,7 @@ const APP_CSS: &str = include_str!("../assets/styles.css");
 pub type CoreSignal = Signal<Option<Result<Rc<core::AppCore>, core::StartupError>>>;
 /// The event-driven UI state.
 pub type UiSignal = Signal<model::UiState>;
+pub type RunnerSignal = Signal<Option<Result<model::RunnerSnapshot, String>>>;
 
 /// Handed from main() to the App component: the backend boots before dioxus launches, so
 /// it runs even while the webview event loop is throttled (hidden window on Wayland).
@@ -123,7 +124,17 @@ fn install_core(core: core::AppCore, mut core_state: CoreSignal, mut ui: UiSigna
                     ui.with_mut(|state| model::reduce(state, &event));
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    ui.with_mut(|state| {
+                        let error = "The connection to the scrubber backend closed. Reopen the app to reconnect.".to_string();
+                        if state.pass.is_active() {
+                            state.fail_execution(error, scrobble_scrubber::ExecFailureKind::Other);
+                        } else {
+                            state.error = Some(error);
+                        }
+                    });
+                    break;
+                }
             }
         }
     });
