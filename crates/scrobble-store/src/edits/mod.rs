@@ -495,7 +495,9 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
                     if !matches_new && !matches_old {
                         continue;
                     }
-                    let album_artist = if aa_changed {
+                    // Edits land atomically, so the album artist only has to break the
+                    // tie when the visible fields match both sides.
+                    let album_artist = if aa_changed && matches_new && matches_old {
                         Some(
                             self.recovery_album_artist(track, source.record_source())
                                 .await?,

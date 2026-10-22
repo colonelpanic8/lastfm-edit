@@ -354,6 +354,46 @@ async fn rate_limit_error_propagates_without_consuming_an_attempt() {
 }
 
 #[tokio::test]
+async fn album_move_recovery_skips_album_artist_lookup() {
+    let store = seeded_store().await;
+    let mut edit = variation("Cam'ron");
+    edit.album_name = "Killa Season".into();
+    edit.album_artist_name = "The Diplomats".into();
+    store
+        .append_edit_events(&[scrobble_store::EditLogEvent {
+            edit_id: "album-move".into(),
+            at: 1,
+            kind: scrobble_store::EditEventKind::Queued {
+                op: scrobble_store::EditOp::Edit(Box::new(edit)),
+                target_ids: vec![seeded_record().id],
+            },
+        }])
+        .await
+        .unwrap();
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_get_scrobble_edit_variations()
+        .returning(|_, _| Ok(vec![variation("Cam'ron"), variation("The Diplomats")]));
+    client
+        .expect_edit_scrobble_single()
+        .times(1)
+        .returning(|edit, _| Ok(success_response(edit)));
+    let upstream = StubSource {
+        tracks: vec![Track {
+            name: "Oh Boy".into(),
+            artist: "Cam'ron".into(),
+            album: Some("Come Home With Me".into()),
+            album_artist: None,
+            timestamp: Some(UTS),
+            playcount: 1,
+        }],
+    };
+    let editor = MirroredEditor::new(store.clone(), client);
+    let outcome = editor.resume_edit("album-move", &upstream).await.unwrap();
+    assert!(matches!(outcome, Some(EditOutcome::Applied { .. })));
+}
+
+#[tokio::test]
 async fn album_artist_only_recovery_uses_authoritative_variations() {
     for ambiguous in [false, true] {
         let store = seeded_store().await;
