@@ -2,8 +2,8 @@
 
 use chrono::{DateTime, Local};
 use lastfm_edit::ScrobbleEdit;
-use scrobble_scrubber::{ExecEnded, ExecReport, PlanReport, ScrubberEvent, Subject};
-use scrobble_store::{PauseReason, SyncEvent};
+use scrobble_scrubber::{EditStep, ExecEnded, ExecReport, PlanReport, ScrubberEvent, Subject};
+use scrobble_store::{PauseReason, ScrobbleId, SyncEvent};
 use std::collections::VecDeque;
 use uuid::Uuid;
 
@@ -32,6 +32,13 @@ pub struct PassProgress {
     pub failed: u64,
     pub intents_done: u64,
     pub current: Option<CurrentIntent>,
+    pub current_edit: Option<CurrentEdit>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CurrentEdit {
+    pub instance: ScrobbleId,
+    pub step: EditStep,
 }
 
 /// Executor state machine. Progress survives pause/resume within a pass, so a
@@ -45,13 +52,21 @@ pub enum PassState {
         progress: PassProgress,
         until: Option<u64>,
     },
+    Failed {
+        progress: PassProgress,
+        error: String,
+    },
 }
 
 impl PassState {
+    pub fn is_active(&self) -> bool {
+        matches!(self, Self::Running(_) | Self::Paused { .. })
+    }
+
     /// The live progress, whether running or paused.
     fn progress_mut(&mut self) -> Option<&mut PassProgress> {
         match self {
-            PassState::Idle => None,
+            PassState::Idle | PassState::Failed { .. } => None,
             PassState::Running(progress) | PassState::Paused { progress, .. } => Some(progress),
         }
     }
@@ -105,6 +120,8 @@ pub struct UiState {
     pub plan: PlanStatus,
     pub last_plan: Option<PlanReport>,
     pub last_exec: Option<ExecReport>,
+    pub execution_started_at: Option<i64>,
+    pub execution_updated_at: Option<i64>,
     pub sync: SyncStatus,
     /// Bumped whenever queue contents may have changed; views reload on change.
     pub queue_epoch: u64,
@@ -139,6 +156,29 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
         }
         ScrubberEvent::ExecStarted => {
             state.pass = PassState::Running(PassProgress::default());
+            let now = Local::now().timestamp();
+            state.execution_started_at = Some(now);
+            state.execution_updated_at = Some(now);
+        }
+        ScrubberEvent::IntentStarted { id, subject } => {
+            if let Some(progress) = state.pass.progress_mut() {
+                progress.current = Some(CurrentIntent {
+                    id: *id,
+                    subject: subject.to_string(),
+                    instances: 0,
+                });
+                progress.current_edit = None;
+            }
+            state.execution_updated_at = Some(Local::now().timestamp());
+        }
+        ScrubberEvent::EditProgress { instance, step, .. } => {
+            if let Some(progress) = state.pass.progress_mut() {
+                progress.current_edit = Some(CurrentEdit {
+                    instance: instance.clone(),
+                    step: step.clone(),
+                });
+            }
+            state.execution_updated_at = Some(Local::now().timestamp());
         }
         ScrubberEvent::IntentExpanded {
             id,
@@ -155,12 +195,14 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
             state.queue_epoch += 1;
         }
         ScrubberEvent::EditApplied { .. } => {
+            state.execution_updated_at = Some(Local::now().timestamp());
             if let Some(progress) = state.pass.progress_mut() {
                 progress.applied += 1;
             }
             state.queue_epoch += 1;
         }
         ScrubberEvent::EditFailed { .. } => {
+            state.execution_updated_at = Some(Local::now().timestamp());
             if let Some(progress) = state.pass.progress_mut() {
                 progress.failed += 1;
             }
@@ -172,12 +214,26 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
                 // The executor is serial, so the completed intent is always the current
                 // one; clear unconditionally rather than matching ids.
                 progress.current = None;
+                progress.current_edit = None;
             }
             state.queue_epoch += 1;
         }
         ScrubberEvent::ExecCompleted { report } => {
             state.pass = PassState::Idle;
             state.last_exec = Some(report.clone());
+            state.queue_epoch += 1;
+        }
+        ScrubberEvent::ExecFailed { error } => {
+            let progress = match std::mem::take(&mut state.pass) {
+                PassState::Running(progress)
+                | PassState::Paused { progress, .. }
+                | PassState::Failed { progress, .. } => progress,
+                PassState::Idle => PassProgress::default(),
+            };
+            state.pass = PassState::Failed {
+                progress,
+                error: error.clone(),
+            };
             state.queue_epoch += 1;
         }
         ScrubberEvent::ExecutorPaused { reason } => {
@@ -188,14 +244,14 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
             // Carry the pass's progress into Paused instead of dropping it.
             let progress = match std::mem::take(&mut state.pass) {
                 PassState::Running(progress) | PassState::Paused { progress, .. } => progress,
-                PassState::Idle => PassProgress::default(),
+                PassState::Idle | PassState::Failed { .. } => PassProgress::default(),
             };
             state.pass = PassState::Paused { progress, until };
         }
         ScrubberEvent::ExecutorResumed => {
             let progress = match std::mem::take(&mut state.pass) {
                 PassState::Running(progress) | PassState::Paused { progress, .. } => progress,
-                PassState::Idle => PassProgress::default(),
+                PassState::Idle | PassState::Failed { .. } => PassProgress::default(),
             };
             state.pass = PassState::Running(progress);
         }
@@ -301,6 +357,13 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
             ),
         ),
         ScrubberEvent::ExecStarted => ("▶", "executing queue".to_string()),
+        ScrubberEvent::IntentStarted { subject, .. } => {
+            ("⇉", format!("finding scrobbles for {subject}"))
+        }
+        ScrubberEvent::EditProgress { subject, step, .. } => {
+            let action = edit_step_label(step, Local::now().timestamp());
+            ("…", format!("{action}: {subject}"))
+        }
         ScrubberEvent::IntentExpanded {
             subject, instances, ..
         } => ("⇉", format!("{subject}: {instances} instance(s)")),
@@ -329,6 +392,7 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
                 report.instances_failed
             ),
         ),
+        ScrubberEvent::ExecFailed { error } => ("‼", format!("execution stopped: {error}")),
         ScrubberEvent::IdentityKeyProcessed { .. } => return None,
         ScrubberEvent::IdentityRoundCompleted { report } => (
             "♫",
@@ -360,10 +424,36 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
 pub fn ended_label(ended: &ExecEnded) -> &'static str {
     match ended {
         ExecEnded::Completed => "completed",
-        ExecEnded::Busy => "busy (another executor is running)",
-        ExecEnded::Deferred => "deferred (rate limited)",
+        ExecEnded::Busy => {
+            "another Scrubber process is editing this library; no edits started here"
+        }
+        ExecEnded::Deferred => {
+            "stopped because Last.fm is still rate limiting; remaining edits are queued"
+        }
         ExecEnded::Cancelled => "cancelled",
-        ExecEnded::BudgetExhausted => "budget exhausted",
+        ExecEnded::BudgetExhausted => "edit limit reached",
+    }
+}
+
+pub fn edit_step_label(step: &EditStep, now: i64) -> String {
+    match step {
+        EditStep::ReadingDetails => "Fetching scrobble details from Last.fm".into(),
+        EditStep::Recovering => "Checking a previously interrupted edit".into(),
+        EditStep::Sending => "Sending edit to Last.fm".into(),
+        EditStep::Pacing { until } => {
+            let left = (*until as i64 - now).max(0);
+            format!("Waiting {left}s before the next edit")
+        }
+    }
+}
+
+pub fn parse_edit_limit(input: &str) -> Result<Option<u32>, &'static str> {
+    if input.trim().is_empty() {
+        return Ok(None);
+    }
+    match input.trim().parse() {
+        Ok(value) if value > 0 => Ok(Some(value)),
+        _ => Err("Enter a positive number, or leave blank for no limit."),
     }
 }
 

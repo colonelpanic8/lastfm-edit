@@ -484,6 +484,7 @@ input[type="password"] {
 
 .pass-panel {
   border-color: var(--accent);
+  overflow-wrap: anywhere;
 }
 
 .headline-count {

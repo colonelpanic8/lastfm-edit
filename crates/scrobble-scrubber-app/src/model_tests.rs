@@ -60,7 +60,7 @@ fn applied(intent: uuid::Uuid) -> ScrubberEvent {
 fn progress(state: &UiState) -> &PassProgress {
     match &state.pass {
         PassState::Running(progress) | PassState::Paused { progress, .. } => progress,
-        PassState::Idle => panic!("expected an in-flight pass, got Idle"),
+        other => panic!("expected an in-flight pass, got {other:?}"),
     }
 }
 
@@ -264,4 +264,93 @@ fn log_is_bounded() {
         );
     }
     assert_eq!(state.log.len(), LOG_CAP);
+}
+
+#[test]
+fn execution_failure_stops_controls_and_keeps_progress() {
+    let mut state = UiState::default();
+    let id = Uuid::new_v4();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(&mut state, &applied(id));
+    reduce(
+        &mut state,
+        &ScrubberEvent::ExecFailed {
+            error: "Last.fm session expired".into(),
+        },
+    );
+    assert!(!state.pass.is_active());
+    match &state.pass {
+        PassState::Failed { progress, error } => {
+            assert_eq!(progress.applied, 1);
+            assert_eq!(error, "Last.fm session expired");
+        }
+        other => panic!("expected a visible execution failure, got {other:?}"),
+    }
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    assert!(state.pass.is_active());
+    assert_eq!(progress(&state).applied, 0);
+}
+
+#[test]
+fn execution_shows_track_before_expansion_and_each_network_step() {
+    let mut state = UiState::default();
+    let id = Uuid::new_v4();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(
+        &mut state,
+        &ScrubberEvent::IntentStarted {
+            id,
+            subject: subject(),
+        },
+    );
+    assert_eq!(
+        progress(&state).current.as_ref().unwrap().subject,
+        subject().to_string()
+    );
+    for step in [
+        EditStep::ReadingDetails,
+        EditStep::Recovering,
+        EditStep::Sending,
+    ] {
+        reduce(
+            &mut state,
+            &ScrubberEvent::EditProgress {
+                intent: id,
+                subject: subject(),
+                instance: instance(),
+                step: step.clone(),
+            },
+        );
+        let current = progress(&state).current_edit.as_ref().unwrap();
+        assert_eq!(current.instance, instance());
+        assert_eq!(current.step, step);
+        assert!(state.execution_updated_at.is_some());
+    }
+}
+
+#[test]
+fn edit_limit_is_optional_and_invalid_values_never_mean_unlimited() {
+    assert_eq!(parse_edit_limit(""), Ok(None));
+    assert_eq!(parse_edit_limit("  "), Ok(None));
+    assert_eq!(parse_edit_limit(" 20 "), Ok(Some(20)));
+    for invalid in ["0", "-1", "1.5", "4294967296", "twenty"] {
+        assert!(parse_edit_limit(invalid).is_err(), "accepted {invalid}");
+    }
+    assert_eq!(
+        ended_label(&ExecEnded::BudgetExhausted),
+        "edit limit reached"
+    );
+}
+
+#[test]
+fn pacing_countdown_explains_the_wait() {
+    let step = EditStep::Pacing { until: 102 };
+    assert_eq!(
+        edit_step_label(&step, 100),
+        "Waiting 2s before the next edit"
+    );
+    assert_eq!(
+        edit_step_label(&step, 103),
+        "Waiting 0s before the next edit"
+    );
 }

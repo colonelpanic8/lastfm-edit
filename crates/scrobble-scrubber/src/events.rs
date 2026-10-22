@@ -57,6 +57,15 @@ pub struct ExecReport {
     pub ended: ExecEnded,
 }
 
+/// The current step for an individual scrobble edit.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditStep {
+    ReadingDetails,
+    Recovering,
+    Sending,
+    Pacing { until: u64 },
+}
+
 /// Events broadcast by the scrubber's components.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ScrubberEvent {
@@ -111,6 +120,16 @@ pub enum ScrubberEvent {
 
     // ---- executor ---------------------------------------------------------------
     ExecStarted,
+    IntentStarted {
+        id: Uuid,
+        subject: Subject,
+    },
+    EditProgress {
+        intent: Uuid,
+        subject: Subject,
+        instance: ScrobbleId,
+        step: EditStep,
+    },
     IntentExpanded {
         id: Uuid,
         subject: Subject,
@@ -138,6 +157,9 @@ pub enum ScrubberEvent {
     ExecutorResumed,
     ExecCompleted {
         report: ExecReport,
+    },
+    ExecFailed {
+        error: String,
     },
 
     // ---- identity lane ----------------------------------------------------------

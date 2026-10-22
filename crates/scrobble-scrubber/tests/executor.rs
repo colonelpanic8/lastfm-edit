@@ -651,6 +651,7 @@ async fn auth_error_does_not_abandon_intent() {
             ..zero_delay()
         },
     );
+    let mut events = exec.subscribe();
     let result = exec.run_once().await;
     assert!(matches!(
         result,
@@ -661,6 +662,14 @@ async fn auth_error_does_not_abandon_intent() {
     let queue = state.load_queue().await.unwrap();
     assert_eq!(queue[0].state, IntentState::InProgress);
     assert_eq!(queue[0].failed_count(), 0);
+    let mut stopped = false;
+    while let Ok(event) = events.try_recv() {
+        if let ScrubberEvent::ExecFailed { error } = event {
+            assert!(error.contains("expired session"));
+            stopped = true;
+        }
+    }
+    assert!(stopped, "fatal execution errors must end the visible run");
 }
 
 #[tokio::test]
@@ -943,4 +952,66 @@ async fn independent_executors_cannot_recover_an_operation_still_owned_by_a_runn
             assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
         })
         .await;
+}
+
+#[tokio::test]
+async fn missing_edit_forms_during_preparation_does_not_block_other_scrobbles() {
+    let store = Arc::new(MemoryStorage::new());
+    let mut missing = record(100);
+    missing.album_artist = Provenanced::Unknown;
+    store
+        .append_scrobbles(&[missing, record(200)])
+        .await
+        .unwrap();
+    let state = Arc::new(MemoryScrubberState::new());
+    let id = Uuid::new_v4();
+    let mut all_album_artists = subject();
+    all_album_artists.album_artist = None;
+    state
+        .append_queue_events(&[QueueEvent {
+            id,
+            at: 1,
+            kind: QueueEventKind::Created {
+                subject: all_album_artists,
+                proposed: Box::new(proposal()),
+                provider: "rewrite_rules".into(),
+                requires_approval: false,
+                rationale: None,
+                sources: Default::default(),
+            },
+        }])
+        .await
+        .unwrap();
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_get_scrobble_edit_variations()
+        .times(1)
+        .returning(|_, _| {
+            Err(lastfm_edit::LastFmError::ScrobblePage {
+                track_name: DIRTY.into(),
+                artist_name: ARTIST.into(),
+                url: "https://www.last.fm/track".into(),
+                source: lastfm_edit::ScrobblePageError::MissingEditForms,
+            })
+        });
+    client
+        .expect_edit_scrobble_single()
+        .times(1)
+        .returning(|edit, _| Ok(success(edit)));
+    let exec = executor(store.clone(), state.clone(), client, zero_delay());
+    let mut events = exec.subscribe();
+    let report = exec.run_once().await.unwrap();
+    assert_eq!(report.instances_failed, 1);
+    assert_eq!(report.instances_applied, 1);
+    let queue = state.load_queue().await.unwrap();
+    assert_eq!(queue[0].failed_count(), 1);
+    assert_eq!(queue[0].done_count(), 1);
+    let mut steps = Vec::new();
+    while let Ok(event) = events.try_recv() {
+        if let ScrubberEvent::EditProgress { step, .. } = event {
+            steps.push(step);
+        }
+    }
+    assert!(steps.contains(&scrobble_scrubber::EditStep::ReadingDetails));
+    assert!(steps.contains(&scrobble_scrubber::EditStep::Sending));
 }

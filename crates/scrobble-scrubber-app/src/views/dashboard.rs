@@ -133,6 +133,7 @@ pub fn Dashboard() -> Element {
     };
     let (exec_pill_class, exec_pill) = match &ui_read.pass {
         PassState::Idle => ("", "executor idle".to_string()),
+        PassState::Failed { error, .. } => ("warn", format!("Execution stopped: {error}")),
         PassState::Running(progress) => (
             "accent",
             format!(
