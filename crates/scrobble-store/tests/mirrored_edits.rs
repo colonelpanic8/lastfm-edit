@@ -454,3 +454,46 @@ async fn album_artist_only_recovery_uses_authoritative_variations() {
         }
     }
 }
+
+#[tokio::test]
+async fn one_scrape_verifies_every_scrobble_of_the_track() {
+    let store = seeded_store().await;
+    let mut sibling = seeded_record();
+    sibling.uts = UTS + 600;
+    sibling.id = ScrobbleId::new(sibling.uts, "Cam'ron", "Oh Boy");
+    let mut other_album = sibling.clone();
+    other_album.uts = UTS + 1200;
+    other_album.id = ScrobbleId::new(other_album.uts, "Cam'ron", "Oh Boy");
+    other_album.album = Some("Oh Boy (Single)".into());
+    store
+        .append_scrobbles(&[sibling.clone(), other_album.clone()])
+        .await
+        .unwrap();
+    let mut client = MockLastFmEditClient::new();
+    client
+        .expect_get_scrobble_edit_variations()
+        .times(1)
+        .returning(|_, _| {
+            let mut single = variation("Cam'ron");
+            single.album_name_original = "Oh Boy (Single)".into();
+            Ok(vec![variation("The Diplomats"), single])
+        });
+    let editor = MirroredEditor::new(store.clone(), client);
+
+    editor.enrich(&seeded_record().id).await.unwrap();
+    let enriched = editor.enrich(&sibling.id).await.unwrap();
+
+    assert_eq!(
+        enriched.album_artist,
+        Provenanced::Verified("The Diplomats".into())
+    );
+    assert_eq!(
+        store
+            .get_scrobble(&other_album.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .album_artist,
+        Provenanced::Verified("Cam'ron".into())
+    );
+}
