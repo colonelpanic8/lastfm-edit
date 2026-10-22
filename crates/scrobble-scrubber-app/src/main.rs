@@ -19,6 +19,7 @@ const APP_CSS: &str = include_str!("../assets/styles.css");
 pub type CoreSignal = Signal<Option<Result<Rc<core::AppCore>, core::StartupError>>>;
 /// The event-driven UI state.
 pub type UiSignal = Signal<model::UiState>;
+pub type RunnerSignal = Signal<Option<Result<model::RunnerSnapshot, String>>>;
 
 /// Handed from main() to the App component: the backend boots before dioxus launches, so
 /// it runs even while the webview event loop is throttled (hidden window on Wayland).

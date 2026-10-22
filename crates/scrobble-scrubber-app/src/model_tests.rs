@@ -435,3 +435,30 @@ fn unexpected_backend_shutdown_stops_the_run_and_preserves_completed_edits() {
         other => panic!("unexpected run state: {other:?}"),
     }
 }
+
+#[test]
+fn another_runner_disables_local_execution_but_an_idle_process_does_not() {
+    let own_id = Uuid::new_v4();
+    let mut snapshot = RunnerSnapshot {
+        instances: Vec::new(),
+    };
+    assert!(!snapshot.owned_elsewhere(own_id));
+    snapshot.instances.push(scrobble_scrubber::RunnerStatus {
+        id: own_id,
+        pid: 1,
+        kind: scrobble_scrubber::RunnerKind::Desktop,
+        started_at: 1,
+        updated_at: 1,
+        activity: scrobble_scrubber::RunnerActivity::Editing,
+        subject: None,
+        step: None,
+        applied: 0,
+        failed: 0,
+        last_error: None,
+    });
+    assert!(!snapshot.owned_elsewhere(own_id));
+    snapshot.instances[0].id = Uuid::new_v4();
+    assert!(snapshot.owned_elsewhere(own_id));
+    snapshot.instances[0].activity = scrobble_scrubber::RunnerActivity::Idle;
+    assert!(!snapshot.owned_elsewhere(own_id));
+}

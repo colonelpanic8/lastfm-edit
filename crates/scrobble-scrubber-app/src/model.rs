@@ -11,6 +11,49 @@ use uuid::Uuid;
 
 pub const LOG_CAP: usize = 500;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunnerSnapshot {
+    pub instances: Vec<scrobble_scrubber::RunnerStatus>,
+}
+
+impl RunnerSnapshot {
+    pub fn owned_elsewhere(&self, own_id: Uuid) -> bool {
+        self.instances
+            .iter()
+            .any(|runner| runner.id != own_id && runner.activity.owns_edits())
+    }
+}
+
+pub fn runner_kind_label(kind: scrobble_scrubber::RunnerKind) -> &'static str {
+    match kind {
+        scrobble_scrubber::RunnerKind::Desktop => "Desktop app",
+        scrobble_scrubber::RunnerKind::Daemon => "Background service",
+        scrobble_scrubber::RunnerKind::CommandLine => "Command-line runner",
+    }
+}
+
+pub fn runner_activity_label(activity: &scrobble_scrubber::RunnerActivity, now: i64) -> String {
+    use scrobble_scrubber::RunnerActivity;
+    match activity {
+        RunnerActivity::Idle => "Idle".into(),
+        RunnerActivity::Syncing => "Fetching recent scrobbles".into(),
+        RunnerActivity::Stopped => "Backend stopped".into(),
+        RunnerActivity::Planning => "Checking for edits to queue".into(),
+        RunnerActivity::Starting => "Trying to acquire the edit queue".into(),
+        RunnerActivity::Editing => "Applying queued edits".into(),
+        RunnerActivity::RateLimited { until: Some(until) } => format!(
+            "Waiting for Last.fm’s rate limit — retrying in {}s",
+            (*until as i64 - now).max(0)
+        ),
+        RunnerActivity::RateLimited { until: None } => "Waiting for Last.fm’s rate limit".into(),
+        RunnerActivity::Sleeping { until } => {
+            format!("Next cycle in {}s", (*until as i64 - now).max(0))
+        }
+        RunnerActivity::Finished { ended } => format!("Last run: {}", ended_label(ended)),
+        RunnerActivity::Failed => "Run stopped because of an error".into(),
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LogEntry {
     pub at: DateTime<Local>,
@@ -367,6 +410,7 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
 /// One-line rendering of an event for the activity log. `None` = too noisy to log.
 pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
     Some(match event {
+        ScrubberEvent::ExecAcquired => return None,
         ScrubberEvent::PlanStarted { feed } => ("▶", format!("planning {feed}")),
         ScrubberEvent::SubjectsFound { count, .. } if *count > 0 => {
             ("·", format!("analyzing {count} subject(s)"))

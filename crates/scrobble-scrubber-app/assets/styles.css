@@ -922,3 +922,28 @@ input.history-search {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+.runner {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.runner-activity {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.runner summary {
+  cursor: pointer;
+}
+
+.runner-error {
+  color: var(--danger);
+}
+
+.runner-error pre {
+  white-space: pre-wrap;
+  user-select: text;
+}

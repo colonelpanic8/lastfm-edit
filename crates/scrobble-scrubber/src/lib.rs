@@ -26,8 +26,12 @@ pub mod provider;
 pub mod queue;
 pub mod rewrite;
 pub mod run;
+pub mod runners;
 pub mod state;
 pub use run::RunGeneration;
+pub use runners::{
+    running_instances, RunnerActivity, RunnerKind, RunnerRegistration, RunnerStatus,
+};
 pub mod subject;
 
 pub use error::{Result, ScrubberError};

@@ -674,7 +674,11 @@ async fn build_edit_client(ctx: &Context) -> Result<lastfm_edit::LastFmEditClien
 
 async fn execute(ctx: &Context, max_edits: Option<u32>, follow: bool) -> Result<()> {
     let client = build_edit_client(ctx).await?;
-    let bus = ScrubberEventBus::new();
+    let runner = Arc::new(scrobble_scrubber::RunnerRegistration::register(
+        ctx.store.root(),
+        scrobble_scrubber::RunnerKind::CommandLine,
+    )?);
+    let bus = ScrubberEventBus::new().with_runner(runner);
     let executor = Executor::new(
         ctx.store.clone() as Arc<dyn Storage>,
         ctx.state.clone() as Arc<dyn ScrubberState>,
@@ -745,7 +749,11 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
     let source = Arc::new(ApiSource::new(api_client));
     let engine = SyncEngine::new(ctx.store.clone() as Arc<dyn Storage>, source.clone());
 
-    let bus = ScrubberEventBus::new();
+    let runner = Arc::new(scrobble_scrubber::RunnerRegistration::register(
+        ctx.store.root(),
+        scrobble_scrubber::RunnerKind::Daemon,
+    )?);
+    let bus = ScrubberEventBus::new().with_runner(runner);
     let edit_client = build_edit_client(ctx).await?;
     let executor = Executor::new(
         ctx.store.clone() as Arc<dyn Storage>,

@@ -191,6 +191,7 @@ impl<C: LastFmEditClient> Executor<C> {
         // A fresh pass starts un-cancelled; the flag only interrupts the pass it was
         // flipped during.
         self.cancelled.store(false, Ordering::Relaxed);
+        self.events.emit(ScrubberEvent::ExecAcquired);
         let mut report = ExecReport::default();
         let mut attempts_used: u32 = 0;
         let mut rate_limit = PassRateLimit::default();

@@ -1,7 +1,7 @@
 //! Work queue: what is truly queued for execution (in executor order) plus the live
 //! pass panel with execute/stop controls.
 
-use crate::components::{ActivityLog, CardContext, ExecutionNotice, IntentCard};
+use crate::components::{ActivityLog, CardContext, ExecutionNotice, IntentCard, RunningInstances};
 use crate::core::BackendCommand;
 use crate::model::{edit_step_label, ended_label, fmt_ts, parse_edit_limit, PassState};
 use crate::views::use_queue;
@@ -13,6 +13,7 @@ use scrobble_scrubber::{work_queue_view, EditStep, ExecEnded, ExecFailureKind, S
 pub fn WorkQueue() -> Element {
     let core = use_context::<CoreSignal>();
     let mut ui = use_context::<UiSignal>();
+    let runners = use_context::<crate::RunnerSignal>();
     let queue = use_queue();
     let mut limit_input = use_signal(String::new);
     let mut limit_error = use_signal(|| None::<String>);
@@ -45,6 +46,11 @@ pub fn WorkQueue() -> Element {
 
     let ui_read = ui.read();
     let is_active = ui_read.pass.is_active();
+    let owned_elsewhere = runners
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .is_some_and(|snapshot| snapshot.owned_elsewhere(core.runner_id));
     let stopping = ui_read.execution_stop_requested;
     let retrying = matches!(&ui_read.pass, PassState::Failed { .. });
     let has_work = !view.items.is_empty();
@@ -56,7 +62,7 @@ pub fn WorkQueue() -> Element {
         .map(|updated| (now() - updated).max(0));
 
     // Precompute pass-panel text (RSX format segments can't contain method calls).
-    let (pass_pill_class, status_line, detail_line) = match &ui_read.pass {
+    let (mut pass_pill_class, mut status_line, mut detail_line) = match &ui_read.pass {
         PassState::Idle => {
             if let Some(report) = &ui_read.last_exec {
                 let ended = ended_label(&report.ended);
@@ -65,7 +71,7 @@ pub fn WorkQueue() -> Element {
                     report.instances_applied, report.instances_failed
                 );
                 let detail = match report.ended {
-                    ExecEnded::Busy => "The background service or another window has the queue. This window cannot show that process’s live progress.",
+                    ExecEnded::Busy => "Another instance has the queue. Its progress appears under Running instances.",
                     ExecEnded::BudgetExhausted => "Your edit limit was reached. Remaining edits stay queued; apply again to continue.",
                     ExecEnded::Deferred => "Last.fm is still rate limiting requests. Remaining edits stay queued for a later run.",
                     ExecEnded::Cancelled => "Stopped. Completed edits are saved and unfinished edits stay queued.",
@@ -130,6 +136,12 @@ pub fn WorkQueue() -> Element {
         ),
     };
 
+    if owned_elsewhere && !is_active {
+        pass_pill_class = "accent";
+        status_line = "Another instance is applying queued edits".into();
+        detail_line = Some("This window is watching the shared queue. See Running instances below for progress; stop controls only affect this window’s run.".into());
+    }
+
     let mut headline = format!("{} track groups queued", view.items.len());
     if view.known_pending_total > 0 {
         headline.push_str(&format!(
@@ -177,7 +189,7 @@ pub fn WorkQueue() -> Element {
                 div { class: "row", style: "margin-top: 10px;",
                     button {
                         class: "btn primary",
-                        disabled: is_active || !has_work,
+                        disabled: is_active || !has_work || owned_elsewhere,
                         onclick: move |_| {
                             let max_edits = match parse_edit_limit(&limit_input.peek()) {
                                 Ok(limit) => limit,
@@ -257,6 +269,7 @@ pub fn WorkQueue() -> Element {
                     div { role: "alert", "{error}" }
                 }
             }
+            RunningInstances {}
             ActivityLog {}
             if !has_work {
                 div { class: "card muted", "nothing queued for execution" }

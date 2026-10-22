@@ -1,6 +1,6 @@
 //! Dashboard: status, stats, controls, activity log.
 
-use crate::components::ActivityLog;
+use crate::components::{ActivityLog, RunningInstances};
 use crate::model::{fmt_ts, CycleInfo, CyclePhase, PassState, PlanStatus, SyncStatus};
 use crate::{CoreSignal, UiSignal};
 use dioxus::prelude::*;
@@ -390,6 +390,7 @@ pub fn Dashboard() -> Element {
                     }
                 }
             }
+            RunningInstances {}
             ActivityLog {}
         }
     }
