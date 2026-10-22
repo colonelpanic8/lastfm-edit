@@ -16,7 +16,8 @@
 
 use crate::error::{Result, ScrubberError};
 use crate::events::{
-    EditStep, ExecEnded, ExecReport, ScrubberEvent, ScrubberEventBus, ScrubberEventReceiver,
+    EditStep, ExecEnded, ExecFailureKind, ExecReport, ScrubberEvent, ScrubberEventBus,
+    ScrubberEventReceiver,
 };
 use crate::queue::{EditIntent, InstanceStatus, IntentState, QueueEvent, QueueEventKind};
 use crate::state::ScrubberState;
@@ -162,6 +163,19 @@ impl<C: LastFmEditClient> Executor<C> {
             }),
             Err(err) => self.events.emit(ScrubberEvent::ExecFailed {
                 error: err.to_string(),
+                kind: match err {
+                    ScrubberError::Store(StoreError::LastFm(
+                        lastfm_edit::LastFmError::Auth(_)
+                        | lastfm_edit::LastFmError::ScrobblePage {
+                            source: lastfm_edit::ScrobblePageError::LoggedOut,
+                            ..
+                        },
+                    )) => ExecFailureKind::Authentication,
+                    ScrubberError::Store(StoreError::LastFm(lastfm_edit::LastFmError::Http(_))) => {
+                        ExecFailureKind::Network
+                    }
+                    _ => ExecFailureKind::Other,
+                },
             }),
         }
         result
@@ -581,7 +595,9 @@ impl<C: LastFmEditClient> Executor<C> {
                 Err(StoreError::NotFound(_)) => return Ok(InstanceOutcome::Gone),
                 Err(StoreError::LastFm(
                     err @ lastfm_edit::LastFmError::ScrobblePage {
-                        source: lastfm_edit::ScrobblePageError::MissingEditForms,
+                        source:
+                            lastfm_edit::ScrobblePageError::MissingEditForms
+                            | lastfm_edit::ScrobblePageError::MissingChartlist,
                         ..
                     },
                 )) => {

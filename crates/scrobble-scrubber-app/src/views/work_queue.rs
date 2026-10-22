@@ -1,13 +1,13 @@
 //! Work queue: what is truly queued for execution (in executor order) plus the live
 //! pass panel with execute/stop controls.
 
-use crate::components::{ActivityLog, CardContext, IntentCard};
+use crate::components::{ActivityLog, CardContext, ExecutionNotice, IntentCard};
 use crate::core::BackendCommand;
 use crate::model::{edit_step_label, ended_label, fmt_ts, parse_edit_limit, PassState};
 use crate::views::use_queue;
 use crate::{CoreSignal, UiSignal};
 use dioxus::prelude::*;
-use scrobble_scrubber::{work_queue_view, ScrubberCommand};
+use scrobble_scrubber::{work_queue_view, EditStep, ExecEnded, ExecFailureKind, ScrubberCommand};
 
 #[component]
 pub fn WorkQueue() -> Element {
@@ -45,6 +45,8 @@ pub fn WorkQueue() -> Element {
 
     let ui_read = ui.read();
     let is_active = ui_read.pass.is_active();
+    let stopping = ui_read.execution_stop_requested;
+    let retrying = matches!(&ui_read.pass, PassState::Failed { .. });
     let has_work = !view.items.is_empty();
     let elapsed = ui_read
         .execution_started_at
@@ -56,14 +58,31 @@ pub fn WorkQueue() -> Element {
     // Precompute pass-panel text (RSX format segments can't contain method calls).
     let (pass_pill_class, status_line, detail_line) = match &ui_read.pass {
         PassState::Idle => {
-            let detail = ui_read.last_exec.as_ref().map(|report| {
+            if let Some(report) = &ui_read.last_exec {
                 let ended = ended_label(&report.ended);
-                format!(
-                    "last pass: {ended} — {} applied, {} failed",
+                let status = format!(
+                    "Last run: {ended} — {} applied, {} failed",
                     report.instances_applied, report.instances_failed
+                );
+                let detail = match report.ended {
+                    ExecEnded::Busy => "The background service or another window has the queue. This window cannot show that process’s live progress.",
+                    ExecEnded::BudgetExhausted => "Your edit limit was reached. Remaining edits stay queued; apply again to continue.",
+                    ExecEnded::Deferred => "Last.fm is still rate limiting requests. Remaining edits stay queued for a later run.",
+                    ExecEnded::Cancelled => "Stopped. Completed edits are saved and unfinished edits stay queued.",
+                    ExecEnded::Completed => "This run has finished. Check any reported failures below.",
+                };
+                (
+                    if report.instances_failed > 0 || report.ended == ExecEnded::Busy {
+                        "warn"
+                    } else {
+                        "ok"
+                    },
+                    status,
+                    Some(detail.into()),
                 )
-            });
-            ("", "executor idle".to_string(), detail)
+            } else {
+                ("", "Ready to apply queued edits".to_string(), None)
+            }
         }
         PassState::Running(progress) => {
             let detail = match (&progress.current, &progress.current_edit) {
@@ -101,13 +120,13 @@ pub fn WorkQueue() -> Element {
                 Some(countdown),
             )
         }
-        PassState::Failed { progress, error } => (
-            "warn",
+        PassState::Failed { progress, .. } => (
+            "danger",
             format!(
                 "Execution stopped — {} applied, {} failed",
                 progress.applied, progress.failed
             ),
-            Some(error.clone()),
+            None,
         ),
     };
 
@@ -142,7 +161,19 @@ pub fn WorkQueue() -> Element {
                             "Running for {elapsed}s · last activity {since_update}s ago"
                         }
                     }
+                    if stopping {
+                        div { class: "banner warn execution-notice", role: "status",
+                            "Stopping after the current request. Completed edits are saved; unfinished edits stay queued."
+                        }
+                    } else if since_update.is_some_and(|seconds| seconds >= 30)
+                        && matches!(&ui_read.pass, PassState::Running(progress)
+                            if !matches!(&progress.current_edit, Some(edit) if matches!(edit.step, EditStep::Pacing { .. }))) {
+                        div { class: "banner warn execution-notice", role: "status",
+                            "Last.fm has not returned an update recently. The request may still be waiting. You can stop this run after the current request finishes."
+                        }
+                    }
                 }
+                ExecutionNotice {}
                 div { class: "row", style: "margin-top: 10px;",
                     button {
                         class: "btn primary",
@@ -158,6 +189,8 @@ pub fn WorkQueue() -> Element {
                             limit_error.set(None);
                             ui.with_mut(|state| {
                                 state.pass = PassState::Running(Default::default());
+                                state.execution_stop_requested = false;
+                                state.last_edit_failure = None;
                                 let now = chrono::Utc::now().timestamp();
                                 state.execution_started_at = Some(now);
                                 state.execution_updated_at = Some(now);
@@ -170,13 +203,15 @@ pub fn WorkQueue() -> Element {
                                     .is_err()
                                 {
                                     ui.with_mut(|state| {
-                                        state.pass = PassState::Idle;
-                                        state.error = Some("the scrubber actor is not available".into());
+                                        state.fail_execution(
+                                            "The scrubber backend is not available. Reopen the app to reconnect.".into(),
+                                            ExecFailureKind::Other,
+                                        );
                                     });
                                 }
                             });
                         },
-                        "Apply queued edits"
+                        if retrying { "Retry queued edits" } else { "Apply queued edits" }
                     }
                     label {
                         r#for: "edit-limit",
@@ -198,15 +233,21 @@ pub fn WorkQueue() -> Element {
                     }
                     button {
                         class: "btn danger",
-                        disabled: !is_active,
+                        disabled: !is_active || stopping,
                         title: "Stop this run; unfinished edits stay queued",
                         onclick: move |_| {
+                            ui.with_mut(|state| state.execution_stop_requested = true);
                             let backend = backend_stop.clone();
                             spawn(async move {
-                                let _ = backend.send(BackendCommand::StopExecution).await;
+                                if backend.send(BackendCommand::StopExecution).await.is_err() {
+                                    ui.with_mut(|state| {
+                                        state.execution_stop_requested = false;
+                                        state.error = Some("The stop request could not reach the backend. Reopen the app to reconnect.".into());
+                                    });
+                                }
                             });
                         },
-                        "Stop execution"
+                        if stopping { "Stopping…" } else { "Stop execution" }
                     }
                 }
                 div { id: "edit-limit-help", class: "muted", style: "margin-top: 8px;",

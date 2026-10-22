@@ -66,6 +66,14 @@ pub enum EditStep {
     Pacing { until: u64 },
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecFailureKind {
+    Authentication,
+    Network,
+    #[default]
+    Other,
+}
+
 /// Events broadcast by the scrubber's components.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ScrubberEvent {
@@ -160,6 +168,8 @@ pub enum ScrubberEvent {
     },
     ExecFailed {
         error: String,
+        #[serde(default)]
+        kind: ExecFailureKind,
     },
 
     // ---- identity lane ----------------------------------------------------------

@@ -133,7 +133,7 @@ pub fn Dashboard() -> Element {
     };
     let (exec_pill_class, exec_pill) = match &ui_read.pass {
         PassState::Idle => ("", "executor idle".to_string()),
-        PassState::Failed { error, .. } => ("warn", format!("Execution stopped: {error}")),
+        PassState::Failed { .. } => ("danger", "Execution stopped".into()),
         PassState::Running(progress) => (
             "accent",
             format!(
@@ -266,9 +266,6 @@ pub fn Dashboard() -> Element {
                         div { class: "banner warn", "{detail}" }
                     }
                 }
-            }
-            if let Some(error) = &ui_read.error {
-                div { class: "banner danger", "{error}" }
             }
             div { class: "grid",
                 div { class: "stat",

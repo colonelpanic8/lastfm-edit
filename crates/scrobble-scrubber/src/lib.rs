@@ -32,7 +32,7 @@ pub mod subject;
 
 pub use error::{Result, ScrubberError};
 pub use events::{
-    EditStep, ExecEnded, ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus,
+    EditStep, ExecEnded, ExecFailureKind, ExecReport, PlanReport, ScrubberEvent, ScrubberEventBus,
     ScrubberEventReceiver,
 };
 pub use executor::{Executor, ExecutorOptions};

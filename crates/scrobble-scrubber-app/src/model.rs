@@ -2,7 +2,9 @@
 
 use chrono::{DateTime, Local};
 use lastfm_edit::ScrobbleEdit;
-use scrobble_scrubber::{EditStep, ExecEnded, ExecReport, PlanReport, ScrubberEvent, Subject};
+use scrobble_scrubber::{
+    EditStep, ExecEnded, ExecFailureKind, ExecReport, PlanReport, ScrubberEvent, Subject,
+};
 use scrobble_store::{PauseReason, ScrobbleId, SyncEvent};
 use std::collections::VecDeque;
 use uuid::Uuid;
@@ -14,6 +16,14 @@ pub struct LogEntry {
     pub at: DateTime<Local>,
     pub icon: &'static str,
     pub summary: String,
+    pub is_error: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EditFailure {
+    pub subject: String,
+    pub instance: ScrobbleId,
+    pub error: String,
 }
 
 /// The intent an execute pass is currently working through.
@@ -55,6 +65,7 @@ pub enum PassState {
     Failed {
         progress: PassProgress,
         error: String,
+        kind: ExecFailureKind,
     },
 }
 
@@ -122,6 +133,8 @@ pub struct UiState {
     pub last_exec: Option<ExecReport>,
     pub execution_started_at: Option<i64>,
     pub execution_updated_at: Option<i64>,
+    pub execution_stop_requested: bool,
+    pub last_edit_failure: Option<EditFailure>,
     pub sync: SyncStatus,
     /// Bumped whenever queue contents may have changed; views reload on change.
     pub queue_epoch: u64,
@@ -129,6 +142,24 @@ pub struct UiState {
     /// recent-scrobbles feed reloads (resetting to the first page) on change.
     pub sync_epoch: u64,
     pub error: Option<String>,
+}
+
+impl UiState {
+    pub fn fail_execution(&mut self, error: String, kind: ExecFailureKind) {
+        let progress = match std::mem::take(&mut self.pass) {
+            PassState::Running(progress)
+            | PassState::Paused { progress, .. }
+            | PassState::Failed { progress, .. } => progress,
+            PassState::Idle => PassProgress::default(),
+        };
+        self.pass = PassState::Failed {
+            progress,
+            error,
+            kind,
+        };
+        self.execution_stop_requested = false;
+        self.queue_epoch += 1;
+    }
 }
 
 /// Apply one scrubber event to the UI state. Pure; the signal write-back lives in the
@@ -156,6 +187,8 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
         }
         ScrubberEvent::ExecStarted => {
             state.pass = PassState::Running(PassProgress::default());
+            state.execution_stop_requested = false;
+            state.last_edit_failure = None;
             let now = Local::now().timestamp();
             state.execution_started_at = Some(now);
             state.execution_updated_at = Some(now);
@@ -201,8 +234,18 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
             }
             state.queue_epoch += 1;
         }
-        ScrubberEvent::EditFailed { .. } => {
+        ScrubberEvent::EditFailed {
+            subject,
+            instance,
+            error,
+            ..
+        } => {
             state.execution_updated_at = Some(Local::now().timestamp());
+            state.last_edit_failure = Some(EditFailure {
+                subject: subject.to_string(),
+                instance: instance.clone(),
+                error: error.clone(),
+            });
             if let Some(progress) = state.pass.progress_mut() {
                 progress.failed += 1;
             }
@@ -220,21 +263,18 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
         }
         ScrubberEvent::ExecCompleted { report } => {
             state.pass = PassState::Idle;
+            state.execution_stop_requested = false;
             state.last_exec = Some(report.clone());
             state.queue_epoch += 1;
         }
-        ScrubberEvent::ExecFailed { error } => {
-            let progress = match std::mem::take(&mut state.pass) {
-                PassState::Running(progress)
-                | PassState::Paused { progress, .. }
-                | PassState::Failed { progress, .. } => progress,
-                PassState::Idle => PassProgress::default(),
-            };
-            state.pass = PassState::Failed {
-                progress,
-                error: error.clone(),
-            };
-            state.queue_epoch += 1;
+        ScrubberEvent::ExecFailed { error, kind } => {
+            state.fail_execution(error.clone(), *kind);
+        }
+        ScrubberEvent::Stopped { reason } if state.pass.is_active() => {
+            state.fail_execution(
+                format!("The scrubber backend stopped: {reason}. Reopen the app to reconnect."),
+                ExecFailureKind::Other,
+            );
         }
         ScrubberEvent::ExecutorPaused { reason } => {
             let until = match reason {
@@ -274,6 +314,9 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
             }
         }
         ScrubberEvent::Error { error } => {
+            if matches!(&state.pass, PassState::Failed { error: stopped, .. } if stopped == error) {
+                return;
+            }
             state.error = Some(error.clone());
         }
         ScrubberEvent::Sync(sync) => match sync {
@@ -307,6 +350,13 @@ pub fn reduce(state: &mut UiState, event: &ScrubberEvent) {
             at: Local::now(),
             icon,
             summary,
+            is_error: matches!(
+                event,
+                ScrubberEvent::EditFailed { .. }
+                    | ScrubberEvent::ExecFailed { .. }
+                    | ScrubberEvent::Error { .. }
+                    | ScrubberEvent::Sync(SyncEvent::SyncFailed { .. })
+            ),
         });
         while state.log.len() > LOG_CAP {
             state.log.pop_front();
@@ -392,7 +442,7 @@ pub fn event_summary(event: &ScrubberEvent) -> Option<(&'static str, String)> {
                 report.instances_failed
             ),
         ),
-        ScrubberEvent::ExecFailed { error } => ("‼", format!("execution stopped: {error}")),
+        ScrubberEvent::ExecFailed { error, .. } => ("‼", format!("execution stopped: {error}")),
         ScrubberEvent::IdentityKeyProcessed { .. } => return None,
         ScrubberEvent::IdentityRoundCompleted { report } => (
             "♫",
@@ -454,6 +504,23 @@ pub fn parse_edit_limit(input: &str) -> Result<Option<u32>, &'static str> {
     match input.trim().parse() {
         Ok(value) if value > 0 => Ok(Some(value)),
         _ => Err("Enter a positive number, or leave blank for no limit."),
+    }
+}
+
+pub fn execution_failure_copy(kind: ExecFailureKind) -> (&'static str, &'static str) {
+    match kind {
+        ExecFailureKind::Authentication => (
+            "Last.fm sign-in required",
+            "Last.fm no longer accepts the saved session. Sign in again before retrying.",
+        ),
+        ExecFailureKind::Network => (
+            "Could not reach Last.fm",
+            "Check your connection and retry. Last.fm may also be temporarily unavailable.",
+        ),
+        ExecFailureKind::Other => (
+            "The run stopped because of an error",
+            "Check the details below before retrying. If the same error returns, keep these details for troubleshooting.",
+        ),
     }
 }
 

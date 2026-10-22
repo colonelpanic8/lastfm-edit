@@ -276,16 +276,35 @@ fn execution_failure_stops_controls_and_keeps_progress() {
         &mut state,
         &ScrubberEvent::ExecFailed {
             error: "Last.fm session expired".into(),
+            kind: ExecFailureKind::Authentication,
         },
     );
     assert!(!state.pass.is_active());
     match &state.pass {
-        PassState::Failed { progress, error } => {
+        PassState::Failed {
+            progress,
+            error,
+            kind,
+        } => {
             assert_eq!(progress.applied, 1);
             assert_eq!(error, "Last.fm session expired");
+            assert_eq!(*kind, ExecFailureKind::Authentication);
         }
         other => panic!("expected a visible execution failure, got {other:?}"),
     }
+    let log_len = state.log.len();
+    reduce(
+        &mut state,
+        &ScrubberEvent::Error {
+            error: "Last.fm session expired".into(),
+        },
+    );
+    assert_eq!(
+        state.log.len(),
+        log_len,
+        "the actor's repeated error must not create another alert"
+    );
+    assert!(state.error.is_none());
     reduce(&mut state, &ScrubberEvent::ExecStarted);
     assert!(state.pass.is_active());
     assert_eq!(progress(&state).applied, 0);
@@ -353,4 +372,66 @@ fn pacing_countdown_explains_the_wait() {
         edit_step_label(&step, 103),
         "Waiting 0s before the next edit"
     );
+}
+
+#[test]
+fn individual_failures_remain_visible_after_completion_and_clear_on_retry() {
+    let mut state = UiState::default();
+    let id = Uuid::new_v4();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(
+        &mut state,
+        &ScrubberEvent::EditFailed {
+            intent: id,
+            subject: subject(),
+            instance: instance(),
+            error: "Last.fm did not return an edit form".into(),
+        },
+    );
+    let failure = state.last_edit_failure.as_ref().unwrap();
+    assert_eq!(failure.subject, subject().to_string());
+    assert_eq!(failure.instance, instance());
+    assert!(state.log.back().unwrap().is_error);
+    reduce(&mut state, &applied(id));
+    assert!(!state.log.back().unwrap().is_error);
+    state.execution_stop_requested = true;
+    reduce(
+        &mut state,
+        &ScrubberEvent::ExecCompleted {
+            report: ExecReport {
+                instances_failed: 1,
+                instances_applied: 1,
+                ..Default::default()
+            },
+        },
+    );
+    assert!(state.last_edit_failure.is_some());
+    assert!(!state.execution_stop_requested);
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    assert!(state.last_edit_failure.is_none());
+}
+
+#[test]
+fn unexpected_backend_shutdown_stops_the_run_and_preserves_completed_edits() {
+    let mut state = UiState::default();
+    reduce(&mut state, &ScrubberEvent::ExecStarted);
+    reduce(&mut state, &applied(Uuid::new_v4()));
+    state.execution_stop_requested = true;
+    reduce(
+        &mut state,
+        &ScrubberEvent::Stopped {
+            reason: "actor shut down".into(),
+        },
+    );
+    assert!(!state.pass.is_active());
+    assert!(!state.execution_stop_requested);
+    match &state.pass {
+        PassState::Failed {
+            progress, error, ..
+        } => {
+            assert_eq!(progress.applied, 1);
+            assert!(error.contains("Reopen the app"));
+        }
+        other => panic!("unexpected run state: {other:?}"),
+    }
 }

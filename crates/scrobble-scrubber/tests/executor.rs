@@ -664,8 +664,9 @@ async fn auth_error_does_not_abandon_intent() {
     assert_eq!(queue[0].failed_count(), 0);
     let mut stopped = false;
     while let Ok(event) = events.try_recv() {
-        if let ScrubberEvent::ExecFailed { error } = event {
+        if let ScrubberEvent::ExecFailed { error, kind } = event {
             assert!(error.contains("expired session"));
+            assert_eq!(kind, scrobble_scrubber::ExecFailureKind::Authentication);
             stopped = true;
         }
     }
@@ -956,6 +957,23 @@ async fn independent_executors_cannot_recover_an_operation_still_owned_by_a_runn
 
 #[tokio::test]
 async fn missing_edit_forms_during_preparation_does_not_block_other_scrobbles() {
+    missing_scrobble_page_does_not_block_other_scrobbles(
+        lastfm_edit::ScrobblePageError::MissingEditForms,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn missing_chartlist_during_preparation_does_not_block_other_scrobbles() {
+    missing_scrobble_page_does_not_block_other_scrobbles(
+        lastfm_edit::ScrobblePageError::MissingChartlist,
+    )
+    .await;
+}
+
+async fn missing_scrobble_page_does_not_block_other_scrobbles(
+    source: lastfm_edit::ScrobblePageError,
+) {
     let store = Arc::new(MemoryStorage::new());
     let mut missing = record(100);
     missing.album_artist = Provenanced::Unknown;
@@ -986,12 +1004,12 @@ async fn missing_edit_forms_during_preparation_does_not_block_other_scrobbles() 
     client
         .expect_get_scrobble_edit_variations()
         .times(1)
-        .returning(|_, _| {
+        .returning(move |_, _| {
             Err(lastfm_edit::LastFmError::ScrobblePage {
                 track_name: DIRTY.into(),
                 artist_name: ARTIST.into(),
                 url: "https://www.last.fm/track".into(),
-                source: lastfm_edit::ScrobblePageError::MissingEditForms,
+                source,
             })
         });
     client

@@ -80,6 +80,10 @@ pub fn Shell() -> Element {
             div { class: "shell",
                 Nav { active }
                 main { class: "content",
+                        crate::components::ErrorNotice {}
+                        if active() != ActiveView::WorkQueue {
+                            crate::components::ExecutionNotice {}
+                        }
                         match active() {
                             ActiveView::Dashboard => rsx! { dashboard::Dashboard {} },
                             ActiveView::Library => rsx! { library::Library {} },
