@@ -359,18 +359,46 @@ struct StoreSection {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 struct ExecutorSection {
-    inter_edit_delay_secs: u64,
+    inter_edit_delay_secs: f64,
     max_attempts_per_instance: u32,
     max_rate_limit_pauses_per_pass: u32,
+    rate_limit_pause_secs: u64,
+    max_rate_limit_pause_secs: u64,
+    reuse_csrf_token: bool,
 }
 
 impl Default for ExecutorSection {
     fn default() -> Self {
         Self {
-            inter_edit_delay_secs: 2,
+            inter_edit_delay_secs: 2.0,
             max_attempts_per_instance: 3,
             max_rate_limit_pauses_per_pass: 3,
+            rate_limit_pause_secs: 60,
+            max_rate_limit_pause_secs: 600,
+            reuse_csrf_token: false,
         }
+    }
+}
+
+impl ExecutorSection {
+    fn options(&self, max_edits: Option<u32>) -> ExecutorOptions {
+        ExecutorOptions {
+            inter_edit_delay: std::time::Duration::from_secs_f64(
+                self.inter_edit_delay_secs.max(0.0),
+            ),
+            max_edits,
+            max_attempts_per_instance: self.max_attempts_per_instance,
+            max_rate_limit_pauses_per_pass: self.max_rate_limit_pauses_per_pass,
+            rate_limit_pause: std::time::Duration::from_secs(self.rate_limit_pause_secs),
+            max_rate_limit_pause: std::time::Duration::from_secs(self.max_rate_limit_pause_secs),
+        }
+    }
+
+    fn client_config(&self) -> lastfm_edit::ClientConfig {
+        let mut config =
+            lastfm_edit::ClientConfig::default().with_reuse_csrf_token(self.reuse_csrf_token);
+        config.rate_limit.assumed_block_secs = self.rate_limit_pause_secs;
+        config
     }
 }
 
@@ -629,9 +657,10 @@ async fn build_edit_client(ctx: &Context) -> Result<lastfm_edit::LastFmEditClien
     let username = &ctx.username;
     match lastfm_edit::SessionPersistence::load_session(username) {
         Ok(session) => {
-            let client = lastfm_edit::LastFmEditClientImpl::from_session(
+            let client = lastfm_edit::LastFmEditClientImpl::from_session_with_client_config(
                 Box::new(http_client::native::NativeClient::new()),
                 session,
+                ctx.config.executor.client_config(),
             );
             if client.validate_session().await {
                 // Non-blocking: rate limits surface as errors so the executor owns all
@@ -659,10 +688,11 @@ async fn build_edit_client(ctx: &Context) -> Result<lastfm_edit::LastFmEditClien
             )
         })?;
     log::info!("logging in to last.fm as {username}…");
-    let client = lastfm_edit::LastFmEditClientImpl::login_with_credentials(
+    let client = lastfm_edit::LastFmEditClientImpl::login_with_credentials_and_client_config(
         Box::new(http_client::native::NativeClient::new()),
         username,
         &password,
+        ctx.config.executor.client_config(),
     )
     .await
     .map_err(|e| format!("last.fm login for {username} failed: {e}"))?;
@@ -684,12 +714,7 @@ async fn execute(ctx: &Context, max_edits: Option<u32>, follow: bool) -> Result<
         ctx.state.clone() as Arc<dyn ScrubberState>,
         client,
     )
-    .with_options(ExecutorOptions {
-        inter_edit_delay: std::time::Duration::from_secs(ctx.config.executor.inter_edit_delay_secs),
-        max_edits,
-        max_attempts_per_instance: ctx.config.executor.max_attempts_per_instance,
-        max_rate_limit_pauses_per_pass: ctx.config.executor.max_rate_limit_pauses_per_pass,
-    })
+    .with_options(ctx.config.executor.options(max_edits))
     .with_event_bus(bus.clone());
 
     // Cancelled passes return cleanly (the executor resets the flag per pass), so a
@@ -761,12 +786,7 @@ async fn run_continuous(ctx: &Context, interval: u64) -> Result<()> {
         edit_client,
     )
     .with_recovery_source(source)
-    .with_options(ExecutorOptions {
-        inter_edit_delay: std::time::Duration::from_secs(ctx.config.executor.inter_edit_delay_secs),
-        max_edits: None,
-        max_attempts_per_instance: ctx.config.executor.max_attempts_per_instance,
-        max_rate_limit_pauses_per_pass: ctx.config.executor.max_rate_limit_pauses_per_pass,
-    })
+    .with_options(ctx.config.executor.options(None))
     .with_event_bus(bus.clone());
 
     let policy = Policy {

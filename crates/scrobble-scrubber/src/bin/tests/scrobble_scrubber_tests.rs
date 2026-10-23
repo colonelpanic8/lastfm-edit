@@ -172,3 +172,33 @@ async fn identity_plans_only_when_the_musicbrainz_corrector_is_listed() {
         ]
     );
 }
+
+#[test]
+fn executor_pacing_accepts_whole_and_fractional_seconds() {
+    let delay = |toml: &str| {
+        let config: FileConfig = toml::from_str(toml).unwrap();
+        config.executor.options(None).inter_edit_delay
+    };
+    assert_eq!(
+        delay("[executor]\ninter_edit_delay_secs = 2\n"),
+        std::time::Duration::from_secs(2)
+    );
+    assert_eq!(
+        delay("[executor]\ninter_edit_delay_secs = 0.25\n"),
+        std::time::Duration::from_millis(250)
+    );
+
+    let config: FileConfig = toml::from_str(
+        "[executor]\nrate_limit_pause_secs = 15\nmax_rate_limit_pause_secs = 120\nreuse_csrf_token = true\n",
+    )
+    .unwrap();
+    let options = config.executor.options(None);
+    assert_eq!(options.rate_limit_pause, std::time::Duration::from_secs(15));
+    assert_eq!(
+        options.max_rate_limit_pause,
+        std::time::Duration::from_secs(120)
+    );
+    let client = config.executor.client_config();
+    assert!(client.reuse_csrf_token);
+    assert_eq!(client.rate_limit.assumed_block_secs, 15);
+}

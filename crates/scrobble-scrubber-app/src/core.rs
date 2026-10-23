@@ -753,6 +753,7 @@ async fn build(
         max_edits: None,
         max_attempts_per_instance: config.executor.max_attempts_per_instance,
         max_rate_limit_pauses_per_pass: config.executor.max_rate_limit_pauses_per_pass,
+        ..ExecutorOptions::default()
     })
     .with_event_bus(bus);
 

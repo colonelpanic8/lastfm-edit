@@ -994,6 +994,9 @@ pub struct RateLimitConfig {
     /// fragment, not short phrases like "slow down" (a real Beatles track title).
     /// Matching is case-insensitive, like the other pattern lists.
     pub success_patterns: Vec<String>,
+    /// How long to assume a detected rate limit lasts when Last.fm gives no `Retry-After`
+    /// (its interstitial pages never do).
+    pub assumed_block_secs: u64,
 }
 
 impl Default for RateLimitConfig {
@@ -1021,6 +1024,7 @@ impl Default for RateLimitConfig {
             ],
             custom_patterns: vec![],
             success_patterns: vec!["you're requesting a lot of pages".to_string()],
+            assumed_block_secs: 60,
         }
     }
 }
@@ -1034,6 +1038,7 @@ impl RateLimitConfig {
             patterns: vec![],
             custom_patterns: vec![],
             success_patterns: vec![],
+            assumed_block_secs: 60,
         }
     }
 
@@ -1045,6 +1050,7 @@ impl RateLimitConfig {
             patterns: vec![],
             custom_patterns: vec![],
             success_patterns: vec![],
+            assumed_block_secs: 60,
         }
     }
 
@@ -1065,6 +1071,7 @@ impl RateLimitConfig {
             patterns: vec![],
             custom_patterns: patterns,
             success_patterns: vec![],
+            assumed_block_secs: 60,
         }
     }
 
@@ -1171,6 +1178,9 @@ pub struct ClientConfig {
     pub api_key: Option<String>,
     /// How to react when a rate limit is detected (block-and-retry vs. return an error)
     pub rate_limit_behavior: RateLimitBehavior,
+    /// Submit edits with the session's last CSRF token instead of loading the edit form
+    /// before every edit, refreshing it only when Last.fm rejects one.
+    pub reuse_csrf_token: bool,
 }
 
 impl ClientConfig {
@@ -1221,6 +1231,12 @@ impl ClientConfig {
     /// Set custom retry configuration
     pub fn with_retry_config(mut self, retry_config: RetryConfig) -> Self {
         self.retry = retry_config;
+        self
+    }
+
+    /// Reuse the session's CSRF token across edits (see [`ClientConfig::reuse_csrf_token`]).
+    pub fn with_reuse_csrf_token(mut self, reuse: bool) -> Self {
+        self.reuse_csrf_token = reuse;
         self
     }
 
