@@ -53,3 +53,12 @@ fn success_resets_the_backoff() {
     // Growth is back to the base; the budget count is untouched.
     assert_eq!(rl.next_pause_secs(0), 60);
 }
+
+#[test]
+fn configured_pauses_start_at_the_base_and_stop_at_the_cap() {
+    let mut rl = PassRateLimit::new(10, 30);
+    assert_eq!(rl.next_pause_secs(0), 10);
+    assert_eq!(rl.next_pause_secs(0), 20);
+    assert_eq!(rl.next_pause_secs(0), 30);
+    assert_eq!(rl.next_pause_secs(0), 30);
+}

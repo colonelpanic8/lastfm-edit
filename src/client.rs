@@ -830,26 +830,44 @@ impl LastFmEditClientImpl {
             )
         };
 
-        log::debug!("Getting fresh CSRF token for edit");
-        let form_html = self.get_edit_form_html(&edit_url).await?;
-
-        let form_document = Html::parse_document(&form_html);
-        let fresh_csrf_token = self.extract_csrf_token(&form_document)?;
-
-        log::debug!("Submitting edit with fresh token");
-
-        let form_data = exact_edit.build_form_data(&fresh_csrf_token);
-
         log::debug!(
             "Editing scrobble: '{}' -> '{}'",
             exact_edit.track_name_original,
             exact_edit.track_name
         );
-        {
-            let session = self.session.lock().unwrap();
-            log::trace!("Session cookies count: {}", session.cookies.len());
+        if self.config.reuse_csrf_token {
+            let cached = self.session.lock().unwrap().csrf_token.clone();
+            if let Some(token) = cached {
+                // A stale token is rejected before the edit runs, so one retry with a fresh
+                // token is safe.
+                match self.post_edit(&edit_url, exact_edit, &token).await {
+                    Ok(true) => return Ok(true),
+                    Ok(false) | Err(LastFmError::Auth(_)) => {
+                        log::debug!(
+                            "Edit with cached CSRF token failed; retrying with a fresh one"
+                        );
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
         }
 
+        log::debug!("Getting fresh CSRF token for edit");
+        let form_html = self.get_edit_form_html(&edit_url).await?;
+        let fresh_csrf_token = self.extract_csrf_token(&Html::parse_document(&form_html))?;
+        self.session.lock().unwrap().csrf_token = Some(fresh_csrf_token.clone());
+        log::debug!("Submitting edit with fresh token");
+        self.post_edit(&edit_url, exact_edit, &fresh_csrf_token)
+            .await
+    }
+
+    async fn post_edit(
+        &self,
+        edit_url: &str,
+        exact_edit: &ExactScrobbleEdit,
+        csrf_token: &str,
+    ) -> Result<bool> {
+        let form_data = exact_edit.build_form_data(csrf_token);
         let mut request = Request::new(Method::Post, edit_url.parse::<Url>().unwrap());
 
         let referer_url = {
@@ -868,7 +886,7 @@ impl LastFmEditClientImpl {
 
         request.set_body(form_string);
 
-        let request_info = RequestInfo::from_url_and_method(&edit_url, "POST");
+        let request_info = RequestInfo::from_url_and_method(edit_url, "POST");
         let request_start = std::time::Instant::now();
 
         self.broadcast_event(ClientEvent::RequestStarted {
@@ -896,7 +914,7 @@ impl LastFmEditClientImpl {
 
         // A rate-limit interstitial (served site-wide, e.g. HTTP 406 after edit bursts) must
         // surface as a RateLimit error, not be misread by edit analysis as "rejected".
-        self.check_post_response_for_rate_limit(&edit_url, response.status(), &response_text)?;
+        self.check_post_response_for_rate_limit(edit_url, response.status(), &response_text)?;
         self.check_auth_response(response.status(), &response_text)?;
         if response.status().is_redirection()
             && response
@@ -1337,7 +1355,7 @@ impl LastFmEditClientImpl {
             // Broadcast here so pattern-detected rate limits are observable even when the
             // retry loop (which also broadcasts) is not driving this call.
             self.broadcast_event(ClientEvent::RateLimited {
-                delay_seconds: 60,
+                delay_seconds: self.config.rate_limit.assumed_block_secs,
                 request: Some(RequestInfo::from_url_and_method(url, "GET")),
                 rate_limit_type: RateLimitType::ResponsePattern,
                 rate_limit_timestamp: std::time::SystemTime::now()
@@ -1345,7 +1363,9 @@ impl LastFmEditClientImpl {
                     .unwrap_or_default()
                     .as_secs(),
             });
-            return Err(LastFmError::RateLimit { retry_after: 60 });
+            return Err(LastFmError::RateLimit {
+                retry_after: self.config.rate_limit.assumed_block_secs,
+            });
         }
 
         let mut new_response = http_types::Response::new(response.status());
@@ -1484,7 +1504,7 @@ impl LastFmEditClientImpl {
                 .header("retry-after")
                 .and_then(|h| h.get(0))
                 .and_then(|v| v.as_str().parse::<u64>().ok())
-                .unwrap_or(60);
+                .unwrap_or(self.config.rate_limit.assumed_block_secs);
             self.broadcast_event(ClientEvent::RateLimited {
                 delay_seconds: retry_after,
                 request: Some(request_info.clone()),
@@ -1502,7 +1522,7 @@ impl LastFmEditClientImpl {
                 .header("retry-after")
                 .and_then(|h| h.get(0))
                 .and_then(|v| v.as_str().parse::<u64>().ok())
-                .unwrap_or(60);
+                .unwrap_or(self.config.rate_limit.assumed_block_secs);
             self.broadcast_event(ClientEvent::RateLimited {
                 delay_seconds: retry_after,
                 request: Some(request_info.clone()),
@@ -1526,7 +1546,7 @@ impl LastFmEditClientImpl {
             if self.is_rate_limit_response(&body) {
                 log::debug!("403 body matches rate-limit pattern - treating as rate limit");
                 self.broadcast_event(ClientEvent::RateLimited {
-                    delay_seconds: 60,
+                    delay_seconds: self.config.rate_limit.assumed_block_secs,
                     request: Some(request_info.clone()),
                     rate_limit_type: RateLimitType::Http403,
                     rate_limit_timestamp: std::time::SystemTime::now()
@@ -1534,7 +1554,9 @@ impl LastFmEditClientImpl {
                         .unwrap_or_default()
                         .as_secs(),
                 });
-                return Err(LastFmError::RateLimit { retry_after: 60 });
+                return Err(LastFmError::RateLimit {
+                    retry_after: self.config.rate_limit.assumed_block_secs,
+                });
             }
 
             // Not a rate limit: rebuild the response with the already-consumed body.
@@ -1606,7 +1628,7 @@ impl LastFmEditClientImpl {
         if self.response_indicates_rate_limit(status, body) {
             log::debug!("POST response body contains rate limit patterns (status {status})");
             self.broadcast_event(ClientEvent::RateLimited {
-                delay_seconds: 60,
+                delay_seconds: self.config.rate_limit.assumed_block_secs,
                 request: Some(RequestInfo::from_url_and_method(url, "POST")),
                 rate_limit_type: RateLimitType::ResponsePattern,
                 rate_limit_timestamp: std::time::SystemTime::now()
@@ -1614,7 +1636,9 @@ impl LastFmEditClientImpl {
                     .unwrap_or_default()
                     .as_secs(),
             });
-            return Err(LastFmError::RateLimit { retry_after: 60 });
+            return Err(LastFmError::RateLimit {
+                retry_after: self.config.rate_limit.assumed_block_secs,
+            });
         }
         Ok(())
     }

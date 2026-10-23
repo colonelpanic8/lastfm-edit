@@ -59,8 +59,12 @@ root = "/path/to/scrobble-store"   # default: ~/.local/share/scrobble-store/<use
 # state_dir = ""                   # default: <root>/scrubber
 
 [executor]
-inter_edit_delay_secs = 2
+inter_edit_delay_secs = 2            # sleep between edits; fractional values allowed
 max_attempts_per_instance = 3
+max_rate_limit_pauses_per_pass = 3   # rate-limit waits a pass sits through before deferring
+rate_limit_pause_secs = 60           # first wait after a rate limit; doubles per consecutive block
+max_rate_limit_pause_secs = 600
+reuse_csrf_token = false             # skip loading the edit form before every edit
 ```
 
 ## Features

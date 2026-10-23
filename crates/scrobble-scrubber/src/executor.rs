@@ -42,6 +42,10 @@ pub struct ExecutorOptions {
     /// stopping early with everything unfinished left `InProgress` for a later pass.
     /// Rate limits still never consume per-instance attempts.
     pub max_rate_limit_pauses_per_pass: u32,
+    /// First wait after a rate limit; doubles on each consecutive block.
+    pub rate_limit_pause: std::time::Duration,
+    /// Longest a single rate-limit wait may grow to.
+    pub max_rate_limit_pause: std::time::Duration,
 }
 
 impl Default for ExecutorOptions {
@@ -51,6 +55,8 @@ impl Default for ExecutorOptions {
             max_edits: None,
             max_attempts_per_instance: 3,
             max_rate_limit_pauses_per_pass: 3,
+            rate_limit_pause: std::time::Duration::from_secs(60),
+            max_rate_limit_pause: std::time::Duration::from_secs(600),
         }
     }
 }
@@ -195,7 +201,10 @@ impl<C: LastFmEditClient> Executor<C> {
         let mut report = ExecReport::default();
         let mut attempts_used: u32 = 0;
         let mut failure_streak: u32 = 0;
-        let mut rate_limit = PassRateLimit::default();
+        let mut rate_limit = PassRateLimit::new(
+            self.options.rate_limit_pause.as_secs(),
+            self.options.max_rate_limit_pause.as_secs(),
+        );
 
         let queue = self.state.load_queue().await?;
         // Resume half-done (InProgress) intents before starting freshly-Ready ones,
@@ -778,19 +787,31 @@ enum InstanceOutcome {
 /// Per-pass rate-limit accounting: the pause budget (how many rate-limited waits a pass
 /// will sit through before deferring) and a growth counter so consecutive blocks back off
 /// harder. A successful instance attempt resets the growth via [`PassRateLimit::succeeded`].
-#[derive(Default)]
 struct PassRateLimit {
     /// Pause *decisions* made this pass; compared against `max_rate_limit_pauses_per_pass`.
     pauses_used: u32,
     /// Consecutive rate-limited pauses since the last success; drives exponential backoff.
     consecutive: u32,
+    base_pause_secs: u64,
+    max_pause_secs: u64,
+}
+
+impl Default for PassRateLimit {
+    fn default() -> Self {
+        Self::new(60, 600)
+    }
 }
 
 impl PassRateLimit {
-    /// Base pause length: never wait less than a minute on a real block.
-    const BASE_PAUSE_SECS: u64 = 60;
-    /// Cap so a single wait never parks the pass for more than ten minutes.
-    const MAX_PAUSE_SECS: u64 = 600;
+    fn new(base_pause_secs: u64, max_pause_secs: u64) -> Self {
+        let base_pause_secs = base_pause_secs.max(1);
+        Self {
+            pauses_used: 0,
+            consecutive: 0,
+            base_pause_secs,
+            max_pause_secs: max_pause_secs.max(base_pause_secs),
+        }
+    }
 
     /// Count one pause decision against the pass's budget. `false` means the budget is
     /// spent: defer the pass instead of waiting again. One unit per decision, never per tick.
@@ -799,13 +820,13 @@ impl PassRateLimit {
         self.pauses_used <= max
     }
 
-    /// Pause length at the current growth level *without* advancing it: `max(retry_after, 60)`
-    /// on the first block, doubling each consecutive time (120, 240, 480), capped at 600s.
+    /// Pause length at the current growth level *without* advancing it: `max(retry_after,
+    /// base)` on the first block, doubling each consecutive time, capped at the max.
     /// Used for the poll cadence inside a single wait, where the growth counter must not move.
     fn pause_secs(&self, retry_after: u64) -> u64 {
         let doublings = self.consecutive.min(4);
-        let grown = Self::BASE_PAUSE_SECS.saturating_mul(1u64 << doublings);
-        retry_after.max(grown).min(Self::MAX_PAUSE_SECS)
+        let grown = self.base_pause_secs.saturating_mul(1u64 << doublings);
+        retry_after.max(grown).min(self.max_pause_secs)
     }
 
     /// The pause length for one pause decision, advancing the growth counter so the *next*
