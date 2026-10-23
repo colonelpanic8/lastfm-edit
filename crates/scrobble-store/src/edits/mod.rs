@@ -105,28 +105,48 @@ impl<C: LastFmEditClient> MirroredEditor<C> {
             .client
             .get_scrobble_edit_variations(&record.track, &record.artist)
             .await?;
+        if variations.is_empty() {
+            return Err(StoreError::NotFound(format!(
+                "no edit-form variations upstream for {} - {}",
+                record.artist, record.track
+            )));
+        }
+
+        // The scrape covers every scrobble of this track, so verify the unverified siblings
+        // too rather than scraping the same page again for each of them.
+        let now = Self::now();
+        let mut batch: Vec<ScrobbleRecord> = self
+            .store
+            .artist_scrobbles(&record.artist, None)
+            .await?
+            .into_iter()
+            .filter(|r| r.track == record.track && r.id != record.id)
+            .filter(|r| !r.album_artist.is_verified())
+            .map(|r| Self::verified_from(r, &variations, now))
+            .collect();
+        let upgraded = Self::verified_from(record, &variations, now);
+        batch.push(upgraded.clone());
+        self.store.append_scrobbles(&batch).await?;
+        Ok(upgraded)
+    }
+
+    /// `record` with its album artist taken from the edit-form variation for its album.
+    fn verified_from(
+        mut record: ScrobbleRecord,
+        variations: &[ExactScrobbleEdit],
+        now: u64,
+    ) -> ScrobbleRecord {
         let variation = variations
             .iter()
             .find(|v| Some(&v.album_name_original) == record.album.as_ref())
-            .or_else(|| variations.first())
-            .ok_or_else(|| {
-                StoreError::NotFound(format!(
-                    "no edit-form variations upstream for {} - {}",
-                    record.artist, record.track
-                ))
-            })?;
-
-        let mut upgraded = record.clone();
-        upgraded.album_artist = Provenanced::Verified(variation.album_artist_name_original.clone());
-        if upgraded.album.is_none() {
-            upgraded.album = Some(variation.album_name_original.clone());
+            .unwrap_or(&variations[0]);
+        record.album_artist = Provenanced::Verified(variation.album_artist_name_original.clone());
+        if record.album.is_none() {
+            record.album = Some(variation.album_name_original.clone());
         }
-        upgraded.source = RecordSource::Scrape;
-        upgraded.fetched_at = Self::now();
-        self.store
-            .append_scrobbles(std::slice::from_ref(&upgraded))
-            .await?;
-        Ok(upgraded)
+        record.source = RecordSource::Scrape;
+        record.fetched_at = now;
+        record
     }
 
     /// Build a fully-specified edit for a stored scrobble (enriching album artist first).
