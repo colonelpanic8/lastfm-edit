@@ -549,11 +549,6 @@
               libsoup_3
               libappindicator-gtk3
               xdotool
-            ]
-            ++ lib.optionals stdenv.hostPlatform.isDarwin [
-              darwin.apple_sdk.frameworks.Security
-              darwin.apple_sdk.frameworks.CoreFoundation
-              darwin.apple_sdk.frameworks.SystemConfiguration
             ];
 
           desktopItems = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
