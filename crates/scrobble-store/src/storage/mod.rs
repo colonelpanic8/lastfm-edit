@@ -60,6 +60,16 @@ pub struct TrackCount {
     pub count: u64,
 }
 
+/// Listening history for one exact artist/title pair across albums.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrackStats {
+    pub artist: String,
+    pub track: String,
+    pub count: u64,
+    pub first_uts: u64,
+    pub last_uts: u64,
+}
+
 /// An album (artist + album) with an aggregate scrobble count.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlbumCount {
@@ -156,6 +166,34 @@ pub trait Storage: Send + Sync {
         limit: usize,
         range: Option<Range<u64>>,
     ) -> Result<Vec<ArtistCount>>;
+
+    /// Aggregate live plays by artist and title within an optional half-open range.
+    async fn track_stats(&self, range: Option<Range<u64>>) -> Result<Vec<TrackStats>> {
+        let mut groups = std::collections::BTreeMap::new();
+        for record in self
+            .scrobbles_in_range(range.unwrap_or(0..u64::MAX))
+            .await?
+        {
+            let (count, first, last) = groups
+                .entry((record.artist, record.track))
+                .or_insert((0, record.uts, record.uts));
+            *count += 1;
+            *first = (*first).min(record.uts);
+            *last = (*last).max(record.uts);
+        }
+        Ok(groups
+            .into_iter()
+            .map(
+                |((artist, track), (count, first_uts, last_uts))| TrackStats {
+                    artist,
+                    track,
+                    count,
+                    first_uts,
+                    last_uts,
+                },
+            )
+            .collect())
+    }
 
     /// Most-scrobbled tracks, optionally restricted to one artist and/or a time range.
     async fn top_tracks(

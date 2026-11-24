@@ -3,6 +3,7 @@
 pub mod dashboard;
 pub mod history;
 pub mod library;
+mod rediscover;
 pub mod review;
 pub mod sync;
 pub mod work_queue;
@@ -52,6 +53,7 @@ pub fn Shell() -> Element {
     // Dev hook: SCRUBBER_APP_VIEW=review opens on the review page ("queue" is the
     // legacy alias for the work queue).
     let active = use_signal(|| match std::env::var("SCRUBBER_APP_VIEW").as_deref() {
+        Ok("library") => ActiveView::Library,
         Ok("review") => ActiveView::Review,
         Ok("work") | Ok("work-queue") | Ok("queue") => ActiveView::WorkQueue,
         Ok("history") => ActiveView::History,

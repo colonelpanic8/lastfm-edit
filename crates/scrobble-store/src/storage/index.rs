@@ -8,7 +8,7 @@
 use crate::error::{Result, StoreError};
 use crate::id::ScrobbleId;
 use crate::record::ScrobbleRecord;
-use crate::storage::{AlbumCount, ArtistCount, ScrobbleGroup, TrackCount};
+use crate::storage::{AlbumCount, ArtistCount, ScrobbleGroup, TrackCount, TrackStats};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::io::Read;
@@ -277,6 +277,29 @@ impl Index {
                 Ok(ArtistCount {
                     artist: row.get(0)?,
                     count: row.get::<_, i64>(1)? as u64,
+                })
+            })
+            .map_err(sqlite_err)?;
+        rows.collect::<std::result::Result<_, _>>()
+            .map_err(sqlite_err)
+    }
+
+    pub(crate) fn track_stats(&self, range: &Option<Range<u64>>) -> Result<Vec<TrackStats>> {
+        let filter = Filter::new(None, range);
+        let sql = format!(
+            "SELECT artist, track, COUNT(*), MIN(uts), MAX(uts)
+            FROM scrobbles WHERE {} GROUP BY artist, track ORDER BY artist, track",
+            filter.sql()
+        );
+        let mut statement = self.conn.prepare_cached(&sql).map_err(sqlite_err)?;
+        let rows = statement
+            .query_map(filter.params(None).as_slice(), |row| {
+                Ok(TrackStats {
+                    artist: row.get(0)?,
+                    track: row.get(1)?,
+                    count: row.get(2)?,
+                    first_uts: row.get(3)?,
+                    last_uts: row.get(4)?,
                 })
             })
             .map_err(sqlite_err)?;

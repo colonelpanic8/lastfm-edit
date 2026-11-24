@@ -63,6 +63,27 @@ struct DrillData {
 
 #[component]
 pub fn Library() -> Element {
+    let mut rediscover = use_signal(|| false);
+    rsx! {
+        div { class: "page",
+            h1 { "Library" }
+            div { class: "tabs", aria_label: "Library view",
+                for (show, label) in [(false, "Overview"), (true, "Rediscover")] {
+                    button {
+                        class: if rediscover() == show { "tab active" } else { "tab" },
+                        aria_pressed: rediscover() == show,
+                        onclick: move |_| rediscover.set(show),
+                        "{label}"
+                    }
+                }
+            }
+            if rediscover() { super::rediscover::Rediscover {} } else { Overview {} }
+        }
+    }
+}
+
+#[component]
+fn Overview() -> Element {
     let core = use_context::<CoreSignal>();
     let ui = use_context::<UiSignal>();
 
@@ -144,10 +165,7 @@ pub fn Library() -> Element {
     let data_loading = *data.state().read() == UseResourceState::Pending;
     let Some(data) = &*data_read else {
         return rsx! {
-            div { class: "page",
-                h1 { "Library" }
-                div { class: "card muted", "loading…" }
-            }
+            div { class: "card muted", "loading…" }
         };
     };
 
@@ -174,8 +192,7 @@ pub fn Library() -> Element {
     let album_max = data.albums.first().map(|a| a.count).unwrap_or(1).max(1);
 
     rsx! {
-        div { class: "page",
-            h1 { "Library" }
+        div {
             div { class: "grid",
                 div { class: "stat",
                     div { class: "label", "total scrobbles" }

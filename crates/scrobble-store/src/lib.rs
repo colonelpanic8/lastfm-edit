@@ -12,6 +12,7 @@ pub mod durable;
 pub mod edits;
 pub mod error;
 pub mod id;
+pub mod insights;
 pub mod record;
 pub mod source;
 pub mod storage;
@@ -27,7 +28,7 @@ pub use record::{Provenanced, RecordSource, ScrobbleRecord};
 pub use source::{ApiSource, ScrapeSource, ScrobbleSource, SourcePage};
 pub use storage::{
     AlbumCount, AppendStats, ArtistCount, EditLease, FsStorage, MemoryStorage, ScrobbleGroup,
-    Storage, SyncState, TrackCount,
+    Storage, SyncState, TrackCount, TrackStats,
 };
 pub use sync::{
     PauseReason, SyncEngine, SyncEvent, SyncEventBus, SyncEventReceiver, SyncMode, SyncOptions,

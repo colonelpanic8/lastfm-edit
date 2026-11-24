@@ -17,6 +17,7 @@
 use super::index::Index;
 use super::{
     AlbumCount, AppendStats, ArtistCount, EditLease, ScrobbleGroup, Storage, SyncState, TrackCount,
+    TrackStats,
 };
 use crate::coverage::{CoverageMap, Segment};
 use crate::durable::{
@@ -383,6 +384,10 @@ impl Storage for FsStorage {
         range: Option<Range<u64>>,
     ) -> Result<Vec<ArtistCount>> {
         self.with_index(|index| index.top_artists(limit, &range))
+    }
+
+    async fn track_stats(&self, range: Option<Range<u64>>) -> Result<Vec<TrackStats>> {
+        self.with_index(|index| index.track_stats(&range))
     }
 
     async fn top_tracks(

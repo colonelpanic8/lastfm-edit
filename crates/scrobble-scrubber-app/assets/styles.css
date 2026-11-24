@@ -947,3 +947,23 @@ input.history-search {
   white-space: pre-wrap;
   user-select: text;
 }
+
+.rediscover-heading { justify-content: space-between; }
+.rediscover-heading h2 { margin: 0; }
+.rediscover-controls { display: flex; gap: 14px; flex-wrap: wrap; }
+.rediscover-controls label { display: grid; gap: 5px; }
+.rediscover-controls input, .rediscover-controls select {
+  background: var(--bg); color: inherit; font: inherit;
+  border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px;
+}
+.rediscover-balance {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px;
+  margin-top: 18px; max-width: 620px;
+}
+.rediscover-balance input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.rediscover-results { overflow-x: auto; }
+.rediscover table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.rediscover td, .rediscover th { text-align: right; padding: 7px; border-bottom: 1px solid var(--border); }
+.rediscover td:first-child, .rediscover th:first-child { text-align: left; }
+.rediscover small { display: block; color: var(--muted); }
+.rediscover-results + button { margin-top: 12px; }

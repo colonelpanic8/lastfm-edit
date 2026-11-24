@@ -3,6 +3,7 @@
 
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
+use scrobble_store::insights::rediscover::{History, Options};
 use scrobble_store::source::ScrobbleSource;
 use scrobble_store::{
     ApiSource, EditState, FsStorage, PauseReason, ScrapeSource, Storage, SyncEngine, SyncEvent,
@@ -125,6 +126,18 @@ enum QueryCommand {
         #[arg(long)]
         artist: Option<String>,
         #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+    /// Rank frequently played tracks by play count and time since their last play
+    Rediscover {
+        #[arg(long, default_value_t = Options::default().min_plays)]
+        min_plays: u64,
+        #[arg(long, default_value_t = Options::default().min_gap_days)]
+        min_gap_days: u64,
+        /// Time-away influence in percent (0 = plays, 50 = balanced, 100 = time away)
+        #[arg(long, default_value_t = Options::default().gap_weight, value_parser = clap::value_parser!(u8).range(0..=100))]
+        gap_weight: u8,
+        #[arg(long, default_value_t = 50)]
         limit: usize,
     },
     /// Every stored scrobble of an artist
@@ -451,6 +464,39 @@ async fn run_query(data_dir: &PathBuf, query: &QueryCommand) -> anyhow_lite::Res
         QueryCommand::TopTracks { artist, limit } => {
             for entry in store.top_tracks(artist.as_deref(), *limit, None).await? {
                 println!("{:>7}  {} — {}", entry.count, entry.artist, entry.track);
+            }
+        }
+        QueryCommand::Rediscover {
+            min_plays,
+            min_gap_days,
+            gap_weight,
+            limit,
+        } => {
+            let history = History::load(&store, now()).await?;
+            let rows = history.rank(Options {
+                min_plays: *min_plays,
+                min_gap_days: *min_gap_days,
+                gap_weight: *gap_weight,
+            });
+            println!("{} tracks as of {}", rows.len(), fmt_ts(history.as_of));
+            if !history.counts_complete {
+                println!("The local listening history has incomplete coverage.");
+            }
+            for row in rows.iter().take(*limit) {
+                let track = row.stats;
+                let gap_note = if row.gap_verified {
+                    ""
+                } else {
+                    " (gap unverified)"
+                };
+                println!(
+                    "{:>8.1}  {:>5} plays  {}{gap_note}  {} — {}",
+                    row.score,
+                    track.count,
+                    fmt_ts(track.last_uts),
+                    track.artist,
+                    track.track
+                );
             }
         }
         QueryCommand::Artist { name } => {
