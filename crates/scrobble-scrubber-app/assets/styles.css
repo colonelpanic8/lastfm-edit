@@ -956,6 +956,14 @@ input.history-search {
   background: var(--bg); color: inherit; font: inherit;
   border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px;
 }
+.rediscover-controls select {
+  appearance: none;
+  padding-right: 26px;
+  background: linear-gradient(45deg, transparent 50%, var(--muted) 50%) right 12px center / 5px 5px no-repeat,
+              linear-gradient(135deg, var(--muted) 50%, transparent 50%) right 7px center / 5px 5px no-repeat,
+              var(--bg);
+  color-scheme: dark;
+}
 .rediscover-balance {
   display: grid; grid-template-columns: 1fr auto; gap: 6px;
   margin-top: 18px; max-width: 620px;

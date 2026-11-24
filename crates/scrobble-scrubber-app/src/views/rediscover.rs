@@ -76,15 +76,15 @@ pub fn Rediscover() -> Element {
             if !history.counts_complete { p { class: "muted", "Sync coverage is incomplete. Play counts may be low." } }
             div { class: "rediscover-controls",
                 label { "Minimum plays"
-                    select { value: "{opts.min_plays}",
+                    select {
                         onchange: move |e| if let Ok(n) = e.value().parse() { options.write().min_plays = n; limit.set(PAGE_SIZE); },
-                        for n in [5, 10, 25, 50] { option { value: "{n}", "{n}" } }
+                        for n in [5, 10, 25, 50] { option { value: "{n}", selected: n == opts.min_plays, "{n}" } }
                     }
                 }
                 label { "Time since last play"
-                    select { value: "{opts.min_gap_days}",
+                    select {
                         onchange: move |e| if let Ok(n) = e.value().parse() { options.write().min_gap_days = n; limit.set(PAGE_SIZE); },
-                        for y in [1, 3, 5, 10] { option { value: "{y * 365}", "{y}+ years" } }
+                        for y in [1, 3, 5, 10] { option { value: "{y * 365}", selected: y * 365 == opts.min_gap_days, "{y}+ years" } }
                     }
                 }
                 label { "Find a favorite"
