@@ -88,7 +88,7 @@ pub fn Rediscover() -> Element {
                     }
                 }
                 label { "Find a favorite"
-                    input { r#type: "search", placeholder: "Track or artist", value: "{search}",
+                    input { r#type: "search", placeholder: "Track or artist",
                         oninput: move |e| { search.set(e.value()); limit.set(PAGE_SIZE); } }
                 }
             }
