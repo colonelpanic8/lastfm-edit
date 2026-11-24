@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## Scrobble Scrubber 0.3.0 (2026-11-24)
+
+- Add Rediscover to Library. Find frequently played tracks that have been absent
+  from your listening history for years, and use a slider to balance play count
+  against time away. Search by track or artist and adjust the minimum play count
+  and listening gap.
+- Run the same ranking from the command line with `scrobble-store query rediscover`.
+- Resolve recordings and album metadata with MusicBrainz. Identity-aware rules
+  can hold uncertain matches and naming decisions for review.
+- Show currently running scrubber instances and their execution progress and errors.
+- Keep the edit queue moving when a scrobble cannot be recovered, and reduce
+  repeated lookups when processing edits for the same track.
+- Allow configurable delays between edits and optional CSRF token reuse.
+
 ## lastfm-edit 8.0.0 (2026-10-21)
 
 - Return structured track-page failures with the track, artist, URL, and a typed
